@@ -1,0 +1,380 @@
+import type { PublicDomainEvent, RoomSnapshot, RoomVerification } from "../domain/types";
+
+const API_ORIGIN = import.meta.env.VITE_VIRA_API_ORIGIN ?? "http://127.0.0.1:8787";
+
+export async function fetchBackendHealth(): Promise<boolean> {
+  const response = await fetch(`${API_ORIGIN}/health`);
+  return response.ok;
+}
+
+export interface MatchSummary {
+  id: string;
+  fixtureId: string;
+  title: string;
+  competitionLabel: string;
+  startTime: string | null;
+  status: string;
+  homeTeam: string;
+  awayTeam: string;
+  source: string;
+}
+
+export interface MatchesResponse {
+  source: "txline";
+  reason?: string;
+  matches: MatchSummary[];
+}
+
+export interface MatchCatalogEntry extends MatchSummary {
+  context: MatchTxlineContext | null;
+  availability: {
+    marketCount: number;
+    hasMarket: boolean;
+    hasPlayablePrediction: boolean;
+    contextStatus: "ready" | "stale" | "unavailable";
+  };
+  contextError?: string;
+}
+
+export interface MatchCatalogResponse {
+  version: number;
+  source: "txline";
+  cacheSource: "server";
+  generatedAt: string;
+  materialization?: {
+    contextsRefreshed: number;
+    contextsReused: number;
+    concurrency: number;
+  };
+  matches: MatchCatalogEntry[];
+  cache: {
+    status: "hit" | "refreshed" | "stale";
+    strategy: "server-warm-swr";
+    generatedAt: string;
+    ageMs: number;
+    freshMs: number;
+    stale: boolean;
+    refreshing: boolean;
+    lastError: string | null;
+  };
+}
+
+export interface TxlineEndpointSummary {
+  count: number;
+  firstTimestamp: string | null;
+  lastTimestamp: string | null;
+  firstSequence: number | null;
+  lastSequence: number | null;
+  eventTypes: Record<string, number>;
+}
+
+export interface TxlineEndpointContext<TData = unknown> {
+  name: string;
+  provider: "TxLINE";
+  source: "txline";
+  ok: boolean;
+  endpoint: string;
+  requestedAt: string;
+  receivedAt: string;
+  status?: number;
+  error?: string;
+  summary: TxlineEndpointSummary;
+  data: TData | null;
+}
+
+export interface TxlineWinProbability {
+  marketType: string;
+  bookmaker: string;
+  messageId: string | null;
+  capturedAt: string | null;
+  home: number;
+  draw: number;
+  away: number;
+  priceNames: string[];
+}
+
+export interface TxlineMarketOption {
+  priceName: string;
+  label: string;
+  pct: number | null;
+  price: number | null;
+}
+
+export interface TxlineAvailableMarket {
+  id: string;
+  signature: string;
+  sequence: number | null;
+  fixtureId: string;
+  messageId: string | null;
+  marketType: string;
+  label: string;
+  bookmaker: string;
+  bookmakerId: number | string | null;
+  marketParameters: string | null;
+  marketPeriod: string | null;
+  inRunning: boolean;
+  capturedAt: string | null;
+  sourceEndpoint: string;
+  priceNames: string[];
+  options: TxlineMarketOption[];
+  hasProbabilities: boolean;
+  leadingOption: TxlineMarketOption | null;
+}
+
+export interface TxlineSuggestedPrediction {
+  marketId: string;
+  openingEventId: string;
+  providerSequence: number | null;
+  marketSignature: string;
+  marketType: string;
+  marketLabel: string;
+  line: string | null;
+  period: string | null;
+  priceName: string;
+  priceLabel: string;
+  pct: number;
+  operator: ">=";
+  threshold: number;
+  prompt: string;
+  winningOption: "yes" | "no";
+}
+
+export interface TxlineLatestRecord {
+  id: string;
+  type: string;
+  timestamp: string | null;
+  sequence: number | null;
+}
+
+export interface MatchTxlineContext {
+  fixtureId: string;
+  provider: "TxLINE";
+  generatedAt: string;
+  cache?: {
+    status: "hit" | "miss" | "refreshed";
+    cachedAt: string;
+    ttlMs: number;
+  };
+  fixture: {
+    provider: "TxLINE";
+    source: string;
+    fixtureId: string;
+    title: string;
+    competitionLabel: string;
+    status: string;
+    startTime: string | null;
+    homeTeam: string;
+    awayTeam: string;
+  };
+  endpoints: {
+    scores: TxlineEndpointContext<{ latest: TxlineLatestRecord[] }>;
+    updates: TxlineEndpointContext<{ latest: TxlineLatestRecord[] }>;
+    historical: TxlineEndpointContext<{ latest: TxlineLatestRecord[] }>;
+    odds: TxlineEndpointContext<{ winProbability: TxlineWinProbability | null; availableMarkets: TxlineAvailableMarket[]; latest: TxlineLatestRecord[] }>;
+    oddsUpdates: TxlineEndpointContext<{ availableMarkets: TxlineAvailableMarket[]; latest: TxlineLatestRecord[] }>;
+  };
+  availableMarkets: TxlineAvailableMarket[];
+  suggestedPrediction: TxlineSuggestedPrediction | null;
+}
+
+export type TxlineProbeKind = "scores" | "updates" | "historical" | "odds";
+
+export interface TxlineProbeResult {
+  ok: boolean;
+  status: number;
+  endpoint: string;
+  payload: unknown;
+}
+
+export interface JoinRoomResponse {
+  participant: {
+    id: string;
+    displayName: string;
+    initials: string;
+  };
+  sessionToken: string;
+  roomVersion: number;
+}
+
+export async function joinRoom(roomId: string, displayName: string): Promise<JoinRoomResponse> {
+  const response = await fetch(`${API_ORIGIN}/rooms/${encodeURIComponent(roomId)}/join`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ displayName }),
+  });
+  if (!response.ok) throw new Error(`join_failed:${response.status}`);
+  return response.json();
+}
+
+export async function fetchRoomState(roomId: string, participantId?: string | null): Promise<RoomSnapshot> {
+  const suffix = participantId ? `?participantId=${encodeURIComponent(participantId)}` : "";
+  const response = await fetch(`${API_ORIGIN}/rooms/${encodeURIComponent(roomId)}/state${suffix}`);
+  if (!response.ok) throw new Error(`state_failed:${response.status}`);
+  return response.json();
+}
+
+export async function validateRoomSession(roomId: string, participantId: string, sessionToken: string): Promise<{ valid: boolean; participant: { id: string; displayName: string } | null; roomVersion: number }> {
+  const response = await fetch(`${API_ORIGIN}/rooms/${encodeURIComponent(roomId)}/session/validate`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ participantId, sessionToken }),
+  });
+  if (!response.ok) throw new Error(`session_validation_failed:${response.status}`);
+  return response.json();
+}
+
+export async function fetchRoomVerification(roomId: string): Promise<RoomVerification> {
+  const response = await fetch(`${API_ORIGIN}/public/rooms/${encodeURIComponent(roomId)}/verification`);
+  if (!response.ok) throw new Error(`verification_failed:${response.status}`);
+  return response.json();
+}
+
+export async function fetchPublicRoomProjection(roomId: string): Promise<RoomSnapshot> {
+  const response = await fetch(`${API_ORIGIN}/public/rooms/${encodeURIComponent(roomId)}/projection`);
+  if (!response.ok) throw new Error(`public_projection_failed:${response.status}`);
+  return response.json();
+}
+
+export async function fetchPublicRoomEvents(roomId: string): Promise<{
+  roomId: string;
+  events: PublicDomainEvent[];
+}> {
+  const response = await fetch(`${API_ORIGIN}/public/rooms/${encodeURIComponent(roomId)}/events`);
+  if (!response.ok) throw new Error(`public_events_failed:${response.status}`);
+  return response.json();
+}
+
+export async function submitRoomAnswer(input: {
+  roomId: string;
+  roundId: string;
+  participantId: string;
+  sessionToken: string;
+  optionId: string;
+  roundVersion: number;
+}): Promise<{
+  accepted: boolean;
+  eventId?: string;
+  roundId: string;
+  optionId: string;
+  answeredAt: string;
+  answerState: string;
+}> {
+  const response = await fetch(`${API_ORIGIN}/rooms/${encodeURIComponent(input.roomId)}/rounds/${encodeURIComponent(input.roundId)}/answer`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      participantId: input.participantId,
+      sessionToken: input.sessionToken,
+      optionId: input.optionId,
+      clientAnswerId: crypto.randomUUID(),
+      roundVersion: input.roundVersion,
+    }),
+  });
+  if (!response.ok) throw new Error(`answer_failed:${response.status}`);
+  return response.json();
+}
+
+export function roomEventsUrl(roomId: string, participantId?: string | null) {
+  const suffix = participantId ? `?participantId=${encodeURIComponent(participantId)}` : "";
+  return `${API_ORIGIN}/rooms/${encodeURIComponent(roomId)}/events${suffix}`;
+}
+
+export async function fetchMatches(): Promise<MatchesResponse> {
+  const response = await fetch(`${API_ORIGIN}/matches`);
+  if (!response.ok) throw new Error(`matches_failed:${response.status}`);
+  return response.json();
+}
+
+export async function fetchMatchCatalog(): Promise<MatchCatalogResponse> {
+  const response = await fetch(`${API_ORIGIN}/matches/catalog`);
+  if (!response.ok) throw new Error(`match_catalog_failed:${response.status}`);
+  return response.json();
+}
+
+export async function fetchMatchTxlineContext(fixtureId: string): Promise<MatchTxlineContext> {
+  const response = await fetch(`${API_ORIGIN}/matches/${encodeURIComponent(fixtureId)}/txline-context`);
+  if (!response.ok) throw new Error(`txline_context_failed:${response.status}`);
+  return response.json();
+}
+
+export async function fetchTxlineProbe(kind: TxlineProbeKind, fixtureId: string): Promise<TxlineProbeResult> {
+  const endpointByKind: Record<TxlineProbeKind, string> = {
+    scores: "/txline/scores",
+    updates: "/txline/scores/updates",
+    historical: "/txline/scores/historical",
+    odds: "/txline/odds",
+  };
+  const endpoint = `${endpointByKind[kind]}?fixtureId=${encodeURIComponent(fixtureId)}`;
+  const response = await fetch(`${API_ORIGIN}${endpoint}`);
+  const text = await response.text();
+  let payload: unknown = text;
+  try {
+    payload = text ? JSON.parse(text) : null;
+  } catch {
+    payload = text;
+  }
+  return {
+    ok: response.ok,
+    status: response.status,
+    endpoint,
+    payload,
+  };
+}
+
+export async function fetchLatestTxlineOdds(roomId: string, fixtureId = roomId): Promise<{
+  accepted: boolean;
+  requestId: string;
+  evidenceId?: string;
+}> {
+  const response = await fetch(`${API_ORIGIN}/rooms/${encodeURIComponent(roomId)}/txline/ingest-odds`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ fixtureId }),
+  });
+  if (!response.ok) throw new Error(`txline_odds_ingest_failed:${response.status}`);
+  return response.json();
+}
+
+export interface TxlineStreamSingleStatus {
+  connected: boolean;
+  status: "idle" | "running" | "failed" | "stopped";
+  kind?: "scores" | "odds";
+  fixtureId?: string | null;
+  endpoint?: string;
+  acceptedMessages?: number;
+  ignoredMessages?: number;
+  lastMessageAt?: string | null;
+  lastError?: string | null;
+  startedAt?: string;
+}
+
+export interface TxlineStreamStatus {
+  scores: TxlineStreamSingleStatus;
+  odds: TxlineStreamSingleStatus;
+}
+
+export async function connectTxlineOddsStream(roomId: string, fixtureId = roomId): Promise<TxlineStreamSingleStatus> {
+  const response = await fetch(`${API_ORIGIN}/rooms/${encodeURIComponent(roomId)}/txline/connect-odds`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ fixtureId }),
+  });
+  if (!response.ok) throw new Error(`txline_odds_stream_connect_failed:${response.status}`);
+  return response.json();
+}
+
+export async function disconnectTxlineStream(roomId: string, kind?: "scores" | "odds"): Promise<TxlineStreamStatus | TxlineStreamSingleStatus> {
+  const response = await fetch(`${API_ORIGIN}/rooms/${encodeURIComponent(roomId)}/txline/disconnect`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ kind }),
+  });
+  if (!response.ok) throw new Error(`txline_stream_disconnect_failed:${response.status}`);
+  return response.json();
+}
+
+export async function fetchTxlineStreamStatus(roomId: string): Promise<TxlineStreamStatus> {
+  const response = await fetch(`${API_ORIGIN}/rooms/${encodeURIComponent(roomId)}/txline/status`);
+  if (!response.ok) throw new Error(`txline_stream_status_failed:${response.status}`);
+  return response.json();
+}

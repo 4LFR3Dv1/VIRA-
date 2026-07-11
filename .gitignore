@@ -1,0 +1,11 @@
+.env
+.env.*
+!.env.example
+.txline/
+dist/
+node_modules/
+backend/*.log
+backend/.cache/
+data/vira/
+*.log
+*.err
