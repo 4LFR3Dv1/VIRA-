@@ -9,13 +9,13 @@
   "theme_color": "#050814",
   "icons": [
     {
-      "src": "/favicon.png",
+      "src": "/vira-symbol.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/apple-touch-icon.png",
+      "src": "/vira-symbol.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any maskable"
