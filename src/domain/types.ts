@@ -75,6 +75,7 @@ export interface PredictionRound {
   options: PredictionOption[];
   opensAtClockSec: number;
   locksAtClockSec: number;
+  answerWindowSec?: number;
   openedAt: string;
   locksAt: string;
   lockedAt?: string | null;

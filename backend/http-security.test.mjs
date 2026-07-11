@@ -115,6 +115,7 @@ test("public round replay endpoint is canonical and public answers stay private"
     const participant = await runtime.join(roomId, "Private Player");
     const round = runtime.snapshot(roomId, participant.participant.id).currentRound;
     await runtime.submitAnswer(roomId, round.id, participant.participant.id, "yes", "answer-http-replay", round.version, participant.sessionToken);
+    runtime.getRoom(roomId).currentRound.locksAt = new Date(Date.now() - 1).toISOString();
     await runtime.applyNormalizedEvent(roomId, {
       id: "odds-http-replay",
       matchId: roomId,

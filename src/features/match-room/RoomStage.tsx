@@ -190,25 +190,33 @@ function WaitingSignalStage({ state, latestPresentationEvent }: { state: ReplayS
   const predicate = round.resolution.predicate ?? {};
   const opening = typeof predicate.openingValue === "number" ? predicate.openingValue : null;
   const target = typeof predicate.pctGte === "number" ? predicate.pctGte : null;
-  const current = latestPresentationEvent?.kind === "txline_update" ? latestPresentationEvent.currentValue : state.snapshot.marketDistribution.yes;
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (round.state !== "open") return undefined;
+    const timer = window.setInterval(() => setNow(Date.now()), 500);
+    return () => window.clearInterval(timer);
+  }, [round.id, round.state]);
+  const remainingSec = Math.max(0, Math.ceil((Date.parse(round.locksAt) - now) / 1_000));
+  const answersClosed = round.state === "locked";
 
   return (
     <motion.section layout className="overflow-hidden border-y border-white/15 bg-[#090d18] px-5 py-10 md:px-8 md:py-14">
-      <div className="flex items-center gap-2 font-['DM_Mono'] text-[10px] font-black uppercase tracking-[.18em] text-primary"><Check className="size-4" /> Palpite registrado</div>
+      <div className="flex items-center gap-2 font-['DM_Mono'] text-[10px] font-black uppercase tracking-[.18em] text-primary"><Check className="size-4" /> {answersClosed ? "Respostas encerradas" : "Palpite confirmado"}</div>
       <div className="mt-7 grid gap-10 lg:grid-cols-[1fr_.72fr] lg:items-end">
         <div>
-          <h1 className="font-['Chakra_Petch'] text-[clamp(2.8rem,6vw,6.3rem)] font-black uppercase leading-[.8]">Aguardando<span className="block text-primary">proximo sinal</span></h1>
+          <h1 className="font-['Chakra_Petch'] text-[clamp(2.8rem,6vw,6.3rem)] font-black uppercase leading-[.8]">{answersClosed ? "O proximo sinal" : "Acompanhando seu"}<span className="block text-primary">{answersClosed ? "decide" : "palpite"}</span></h1>
           <p className="mt-7 text-sm text-white/50">Voce respondeu: <strong className="ml-1 uppercase text-white">{option?.label ?? answer?.optionId ?? "--"}</strong></p>
+          <div className="mt-6 border-l-2 border-primary pl-4"><p className="font-['DM_Mono'] text-[9px] uppercase text-white/35">{answersClosed ? "Estado da rodada" : "Janela de resposta"}</p><strong className="mt-1 block font-['Chakra_Petch'] text-2xl font-black uppercase">{answersClosed ? "Escolhas bloqueadas" : `Fecha em ${remainingSec}s`}</strong><p className="mt-1 text-xs text-white/40">{answersClosed ? "A primeira observacao elegivel recebida agora resolve todos." : "Seu palpite ja esta confirmado. Outros participantes ainda podem responder."}</p></div>
         </div>
         <div className="border-l border-white/15 pl-6">
           <p className="font-['DM_Mono'] text-[10px] uppercase text-white/35">Sinal monitorado</p>
           <div className="mt-5 flex items-end gap-4">
-            <SignalValue label="Abertura" value={opening} />
+            <SignalValue label="Abertura congelada" value={opening} />
             <span className="pb-2 text-2xl text-primary">→</span>
-            <SignalValue label={current ? "Agora" : "Alvo"} value={current || target} highlight />
+            <SignalValue label="Alvo" value={target} highlight />
           </div>
           <div className="relative mt-7 h-px bg-white/15"><motion.span className="absolute top-1/2 size-3 -translate-y-1/2 rounded-full bg-primary shadow-[0_0_24px_rgba(202,255,40,.8)]" animate={{ left: ["8%", "88%", "8%"] }} transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }} /></div>
-          <p className="mt-6 flex items-center gap-2 text-xs text-white/40"><Radio className="size-3 text-primary" /> A TxLINE resolvera esta rodada no proximo evento elegivel.</p>
+          <p className="mt-6 flex items-center gap-2 text-xs text-white/40"><Radio className="size-3 text-primary" /> {answersClosed ? "Monitorando o primeiro sinal elegivel apos o fechamento." : "Updates intermediarios nao alteram sua pergunta, abertura ou alvo."}</p>
         </div>
       </div>
     </motion.section>

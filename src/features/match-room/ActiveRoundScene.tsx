@@ -1,5 +1,6 @@
 import { Check, Send } from "lucide-react";
 import { motion } from "motion/react";
+import { useEffect, useState } from "react";
 
 import type { ReplayState } from "../../domain/types";
 import { AnimatedNumber } from "../../shared/number/AnimatedNumber";
@@ -16,19 +17,25 @@ interface ActiveRoundSceneProps {
 export function ActiveRoundScene({ model, state, answerSummary, onSelect, onSubmit }: ActiveRoundSceneProps) {
   if (!model.round) return null;
   const selected = state.selectedOptionId;
-  const locked = state.currentAnswerState === "submitted";
+  const locked = state.currentAnswerState === "submitted" || state.snapshot.currentRound?.state !== "open";
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 500);
+    return () => window.clearInterval(timer);
+  }, [state.snapshot.currentRound?.id]);
+  const remainingSec = Math.max(0, Math.ceil((Date.parse(state.snapshot.currentRound?.locksAt ?? "") - now) / 1_000));
   const total = Object.values(answerSummary).reduce((sum, value) => sum + value, 0);
 
   return (
     <motion.section initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} className="overflow-hidden border-y border-white/15 bg-[#090d18] px-5 py-8 md:px-8 md:py-11">
       <div className="flex items-end justify-between gap-5 border-b border-white/15 pb-5">
         <div><p className="font-['DM_Mono'] text-[10px] font-black uppercase tracking-[.2em] text-primary">Rodada {String(model.round.number).padStart(2, "0")}</p><p className="mt-1 text-xs text-white/40">Uma resposta por participante</p></div>
-        <span className="font-['DM_Mono'] text-[10px] uppercase text-white/40">{model.round.status === "open" ? "Palpites abertos" : model.round.status}</span>
+        <span className="font-['DM_Mono'] text-[10px] uppercase text-white/55">{model.round.status === "open" ? `${remainingSec}s para responder` : "Respostas encerradas"}</span>
       </div>
 
       <h1 className="mt-8 max-w-5xl font-['Chakra_Petch'] text-[clamp(2.6rem,5.8vw,6rem)] font-black uppercase leading-[.8]">{model.round.question}</h1>
 
-      {model.market ? <MarketScoreboard model={model} /> : null}
+      {model.market ? <MarketScoreboard model={model} remainingSec={remainingSec} /> : null}
 
       <div className="mt-8 grid min-h-52 overflow-hidden border-y border-white/15 md:grid-cols-2">
         {model.round.options.map((option) => {
@@ -56,7 +63,7 @@ export function ActiveRoundScene({ model, state, answerSummary, onSelect, onSubm
   );
 }
 
-function MarketScoreboard({ model }: { model: ViraExperienceModel }) {
+function MarketScoreboard({ model, remainingSec }: { model: ViraExperienceModel; remainingSec: number }) {
   const market = model.market;
   if (!market) return null;
   const values = [market.openingValue, market.currentValue, market.targetValue].filter((value): value is number => typeof value === "number");
@@ -64,13 +71,13 @@ function MarketScoreboard({ model }: { model: ViraExperienceModel }) {
   const max = Math.max(...values, 100) + 1;
   const position = (value: number | null) => value === null ? 0 : Math.max(0, Math.min(100, ((value - min) / (max - min)) * 100));
   return <section className="mt-9 border-y border-white/15 py-7">
-    <div className="flex items-end justify-between"><div><p className="font-['DM_Mono'] text-[9px] uppercase text-primary">Placar de mercado</p><h2 className="mt-1 font-['Chakra_Petch'] text-2xl font-black uppercase">{market.label}</h2></div><span className="font-['DM_Mono'] text-[9px] uppercase text-white/35">Proximo sinal resolve</span></div>
+    <div className="flex items-end justify-between gap-4"><div><p className="font-['DM_Mono'] text-[9px] uppercase text-primary">Placar da rodada</p><h2 className="mt-1 font-['Chakra_Petch'] text-2xl font-black uppercase">{market.label}</h2></div><span className="text-right font-['DM_Mono'] text-[9px] uppercase text-white/45">{remainingSec}s para responder<br />depois, o proximo sinal decide</span></div>
     <div className="relative mt-9 h-16">
       <div className="absolute inset-x-0 top-1/2 h-px bg-white/15" />
       {market.targetValue !== null ? <span className="absolute top-0 h-full w-px bg-primary" style={{ left: `${position(market.targetValue)}%` }} /> : null}
       {market.currentValue !== null ? <motion.span layoutId="live-market-value" className="absolute top-1/2 size-4 -translate-x-1/2 -translate-y-1/2 rounded-full bg-primary shadow-[0_0_28px_rgba(202,255,40,.8)]" animate={{ left: `${position(market.currentValue)}%` }} /> : null}
     </div>
-    <div className="grid grid-cols-3 gap-4 border-t border-white/10 pt-5"><Probability label="Abertura" value={market.openingValue} /><Probability label="Agora" value={market.currentValue} highlight /><Probability label="Alvo" value={market.targetValue} /></div>
+    <div className="grid grid-cols-3 gap-4 border-t border-white/10 pt-5"><Probability label="Abertura" value={market.openingValue} /><Probability label="Referencia" value={market.openingValue} highlight /><Probability label="Alvo" value={market.targetValue} /></div>
   </section>;
 }
 

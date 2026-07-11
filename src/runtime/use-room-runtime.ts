@@ -226,20 +226,6 @@ export function useRoomRuntime(roomId: string, displayName?: string | null) {
       const snapshot = JSON.parse((event as MessageEvent).data) as RoomSnapshot;
       setState((current) => stateFromSnapshot(current, snapshot, participantId));
     });
-    events.addEventListener("match.event_received", (event) => {
-      const matchEvent = JSON.parse((event as MessageEvent).data) as NormalizedMatchEvent;
-      if (matchEvent.type !== "odds_shift") return;
-      const snapshot = latestStateRef.current.snapshot;
-      const currentValue = marketValueFromEvent(matchEvent, snapshot);
-      enqueuePresentationEvent({
-        id: `txline-update:${roomId}:${matchEvent.id}`,
-        kind: "txline_update",
-        eventId: matchEvent.id,
-        previousValue: marketValueFromSnapshot(snapshot),
-        currentValue,
-        providerSequence: numberOrNull(matchEvent.providerSequence) ?? numberOrNull(matchEvent.payload?.Seq) ?? undefined,
-      });
-    });
     events.addEventListener("round.resolved", (event) => {
       const resolution = JSON.parse((event as MessageEvent).data) as RoundResolutionResult;
       const previousSnapshot = latestStateRef.current.snapshot;

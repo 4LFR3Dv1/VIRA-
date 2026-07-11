@@ -344,6 +344,7 @@ test("concurrent matching observations resolve a round only once", async () => {
     const { runtime, renan, roomId } = await setupRuntimeRoom(dataDir);
     const round = runtime.snapshot(roomId, renan.participant.id).currentRound;
     await runtime.submitAnswer(roomId, round.id, renan.participant.id, "yes", "race-answer", round.version, renan.sessionToken);
+    runtime.getRoom(roomId).currentRound.locksAt = new Date(Date.now() - 1).toISOString();
     await Promise.all([
       runtime.applyNormalizedEvent(roomId, oddsEvent({ roomId, id: "race-1", seq: 301, homePct: 60 }), { acquisitionOrigin: "txline_live_stream" }),
       runtime.applyNormalizedEvent(roomId, oddsEvent({ roomId, id: "race-2", seq: 302, homePct: 61 }), { acquisitionOrigin: "txline_live_stream" }),
@@ -352,6 +353,51 @@ test("concurrent matching observations resolve a round only once", async () => {
     assert.equal(events.filter((event) => event.type === "round.locked" && event.payload.roundId === round.id).length, 1);
     assert.equal(events.filter((event) => event.type === "round.resolved" && event.payload.roundId === round.id).length, 1);
     assert.equal(runtime.snapshot(roomId, renan.participant.id).leaderboard.find((entry) => entry.participantId === renan.participant.id).points, 100);
+  } finally {
+    await rm(dataDir, { recursive: true, force: true });
+  }
+});
+
+test("signals received during the answer window cannot close or mutate the round contract", async () => {
+  const dataDir = await mkdtemp(path.join(os.tmpdir(), "vira-fixed-answer-window-"));
+  try {
+    const { runtime, renan, roomId } = await setupRuntimeRoom(dataDir);
+    const room = runtime.getRoom(roomId);
+    room.currentRound = {
+      ...room.currentRound,
+      title: "Spain chega a 53% ou mais no proximo sinal?",
+      locksAt: new Date(Date.now() + 30_000).toISOString(),
+      answerWindowSec: 30,
+      resolution: {
+        ...room.currentRound.resolution,
+        predicate: {
+          ...room.currentRound.resolution.predicate,
+          openingValue: 52,
+          pctGte: 53,
+          openedFromEventId: "opening-100",
+          minimumProviderSequence: 101,
+        },
+      },
+    };
+    const frozen = { title: room.currentRound.title, openingValue: room.currentRound.resolution.predicate.openingValue, target: room.currentRound.resolution.predicate.pctGte };
+    await runtime.submitAnswer(roomId, room.currentRound.id, renan.participant.id, "yes", "window-answer", room.currentRound.version, renan.sessionToken);
+    await runtime.applyNormalizedEvent(roomId, oddsEvent({ roomId, id: "window-signal-1", seq: 101, homePct: 54 }), { acquisitionOrigin: "txline_live_stream" });
+
+    const duringWindow = runtime.snapshot(roomId, renan.participant.id);
+    assert.equal(duringWindow.currentRound.state, "open");
+    assert.equal(duringWindow.leaderboard[0].points, 0);
+    assert.deepEqual({ title: duringWindow.currentRound.title, openingValue: duringWindow.currentRound.resolution.predicate.openingValue, target: duringWindow.currentRound.resolution.predicate.pctGte }, frozen);
+    const eventsBeforeLock = await runtime.publicEvents(roomId);
+    assert.equal(eventsBeforeLock.some((event) => event.type === "round.locked"), false);
+    assert.equal(eventsBeforeLock.some((event) => event.type === "round.resolved"), false);
+
+    runtime.getRoom(roomId).currentRound.locksAt = new Date(Date.now() - 1).toISOString();
+    await runtime.applyNormalizedEvent(roomId, oddsEvent({ roomId, id: "window-signal-2", seq: 102, homePct: 54 }), { acquisitionOrigin: "txline_live_stream" });
+    const resolved = runtime.snapshot(roomId, renan.participant.id);
+    assert.equal(resolved.leaderboard[0].points, 100);
+    const finalEvents = await runtime.publicEvents(roomId);
+    assert.equal(finalEvents.filter((event) => event.type === "round.locked").length, 1);
+    assert.equal(finalEvents.filter((event) => event.type === "round.resolved").length, 1);
   } finally {
     await rm(dataDir, { recursive: true, force: true });
   }

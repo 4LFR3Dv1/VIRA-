@@ -167,6 +167,7 @@ Internal mutation routes require both `VIRA_INTERNAL_INGEST_ENABLED=true` and a 
 
 - Round authority uses its own `round.version`, independent of room projection changes.
 - The server checks the absolute `locksAt` deadline while holding the room lock.
+- Competitive rounds expose a fixed answer window (`VIRA_ROUND_ANSWER_WINDOW_SEC`, default 30 seconds); only the first eligible signal received after lock can resolve them.
 - `round.locked` is idempotent and persisted before resolution.
 - Only persisted answers submitted before lock are scored.
 - Provider observations record `txline_live_stream`, `txline_snapshot`, `verified_playback` or `internal_test` acquisition origin.

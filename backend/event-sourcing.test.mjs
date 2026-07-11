@@ -62,6 +62,7 @@ test("domain ledger restores competitive room and keeps txline idempotency after
 
     await runtime.submitAnswer(roomId, roundId, renan.participant.id, "yes", "answer-renan", openingRound.version, renan.sessionToken);
     await runtime.submitAnswer(roomId, roundId, ana.participant.id, "no", "answer-ana", openingRound.version, ana.sessionToken);
+    runtime.getRoom(roomId).currentRound.locksAt = new Date(Date.now() - 1).toISOString();
     await runtime.applyNormalizedEvent(roomId, oddsEvent({ roomId, id: "odds-101", seq: 101, homePct: 60 }));
 
     const beforeRestart = runtime.snapshot(roomId, renan.participant.id);
@@ -162,6 +163,7 @@ test("round commitment publishes asynchronously once and survives restart", asyn
     const participant = await runtime.join(roomId, "Renan");
     const round = runtime.snapshot(roomId, participant.participant.id).currentRound;
     await runtime.submitAnswer(roomId, round.id, participant.participant.id, "yes", "answer-commitment", round.version, participant.sessionToken);
+    runtime.getRoom(roomId).currentRound.locksAt = new Date(Date.now() - 1).toISOString();
     await runtime.applyNormalizedEvent(roomId, oddsEvent({ roomId, id: "odds-commitment", seq: 101, homePct: 60 }));
 
     const confirmed = await waitFor(async () => {

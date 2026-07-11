@@ -1,5 +1,6 @@
-import { Activity, CheckCircle2, CircleDot, Radio, Trophy } from "lucide-react";
+import { CheckCircle2, CircleDot, Radio, Trophy } from "lucide-react";
 import { motion, useReducedMotion } from "motion/react";
+import { useEffect, useState } from "react";
 
 import { formatMatchClock } from "../../domain/contracts";
 import type { PresentationEvent, ReplayState } from "../../domain/types";
@@ -10,18 +11,18 @@ interface LiveDecisionCapsuleProps {
   latestPresentationEvent?: PresentationEvent | null;
 }
 
-function pct(value: number | null | undefined) {
-  if (typeof value !== "number" || !Number.isFinite(value)) return "--";
-  return <AnimatedNumber value={value} suffix="%" format={{ minimumFractionDigits: 1, maximumFractionDigits: 1 }} />;
-}
-
 function optionLabel(optionId: string | null | undefined) {
   if (optionId === "yes") return "Sim";
   if (optionId === "no") return "Nao";
   return optionId ?? "--";
 }
 
-function capsuleState(state: ReplayState, event?: PresentationEvent | null) {
+function remainingLabel(locksAt: string | undefined, now: number) {
+  const total = Math.max(0, Math.ceil((Date.parse(locksAt ?? "") - now) / 1_000));
+  return `${String(Math.floor(total / 60)).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`;
+}
+
+function capsuleState(state: ReplayState, event: PresentationEvent | null | undefined, now: number) {
   const round = state.snapshot.currentRound;
   if (state.snapshot.match.status === "finished") {
     return {
@@ -44,24 +45,14 @@ function capsuleState(state: ReplayState, event?: PresentationEvent | null) {
     };
   }
 
-  if (event?.kind === "txline_update") {
-    return {
-      tone: "live",
-      icon: Activity,
-      label: "TxLINE update",
-      title: "Mercado atualizado",
-      detail: event.currentValue !== null ? `${event.currentValue.toFixed(1)}%` : "sinal recebido",
-      event,
-    };
-  }
-
   if (event?.kind === "answer_registered" || state.currentAnswerState === "submitted") {
+    const closed = round?.state === "locked";
     return {
       tone: "registered",
       icon: CheckCircle2,
-      label: "Palpite registrado",
-      title: "Aguardando TxLINE",
-      detail: round ? `Rodada ${String(round.sequence).padStart(2, "0")}` : "sincronizado",
+      label: closed ? "Respostas encerradas" : "Palpite confirmado",
+      title: closed ? "O proximo sinal decide" : "Sua escolha esta protegida",
+      detail: closed ? optionLabel(state.snapshot.currentParticipantAnswer?.optionId) : remainingLabel(round?.locksAt, now),
       event,
     };
   }
@@ -86,7 +77,13 @@ function toneClasses(tone: string) {
 
 export function LiveDecisionCapsule({ state, latestPresentationEvent }: LiveDecisionCapsuleProps) {
   const reduceMotion = useReducedMotion();
-  const current = capsuleState(state, latestPresentationEvent);
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (state.snapshot.currentRound?.state !== "open") return undefined;
+    const timer = window.setInterval(() => setNow(Date.now()), 500);
+    return () => window.clearInterval(timer);
+  }, [state.snapshot.currentRound?.id, state.snapshot.currentRound?.state]);
+  const current = capsuleState(state, latestPresentationEvent, now);
   const Icon = current.icon;
   const event = "event" in current ? current.event : null;
 
@@ -94,7 +91,7 @@ export function LiveDecisionCapsule({ state, latestPresentationEvent }: LiveDeci
     <div className="sticky top-[4.7rem] z-30 mx-auto mt-2 w-full max-w-6xl px-3 md:px-4 lg:px-5">
       <motion.section
         layout
-        key={`${current.label}:${current.title}:${event?.id ?? state.snapshot.version}`}
+        key={`${state.snapshot.currentRound?.id}:${state.snapshot.currentRound?.state}:${state.currentAnswerState}:${event?.kind ?? "steady"}`}
         initial={reduceMotion ? false : { opacity: 0, y: -8, scale: 0.98 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
         transition={{ type: "spring", stiffness: 420, damping: 34 }}
@@ -109,16 +106,7 @@ export function LiveDecisionCapsule({ state, latestPresentationEvent }: LiveDeci
             <p className="truncate font-['DM_Mono'] text-[9px] uppercase tracking-[.16em] text-muted-foreground">
               {current.label}
             </p>
-            <div className="flex min-w-0 items-center gap-2">
-              <h2 className="truncate font-['Chakra_Petch'] text-sm font-bold leading-tight md:text-base">{current.title}</h2>
-              {event?.kind === "txline_update" && event.previousValue !== null && event.currentValue !== null ? (
-                <span className="hidden shrink-0 items-center gap-1 font-['DM_Mono'] text-[10px] text-primary sm:inline-flex">
-                  {pct(event.previousValue)}
-                  <span className="text-muted-foreground">→</span>
-                  {pct(event.currentValue)}
-                </span>
-              ) : null}
-            </div>
+            <h2 className="truncate font-['Chakra_Petch'] text-sm font-bold leading-tight md:text-base">{current.title}</h2>
           </div>
           <div className="shrink-0 rounded-full bg-background/80 px-3 py-1.5 text-right font-['DM_Mono'] text-[10px] text-primary">
             {event?.kind === "round_resolved" ? (

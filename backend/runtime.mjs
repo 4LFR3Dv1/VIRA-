@@ -36,11 +36,14 @@ const matchSeed = {
 
 const dynamicFixtureSeeds = new Map();
 const dynamicPredictionSeeds = new Map();
+const DEFAULT_ROUND_ANSWER_WINDOW_SEC = Math.max(10, Math.min(120, Number(process.env.VIRA_ROUND_ANSWER_WINDOW_SEC) || 30));
 
 function openedRound(round, openedAtMs = Date.now()) {
-  const durationSec = Math.max(1, Number(round.locksAtClockSec) - Number(round.opensAtClockSec) || 90);
+  const durationSec = Math.max(1, Number(round.answerWindowSec) || Number(round.locksAtClockSec) - Number(round.opensAtClockSec) || DEFAULT_ROUND_ANSWER_WINDOW_SEC);
   return {
     ...round,
+    answerWindowSec: durationSec,
+    locksAtClockSec: Number(round.opensAtClockSec) + durationSec,
     version: Number(round.version) || 1,
     openedAt: round.openedAt ?? new Date(openedAtMs).toISOString(),
     locksAt: round.locksAt ?? new Date(openedAtMs + durationSec * 1_000).toISOString(),
@@ -84,6 +87,7 @@ function roundSeedsForMatch(match) {
   return [
     {
       ...roundSeeds[0],
+      answerWindowSec: DEFAULT_ROUND_ANSWER_WINDOW_SEC,
       matchId: match.id,
       title: `${match.homeTeam.name} chega a 55% ou mais no proximo sinal?`,
       contextLabel: "Mercado 1X2 · proximo sinal elegivel",
@@ -99,6 +103,7 @@ function roundSeedsForMatch(match) {
     },
     {
       ...roundSeeds[1],
+      answerWindowSec: DEFAULT_ROUND_ANSWER_WINDOW_SEC,
       matchId: match.id,
       title: `A probabilidade de ${match.homeTeam.name} sobe no proximo sinal?`,
       contextLabel: "Mercado 1X2 · direcao do proximo sinal",
@@ -376,6 +381,7 @@ export function createRoomRuntime({ eventStore = null, commitmentPublisher = nul
   function applySuggestedPrediction(room, suggestedPrediction) {
     if (!suggestedPrediction || !room.currentRound || room.currentRound.state !== "open") return;
     if (room.match.status === "finished") return;
+    if (Object.keys(currentRoundAnswers(room)).length > 0) return;
     room.currentRound = {
       ...room.currentRound,
       title: suggestedPrediction.prompt,
@@ -894,7 +900,8 @@ export function createRoomRuntime({ eventStore = null, commitmentPublisher = nul
       options: [{ id: "yes", label: "Sim" }, { id: "no", label: "Nao" }],
       title: `A probabilidade de ${sideLabel} sobe no proximo sinal?`,
       opensAtClockSec: event.matchClockSec,
-      locksAtClockSec: event.matchClockSec + 90,
+      locksAtClockSec: event.matchClockSec + DEFAULT_ROUND_ANSWER_WINDOW_SEC,
+      answerWindowSec: DEFAULT_ROUND_ANSWER_WINDOW_SEC,
       state: "open",
       resolution: {
         mode: "first_matching_event",
@@ -1058,10 +1065,11 @@ export function createRoomRuntime({ eventStore = null, commitmentPublisher = nul
     room.currentRound = {
       ...room.currentRound,
       opensAtClockSec: event.matchClockSec,
-      locksAtClockSec: event.matchClockSec + 90,
+      locksAtClockSec: event.matchClockSec + DEFAULT_ROUND_ANSWER_WINDOW_SEC,
+      answerWindowSec: DEFAULT_ROUND_ANSWER_WINDOW_SEC,
       version: (Number(room.currentRound.version) || 1) + 1,
       openedAt: new Date(eventServerTimeMs(event)).toISOString(),
-      locksAt: new Date(eventServerTimeMs(event) + 90_000).toISOString(),
+      locksAt: new Date(eventServerTimeMs(event) + DEFAULT_ROUND_ANSWER_WINDOW_SEC * 1_000).toISOString(),
     };
     scheduleRoundLock(room);
     const openEntry = room.timeline.find((item) => item.id === "timeline-round-1-open");
@@ -1096,6 +1104,7 @@ export function createRoomRuntime({ eventStore = null, commitmentPublisher = nul
     if (!round || round.state !== "open" || event.type !== "odds_shift") return;
     if (Object.keys(currentRoundAnswers(room)).length > 0) return;
     const predicate = round.resolution?.predicate ?? {};
+    if (Number.isFinite(Number(predicate.openingValue)) && predicate.openedFromEventId) return;
     const providerSequence = Number(event.providerSequence ?? event.payload?.Seq ?? event.payload?.seq);
     const shouldReanchor = !Number.isFinite(Number(predicate.minimumProviderSequence))
       || Number(predicate.minimumProviderSequence) <= 1
@@ -1112,10 +1121,11 @@ export function createRoomRuntime({ eventStore = null, commitmentPublisher = nul
         .replace(/ultrapassa \d+(?:\.\d+)?%/, `chega a ${nextThreshold}% ou mais`)
         .replace(/chega a \d+(?:\.\d+)?% ou mais/, `chega a ${nextThreshold}% ou mais`),
       opensAtClockSec: event.matchClockSec || room.match.matchClockSec,
-      locksAtClockSec: (event.matchClockSec || room.match.matchClockSec) + 90,
+      locksAtClockSec: (event.matchClockSec || room.match.matchClockSec) + DEFAULT_ROUND_ANSWER_WINDOW_SEC,
+      answerWindowSec: DEFAULT_ROUND_ANSWER_WINDOW_SEC,
       version: (Number(round.version) || 1) + 1,
       openedAt: new Date(eventServerTimeMs(event)).toISOString(),
-      locksAt: new Date(eventServerTimeMs(event) + 90_000).toISOString(),
+      locksAt: new Date(eventServerTimeMs(event) + DEFAULT_ROUND_ANSWER_WINDOW_SEC * 1_000).toISOString(),
       resolution: {
         ...round.resolution,
         predicate: {
@@ -1856,8 +1866,8 @@ export function createRoomRuntime({ eventStore = null, commitmentPublisher = nul
     const currentRuleEvaluation = ruleEvaluationFor(room.currentRound, event);
     if (room.currentRound?.state === "open") {
       const deadlineElapsed = room.currentRound.locksAt && Date.now() >= Date.parse(room.currentRound.locksAt);
-      if (deadlineElapsed || currentRuleEvaluation.predicateResult) {
-        await lockCurrentRound(room, deadlineElapsed ? "deadline_elapsed" : "resolution_signal_received", { causationId: event.id, correlationId });
+      if (deadlineElapsed) {
+        await lockCurrentRound(room, "deadline_elapsed", { causationId: event.id, correlationId });
       }
     }
     const resolution = resolveCurrentRound(room, event);
