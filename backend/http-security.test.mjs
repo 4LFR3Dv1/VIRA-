@@ -48,6 +48,16 @@ test("internal ingestion is disabled by default and rejected requests do not app
     assert.equal(readiness.checks.rehydration.ok, true);
     assert.equal(readiness.checks.eventStore.ok, true);
     assert.equal(readiness.checks.txline.required, false);
+    const frontend = await fetch(`${origin}/`);
+    assert.equal(frontend.status, 200);
+    assert.match(frontend.headers.get("content-type") || "", /^text\/html/);
+    const html = await frontend.text();
+    const modulePath = html.match(/<script[^>]+src="([^"]+\.js)"/)?.[1];
+    assert.ok(modulePath, "built frontend module should be present");
+    const moduleResponse = await fetch(new URL(modulePath, origin));
+    assert.equal(moduleResponse.status, 200);
+    assert.match(moduleResponse.headers.get("content-type") || "", /^text\/javascript/);
+    assert.doesNotMatch(await moduleResponse.text(), /<html/i);
     const response = await fetch(`${origin}/rooms/security-room/txline-event`, {
       method: "POST",
       headers: { "Content-Type": "application/json", "X-Vira-Admin-Token": "test-admin-secret" },

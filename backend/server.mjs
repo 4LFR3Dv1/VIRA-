@@ -89,10 +89,14 @@ async function serveFrontend(request, response, pathname) {
   if (request.method !== "GET" && request.method !== "HEAD") return false;
   const requested = pathname === "/" ? "index.html" : pathname.replace(/^\/+/, "");
   const candidate = path.resolve(distDirectory, requested);
-  let filePath = candidate.startsWith(`${distDirectory}${path.sep}`) ? candidate : path.join(distDirectory, "index.html");
+  const relativeCandidate = path.relative(distDirectory, candidate);
+  const insideDist = relativeCandidate === "" || (!relativeCandidate.startsWith("..") && !path.isAbsolute(relativeCandidate));
+  if (!insideDist) return false;
+  let filePath = candidate;
   try {
-    if (!(await stat(filePath)).isFile()) filePath = path.join(distDirectory, "index.html");
+    if (!(await stat(filePath)).isFile()) throw new Error("static_file_not_found");
   } catch {
+    if (path.extname(requested)) return false;
     filePath = path.join(distDirectory, "index.html");
   }
   try {
