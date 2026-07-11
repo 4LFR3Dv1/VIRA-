@@ -87,3 +87,15 @@ test("degraded empty odds response cannot replace a rich confirmed context", asy
   assert.equal(refreshed.matches[0].availability.contextStatus, "stale");
   assert.equal(refreshed.matches[0].contextError, "degraded_refresh_preserved_previous");
 });
+
+test("background startup refresh contains provider failures", async () => {
+  const cache = createTxlineCatalogCache({
+    loadMatches: async () => { throw new Error("missing_txline_credentials"); },
+    loadContext: async () => null,
+    refreshMs: 60_000,
+  });
+  cache.start();
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  assert.equal(cache.status().lastError, "missing_txline_credentials");
+  cache.stop();
+});

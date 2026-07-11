@@ -167,9 +167,11 @@ export function createTxlineCatalogCache({
 
   function start() {
     if (interval) return;
-    interval = setInterval(() => void refresh("interval"), refreshMs);
+    interval = setInterval(() => {
+      void refresh("interval").catch(() => undefined);
+    }, refreshMs);
     interval.unref?.();
-    void refresh("startup");
+    void refresh("startup").catch(() => undefined);
   }
 
   function stop() {

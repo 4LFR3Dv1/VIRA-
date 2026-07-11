@@ -763,14 +763,18 @@ const server = http.createServer((request, response) => {
 });
 
 const catalogHydrated = await txlineCatalogCache.hydrate();
-if (!catalogHydrated) {
-  try {
-    await txlineCatalogCache.refresh("startup-warm");
-  } catch (error) {
-    console.error("VIRA TxLINE catalog failed initial warmup", error);
+if (hasTxlineCredentials(txlineConfig)) {
+  if (!catalogHydrated) {
+    try {
+      await txlineCatalogCache.refresh("startup-warm");
+    } catch (error) {
+      console.error("VIRA TxLINE catalog failed initial warmup", error);
+    }
   }
+  txlineCatalogCache.start();
+} else {
+  console.warn("VIRA TxLINE catalog refresh disabled: missing credentials");
 }
-txlineCatalogCache.start();
 
 server.listen(port, () => {
   console.log(`VIRA runtime listening on http://127.0.0.1:${port}`);
