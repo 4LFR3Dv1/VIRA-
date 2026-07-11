@@ -18,18 +18,34 @@ function readKeypair() {
   return Keypair.fromSecretKey(Uint8Array.from(raw));
 }
 
+function unsupportedPublisher(reason = "solana_commitment_unsupported") {
+  return {
+    enabled: false,
+    network: "unsupported",
+    reason,
+    async publish() { throw new Error(reason); },
+  };
+}
+
 export function createSolanaCommitmentPublisherFromEnv() {
   if (!enabledFromEnv()) {
-    return {
-      enabled: false,
-      network: "unsupported",
-      async publish() { throw new Error("solana_commitment_unsupported"); },
-    };
+    return unsupportedPublisher();
   }
-  const network = String(process.env.VIRA_SOLANA_NETWORK ?? "devnet");
-  if (network !== "devnet") throw new Error("solana_commitment_devnet_required");
-  const rpcUrl = String(process.env.VIRA_SOLANA_RPC_URL ?? "https://api.devnet.solana.com");
-  const payer = readKeypair();
+  let network;
+  let rpcUrl;
+  let payer;
+  try {
+    network = String(process.env.VIRA_SOLANA_NETWORK ?? "devnet");
+    if (network !== "devnet") throw new Error("solana_commitment_devnet_required");
+    rpcUrl = String(process.env.VIRA_SOLANA_RPC_URL ?? "https://api.devnet.solana.com");
+    payer = readKeypair();
+  } catch (error) {
+    const reason = error?.code === "ENOENT"
+      ? "solana_commitment_keypair_missing"
+      : `solana_commitment_configuration_invalid:${error?.message ?? "unknown"}`;
+    console.warn(`VIRA Solana commitment disabled: ${reason}`);
+    return unsupportedPublisher(reason);
+  }
   const connection = new Connection(rpcUrl, "confirmed");
   async function readConfirmedTransaction(signature) {
     for (let attempt = 0; attempt < 6; attempt += 1) {
