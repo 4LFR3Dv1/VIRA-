@@ -59,6 +59,7 @@ const TXLINE_CONTEXT_CACHE_TTL_MS = 30_000;
 const TXLINE_ROOM_POLL_MS = Number(process.env.TXLINE_ROOM_POLL_MS || 10_000);
 const liveRoomFeeds = new Map();
 const internalIngestEnabled = String(process.env.VIRA_INTERNAL_INGEST_ENABLED || "false").toLowerCase() === "true";
+const requireTxlineCredentials = String(process.env.VIRA_REQUIRE_TXLINE_CREDENTIALS || "false").toLowerCase() === "true";
 const adminToken = String(process.env.VIRA_ADMIN_TOKEN || "");
 const allowedOrigins = new Set(String(process.env.VIRA_ALLOWED_ORIGINS || "http://localhost:5173,http://127.0.0.1:5173").split(",").map((value) => value.trim()).filter(Boolean));
 const distDirectory = fileURLToPath(new URL("../dist/", import.meta.url));
@@ -422,6 +423,31 @@ async function handleRequest(request, response) {
           fixtureId: txlineConfig.fixtureId || null,
           catalog: txlineCatalogCache.status(),
         },
+      });
+      return;
+    }
+
+    if (request.method === "GET" && url.pathname === "/ready") {
+      const eventStoreWritable = await eventStore.checkWritable();
+      const txlineConfigured = hasTxlineCredentials(txlineConfig);
+      const checks = {
+        rehydration: { ok: runtimeBoot.readiness, mode: runtimeBoot.mode, error: runtimeBoot.rehydrateError },
+        eventStore: eventStoreWritable,
+        txline: {
+          ok: !requireTxlineCredentials || txlineConfigured,
+          required: requireTxlineCredentials,
+          configured: txlineConfigured,
+          network: txlineConfig.network,
+        },
+      };
+      const ready = Object.values(checks).every((check) => check.ok);
+      sendJson(response, ready ? 200 : 503, {
+        ok: ready,
+        service: "vira-runtime",
+        checkedAt: new Date().toISOString(),
+        checks,
+        eventStore: eventStore.info(),
+        rehydration: runtimeBoot.rehydration ?? null,
       });
       return;
     }

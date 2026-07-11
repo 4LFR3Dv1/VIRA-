@@ -8,6 +8,7 @@ services:
       PORT: "8787"
       VIRA_DATA_DIR: /var/lib/vira
       VIRA_INTERNAL_INGEST_ENABLED: "false"
+      VIRA_REQUIRE_TXLINE_CREDENTIALS: ${VIRA_REQUIRE_TXLINE_CREDENTIALS:-true}
       VIRA_ADMIN_TOKEN: ${VIRA_ADMIN_TOKEN:-}
       VIRA_ALLOWED_ORIGINS: ${VIRA_ALLOWED_ORIGINS:-http://localhost:8787}
       TXLINE_NETWORK: ${TXLINE_NETWORK:-mainnet}
@@ -16,6 +17,12 @@ services:
       TXLINE_SERVICE_LEVEL_ID: ${TXLINE_SERVICE_LEVEL_ID:-1}
     volumes:
       - vira-data:/var/lib/vira
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8787/ready"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
     deploy:
       replicas: 1
 volumes:

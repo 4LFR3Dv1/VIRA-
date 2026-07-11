@@ -346,6 +346,24 @@ export class FileEventStore {
     };
   }
 
+  async checkWritable() {
+    const probePath = path.join(this.dataDir, `.readiness-${process.pid}-${crypto.randomUUID()}`);
+    try {
+      const handle = await fs.open(probePath, "wx");
+      try {
+        await handle.writeFile("ready", "utf8");
+        await handle.sync();
+      } finally {
+        await handle.close();
+      }
+      await fs.unlink(probePath);
+      return { ok: true, dataDir: this.dataDir };
+    } catch (error) {
+      await fs.unlink(probePath).catch(() => undefined);
+      return { ok: false, dataDir: this.dataDir, error: error.message || "event_store_not_writable" };
+    }
+  }
+
   info() {
     return {
       adapter: "file",

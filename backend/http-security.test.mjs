@@ -41,6 +41,13 @@ test("internal ingestion is disabled by default and rejected requests do not app
   });
   try {
     await waitForHealth(origin, child);
+    const ready = await fetch(`${origin}/ready`);
+    assert.equal(ready.status, 200);
+    const readiness = await ready.json();
+    assert.equal(readiness.ok, true);
+    assert.equal(readiness.checks.rehydration.ok, true);
+    assert.equal(readiness.checks.eventStore.ok, true);
+    assert.equal(readiness.checks.txline.required, false);
     const response = await fetch(`${origin}/rooms/security-room/txline-event`, {
       method: "POST",
       headers: { "Content-Type": "application/json", "X-Vira-Admin-Token": "test-admin-secret" },
@@ -50,6 +57,30 @@ test("internal ingestion is disabled by default and rejected requests do not app
     assert.equal((await response.json()).error, "internal_ingest_disabled");
     const ledger = await readFile(path.join(dataDir, "events.jsonl"), "utf8").catch(() => "");
     assert.equal(ledger.includes("security-room"), false);
+  } finally {
+    child.kill("SIGTERM");
+    await new Promise((resolve) => child.once("exit", resolve));
+    await rm(dataDir, { recursive: true, force: true });
+  }
+});
+
+test("readiness fails when production requires missing TxLINE credentials", async () => {
+  const dataDir = await mkdtemp(path.join(os.tmpdir(), "vira-ready-txline-"));
+  const port = await freePort();
+  const origin = `http://127.0.0.1:${port}`;
+  const child = spawn(process.execPath, ["backend/server.mjs"], {
+    cwd: process.cwd(),
+    env: { ...process.env, PORT: String(port), VIRA_DATA_DIR: dataDir, VIRA_REQUIRE_TXLINE_CREDENTIALS: "true", TXLINE_JWT: "", TXLINE_API_TOKEN: "" },
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  try {
+    await waitForHealth(origin, child);
+    const response = await fetch(`${origin}/ready`);
+    assert.equal(response.status, 503);
+    const body = await response.json();
+    assert.equal(body.ok, false);
+    assert.equal(body.checks.txline.required, true);
+    assert.equal(body.checks.txline.configured, false);
   } finally {
     child.kill("SIGTERM");
     await new Promise((resolve) => child.once("exit", resolve));

@@ -66,6 +66,13 @@ Frontend: http://127.0.0.1:5173
 Backend:  http://127.0.0.1:8787
 ```
 
+Operational probes:
+
+```text
+GET /health  -> process liveness
+GET /ready   -> ledger rehydrated, persistent directory writable, required TxLINE credentials configured
+```
+
 Run all release checks:
 
 ```powershell
@@ -159,6 +166,8 @@ The included `Dockerfile` serves the built frontend and API from one process. `c
 ```powershell
 docker compose up --build -d
 ```
+
+The restart proof used by CI is available as `npm run test:container`; it emits `artifacts/p1-a-container-smoke.json`. See `docs/P1_A_EVIDENCE.md` for its invariants and the public deployment record.
 
 Required production invariants:
 

@@ -10,6 +10,7 @@
     "test:adversarial": "node --test backend/event-sourcing-adversarial.test.mjs backend/http-security.test.mjs",
     "test:cache": "node --test backend/txline-catalog-cache.test.mjs",
     "test:all": "npm run typecheck && node --test backend/event-sourcing.test.mjs backend/event-sourcing-adversarial.test.mjs backend/http-security.test.mjs backend/txline-catalog-cache.test.mjs",
+    "test:container": "node scripts/ci/container-smoke.mjs",
     "verify": "npm run test:all && npm run build",
     "dev": "vite",
     "backend:dev": "node backend/server.mjs",

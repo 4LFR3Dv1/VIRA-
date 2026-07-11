@@ -9,3 +9,4 @@ backend/.cache/
 data/vira/
 *.log
 *.err
+artifacts/

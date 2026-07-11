@@ -17,3 +17,18 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run verify
+  container-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm run test:container
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: p1-a-container-smoke
+          path: artifacts/p1-a-container-smoke.json
+          if-no-files-found: warn
