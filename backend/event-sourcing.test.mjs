@@ -47,10 +47,11 @@ test("domain ledger restores competitive room and keeps txline idempotency after
 
     const renan = await runtime.join(roomId, "Renan");
     const ana = await runtime.join(roomId, "Ana");
-    const roundId = runtime.snapshot(roomId, renan.participant.id).currentRound.id;
+    const openingRound = runtime.snapshot(roomId, renan.participant.id).currentRound;
+    const roundId = openingRound.id;
 
-    await runtime.submitAnswer(roomId, roundId, renan.participant.id, "yes", "answer-renan", 1, renan.sessionToken);
-    await runtime.submitAnswer(roomId, roundId, ana.participant.id, "no", "answer-ana", 1, ana.sessionToken);
+    await runtime.submitAnswer(roomId, roundId, renan.participant.id, "yes", "answer-renan", openingRound.version, renan.sessionToken);
+    await runtime.submitAnswer(roomId, roundId, ana.participant.id, "no", "answer-ana", openingRound.version, ana.sessionToken);
     await runtime.applyNormalizedEvent(roomId, oddsEvent({ roomId, id: "odds-101", seq: 101, homePct: 60 }));
 
     const beforeRestart = runtime.snapshot(roomId, renan.participant.id);
@@ -75,7 +76,7 @@ test("domain ledger restores competitive room and keeps txline idempotency after
     assert.equal(afterDuplicate.latestEvidence.ruleEvaluation.ignoredReason, "duplicate_event_id");
 
     const nextRoundId = afterDuplicate.currentRound.id;
-    await runtimeAfterRestart.submitAnswer(roomId, nextRoundId, renan.participant.id, "yes", "answer-renan-2", afterDuplicate.version, renan.sessionToken);
+    await runtimeAfterRestart.submitAnswer(roomId, nextRoundId, renan.participant.id, "yes", "answer-renan-2", afterDuplicate.currentRound.version, renan.sessionToken);
     const afterSessionAnswer = runtimeAfterRestart.snapshot(roomId, renan.participant.id);
     assert.equal(afterSessionAnswer.answers[renan.participant.id].optionId, "yes");
 

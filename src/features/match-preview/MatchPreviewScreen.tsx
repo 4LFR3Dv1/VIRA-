@@ -199,10 +199,10 @@ export function MatchPreviewScreen() {
     const safeName = playerName.trim();
     window.localStorage.setItem("vira:displayName", safeName);
     window.localStorage.setItem(`vira:${match.fixtureId}:displayName`, safeName);
-    const params = new URLSearchParams({ name: safeName });
+    const params = new URLSearchParams();
     if (inspectOnJoin) params.set("inspect", "true");
     if (choiceOnJoin) params.set("choice", choiceOnJoin);
-    navigate(`/match/${match.fixtureId}?${params.toString()}`);
+    navigate(`/match/${match.fixtureId}${params.size ? `?${params.toString()}` : ""}`);
   };
 
   if (loadState === "loading") {

@@ -7,7 +7,7 @@ interface AnimatedNumberProps {
   prefix?: string;
   suffix?: string;
   locales?: Intl.LocalesArgument;
-  format?: Intl.NumberFormatOptions;
+  format?: React.ComponentProps<typeof NumberFlow>["format"];
 }
 
 export function AnimatedNumber({

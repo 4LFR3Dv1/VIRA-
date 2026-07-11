@@ -43,7 +43,7 @@ function pct(value: unknown) {
 function buildSteps(state: ReplayState, latestPresentationEvent?: PresentationEvent | null, verification?: RoomVerification | null): StepModel[] {
   const evidence = state.snapshot.latestEvidence ?? null;
   const currentParticipant = state.snapshot.currentParticipant;
-  const currentAnswer = currentParticipant ? state.snapshot.answers[currentParticipant.id] : null;
+  const currentAnswer = state.snapshot.currentParticipantAnswer ?? (currentParticipant ? state.snapshot.answers[currentParticipant.id] : null);
   const resolutionEvent = latestPresentationEvent?.kind === "round_resolved" ? latestPresentationEvent : null;
   const txlineEvent = latestPresentationEvent?.kind === "txline_update" ? latestPresentationEvent : null;
   const resolved = Boolean(evidence?.resolution || resolutionEvent);

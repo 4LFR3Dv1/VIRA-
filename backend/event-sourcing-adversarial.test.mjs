@@ -164,7 +164,7 @@ test("file store fails closed on tamper, removed batch, swapped order and interm
 test("public event stream never exposes session or provider secrets", async () => {
   const dataDir = await mkdtemp(path.join(os.tmpdir(), "vira-sanitize-"));
   try {
-    const { runtime, renan, roomId } = await setupRuntimeRoom(dataDir);
+    const { runtime, renan, ana, roomId } = await setupRuntimeRoom(dataDir);
     const roundId = runtime.snapshot(roomId, renan.participant.id).currentRound.id;
     await runtime.submitAnswer(roomId, roundId, renan.participant.id, "yes", "answer-secret", 1, renan.sessionToken);
     await runtime.applyNormalizedEvent(roomId, oddsEvent({
@@ -241,6 +241,89 @@ test("streams isolate rooms, hash chains and idempotency keys", async () => {
     assert.equal(roomBEvents.length, 1);
     assert.equal(roomAEvents[0].payload.room, "a");
     assert.equal(roomBEvents[0].payload.room, "b");
+  } finally {
+    await rm(dataDir, { recursive: true, force: true });
+  }
+});
+
+test("round authority rejects stale version and foreign token without mutating ledger", async () => {
+  const dataDir = await mkdtemp(path.join(os.tmpdir(), "vira-round-authority-"));
+  try {
+    const { eventStore, runtime, renan, ana, roomId } = await setupRuntimeRoom(dataDir);
+    const round = runtime.snapshot(roomId, renan.participant.id).currentRound;
+    const before = await eventStore.getStreamMetadata(roomId);
+    await assert.rejects(() => runtime.submitAnswer(roomId, round.id, renan.participant.id, "yes", "stale", round.version - 1, renan.sessionToken), /stale_round_version/);
+    await assert.rejects(() => runtime.submitAnswer(roomId, round.id, renan.participant.id, "yes", "foreign", round.version, ana.sessionToken), /invalid_session/);
+    const after = await eventStore.getStreamMetadata(roomId);
+    assert.equal(after.version, before.version);
+    assert.equal(after.headHash, before.headHash);
+    assert.equal(runtime.snapshot(roomId, renan.participant.id).leaderboard.find((entry) => entry.participantId === renan.participant.id).points, 0);
+  } finally {
+    await rm(dataDir, { recursive: true, force: true });
+  }
+});
+
+test("deadline persists round.locked and rejects the late answer", async () => {
+  const dataDir = await mkdtemp(path.join(os.tmpdir(), "vira-round-deadline-"));
+  try {
+    const { runtime, renan, roomId } = await setupRuntimeRoom(dataDir);
+    const room = runtime.getRoom(roomId);
+    room.currentRound = { ...room.currentRound, locksAt: new Date(Date.now() - 1).toISOString() };
+    await assert.rejects(() => runtime.submitAnswer(roomId, room.currentRound.id, renan.participant.id, "yes", "late", room.currentRound.version, renan.sessionToken), /round_locked/);
+    const authenticated = runtime.snapshot(roomId, renan.participant.id);
+    assert.equal(authenticated.currentRound.state, "locked");
+    assert.equal(authenticated.currentParticipantAnswer, null);
+    const events = await runtime.publicEvents(roomId);
+    assert.equal(events.filter((event) => event.type === "round.locked").length, 1);
+    assert.equal(events.some((event) => event.type === "answer.submitted"), false);
+  } finally {
+    await rm(dataDir, { recursive: true, force: true });
+  }
+});
+
+test("public projection hides individual answers and option split until lock", async () => {
+  const dataDir = await mkdtemp(path.join(os.tmpdir(), "vira-public-answers-"));
+  try {
+    const { runtime, renan, ana, roomId } = await setupRuntimeRoom(dataDir);
+    const round = runtime.snapshot(roomId, renan.participant.id).currentRound;
+    await runtime.submitAnswer(roomId, round.id, renan.participant.id, "yes", "answer-private", round.version, renan.sessionToken);
+    const publicBeforeLock = runtime.snapshot(roomId, null);
+    assert.deepEqual(publicBeforeLock.answers, {});
+    assert.equal(publicBeforeLock.currentParticipantAnswer, null);
+    assert.equal(publicBeforeLock.answerSummary.total, 1);
+    assert.equal(publicBeforeLock.answerSummary.byOption, undefined);
+    assert.deepEqual(publicBeforeLock.roomDistribution, {});
+    const room = runtime.getRoom(roomId);
+    room.currentRound = { ...room.currentRound, locksAt: new Date(Date.now() - 1).toISOString() };
+    await assert.rejects(
+      () => runtime.submitAnswer(roomId, round.id, ana.participant.id, "no", "answer-after-deadline", round.version, ana.sessionToken),
+      /round_locked/,
+    );
+    const publicAfterLock = runtime.snapshot(roomId, null);
+    assert.equal(publicAfterLock.answers[renan.participant.id], undefined);
+    assert.equal(publicAfterLock.answerSummary.byOption.yes, 1);
+    const events = await runtime.publicEvents(roomId);
+    const lockedIndex = events.findIndex((event) => event.type === "round.locked");
+    assert.ok(lockedIndex > -1);
+  } finally {
+    await rm(dataDir, { recursive: true, force: true });
+  }
+});
+
+test("concurrent matching observations resolve a round only once", async () => {
+  const dataDir = await mkdtemp(path.join(os.tmpdir(), "vira-resolution-race-"));
+  try {
+    const { runtime, renan, roomId } = await setupRuntimeRoom(dataDir);
+    const round = runtime.snapshot(roomId, renan.participant.id).currentRound;
+    await runtime.submitAnswer(roomId, round.id, renan.participant.id, "yes", "race-answer", round.version, renan.sessionToken);
+    await Promise.all([
+      runtime.applyNormalizedEvent(roomId, oddsEvent({ roomId, id: "race-1", seq: 301, homePct: 60 }), { acquisitionOrigin: "txline_live_stream" }),
+      runtime.applyNormalizedEvent(roomId, oddsEvent({ roomId, id: "race-2", seq: 302, homePct: 61 }), { acquisitionOrigin: "txline_live_stream" }),
+    ]);
+    const events = await runtime.publicEvents(roomId);
+    assert.equal(events.filter((event) => event.type === "round.locked" && event.payload.roundId === round.id).length, 1);
+    assert.equal(events.filter((event) => event.type === "round.resolved" && event.payload.roundId === round.id).length, 1);
+    assert.equal(runtime.snapshot(roomId, renan.participant.id).leaderboard.find((entry) => entry.participantId === renan.participant.id).points, 100);
   } finally {
     await rm(dataDir, { recursive: true, force: true });
   }

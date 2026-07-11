@@ -1,0 +1,18 @@
+FROM node:22-alpine AS build
+WORKDIR /app
+COPY package.json package-lock.json ./
+RUN npm ci
+COPY . .
+RUN npm run build
+
+FROM node:22-alpine AS runtime
+WORKDIR /app
+ENV NODE_ENV=production PORT=8787 VIRA_DATA_DIR=/var/lib/vira VIRA_INTERNAL_INGEST_ENABLED=false
+COPY package.json package-lock.json ./
+RUN npm ci --omit=dev
+COPY backend ./backend
+COPY scripts ./scripts
+COPY --from=build /app/dist ./dist
+EXPOSE 8787
+VOLUME ["/var/lib/vira"]
+CMD ["node", "backend/server.mjs"]

@@ -1,6 +1,7 @@
 import type { PublicDomainEvent, RoomSnapshot, RoomVerification } from "../domain/types";
 
-const API_ORIGIN = import.meta.env.VITE_VIRA_API_ORIGIN ?? "http://127.0.0.1:8787";
+const API_ORIGIN = import.meta.env.VITE_VIRA_API_ORIGIN
+  ?? (import.meta.env.PROD ? window.location.origin : "http://127.0.0.1:8787");
 
 export async function fetchBackendHealth(): Promise<boolean> {
   const response = await fetch(`${API_ORIGIN}/health`);
@@ -206,9 +207,10 @@ export async function joinRoom(roomId: string, displayName: string): Promise<Joi
   return response.json();
 }
 
-export async function fetchRoomState(roomId: string, participantId?: string | null): Promise<RoomSnapshot> {
-  const suffix = participantId ? `?participantId=${encodeURIComponent(participantId)}` : "";
-  const response = await fetch(`${API_ORIGIN}/rooms/${encodeURIComponent(roomId)}/state${suffix}`);
+export async function fetchRoomState(roomId: string, participantId: string, sessionToken: string): Promise<RoomSnapshot> {
+  const response = await fetch(`${API_ORIGIN}/rooms/${encodeURIComponent(roomId)}/state?participantId=${encodeURIComponent(participantId)}`, {
+    headers: { Authorization: `Bearer ${sessionToken}` },
+  });
   if (!response.ok) throw new Error(`state_failed:${response.status}`);
   return response.json();
 }

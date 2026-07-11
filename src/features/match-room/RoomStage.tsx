@@ -136,9 +136,9 @@ function WaitingSignalStage({ state, latestPresentationEvent }: { state: ReplayS
   const round = state.snapshot.currentRound;
   if (!round) return null;
   const participant = state.snapshot.currentParticipant;
-  const answer = participant ? state.snapshot.answers[participant.id] : null;
+  const answer = state.snapshot.currentParticipantAnswer ?? (participant ? state.snapshot.answers[participant.id] : null);
   const option = round.options.find((item) => item.id === answer?.optionId);
-  const predicate = round.resolution.predicate;
+  const predicate = round.resolution.predicate ?? {};
   const opening = typeof predicate.openingValue === "number" ? predicate.openingValue : null;
   const target = typeof predicate.pctGte === "number" ? predicate.pctGte : null;
   const current = latestPresentationEvent?.kind === "txline_update" ? latestPresentationEvent.currentValue : state.snapshot.marketDistribution.yes;

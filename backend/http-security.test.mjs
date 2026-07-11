@@ -1,0 +1,58 @@
+import assert from "node:assert/strict";
+import { spawn } from "node:child_process";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
+import http from "node:http";
+import os from "node:os";
+import path from "node:path";
+import test from "node:test";
+
+function freePort() {
+  return new Promise((resolve, reject) => {
+    const server = http.createServer();
+    server.once("error", reject);
+    server.listen(0, "127.0.0.1", () => {
+      const address = server.address();
+      server.close(() => resolve(address.port));
+    });
+  });
+}
+
+async function waitForHealth(origin, child) {
+  const deadline = Date.now() + 15_000;
+  while (Date.now() < deadline) {
+    if (child.exitCode !== null) throw new Error(`backend_exited_${child.exitCode}`);
+    try {
+      const response = await fetch(`${origin}/health`);
+      if (response.ok) return;
+    } catch {}
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  throw new Error("backend_health_timeout");
+}
+
+test("internal ingestion is disabled by default and rejected requests do not append events", async () => {
+  const dataDir = await mkdtemp(path.join(os.tmpdir(), "vira-http-security-"));
+  const port = await freePort();
+  const origin = `http://127.0.0.1:${port}`;
+  const child = spawn(process.execPath, ["backend/server.mjs"], {
+    cwd: process.cwd(),
+    env: { ...process.env, PORT: String(port), VIRA_DATA_DIR: dataDir, VIRA_INTERNAL_INGEST_ENABLED: "false", VIRA_ADMIN_TOKEN: "test-admin-secret", VIRA_ALLOWED_ORIGINS: origin, TXLINE_JWT: "", TXLINE_API_TOKEN: "" },
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  try {
+    await waitForHealth(origin, child);
+    const response = await fetch(`${origin}/rooms/security-room/txline-event`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Vira-Admin-Token": "test-admin-secret" },
+      body: JSON.stringify({ type: "period", payload: {} }),
+    });
+    assert.equal(response.status, 403);
+    assert.equal((await response.json()).error, "internal_ingest_disabled");
+    const ledger = await readFile(path.join(dataDir, "events.jsonl"), "utf8").catch(() => "");
+    assert.equal(ledger.includes("security-room"), false);
+  } finally {
+    child.kill("SIGTERM");
+    await new Promise((resolve) => child.once("exit", resolve));
+    await rm(dataDir, { recursive: true, force: true });
+  }
+});

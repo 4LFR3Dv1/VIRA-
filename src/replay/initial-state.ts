@@ -32,6 +32,9 @@ export const replayMatch: Match = {
 export const replayRounds: PredictionRound[] = [
   {
     id: "round-1",
+    version: 1,
+    openedAt: new Date(0).toISOString(),
+    locksAt: new Date(0).toISOString(),
     matchId: DEFAULT_MATCH_ID,
     sequence: 1,
     title: "Aguardando regra da sala",

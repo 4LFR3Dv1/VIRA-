@@ -13,8 +13,8 @@ type VerificationVerdict = { kind: "verified" | "pending" | "failed"; title: str
 function deriveVerdict(verification: RoomVerification | null, loadFailed = false): VerificationVerdict {
   if (loadFailed) return { kind: "failed", title: "Verificação falhou", reason: "As APIs públicas não responderam e o resultado não pôde ser conferido." };
   if (!verification) return { kind: "pending", title: "Verificação pendente", reason: "A prova pública ainda está sendo materializada." };
-  if (verification.hashChainValid && verification.projectionMatches && verification.rankingMatches) return { kind: "verified", title: "Resultado reproduzível", reason: "Hash chain, projeção e ranking correspondem ao replay público." };
-  const divergent = [!verification.hashChainValid ? "hash chain" : null, !verification.projectionMatches ? "projeção" : null, !verification.rankingMatches ? "ranking" : null].filter(Boolean).join(", ");
+  if (verification.hashChainValid && verification.projectionMatches && verification.rankingMatches && verification.authorityValid !== false) return { kind: "verified", title: "Resultado reproduzível", reason: "Origem TxLINE, hash chain, projeção e ranking correspondem ao replay público." };
+  const divergent = [verification.authorityValid === false ? "origem da observação" : null, !verification.hashChainValid ? "hash chain" : null, !verification.projectionMatches ? "projeção" : null, !verification.rankingMatches ? "ranking" : null].filter(Boolean).join(", ");
   return { kind: "pending", title: "Verificação pendente", reason: `${divergent || "A prova"} ainda não corresponde integralmente ao replay público.` };
 }
 

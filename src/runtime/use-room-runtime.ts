@@ -11,6 +11,7 @@ import {
   joinRoom,
   roomEventsUrl,
   submitRoomAnswer,
+  validateRoomSession,
 } from "./api";
 import type { TxlineStreamStatus } from "./api";
 
@@ -43,9 +44,14 @@ function withCurrentParticipant(snapshot: RoomSnapshot, participantId: string | 
 }
 
 function stateFromSnapshot(base: ReplayState, incomingSnapshot: RoomSnapshot, participantId: string | null): ReplayState {
-  const snapshot = withCurrentParticipant(incomingSnapshot, participantId);
+  const roundChanged = base.snapshot.currentRound?.id !== incomingSnapshot.currentRound?.id;
+  const preservedAnswer = roundChanged ? null : incomingSnapshot.currentParticipantAnswer ?? base.snapshot.currentParticipantAnswer ?? (participantId ? base.snapshot.answers[participantId] : null);
+  const snapshot = withCurrentParticipant({
+    ...incomingSnapshot,
+    currentParticipantAnswer: preservedAnswer,
+    answers: preservedAnswer && participantId ? { [participantId]: preservedAnswer } : {},
+  }, participantId);
   const participantAnswer = participantId ? snapshot.answers[participantId] : null;
-  const roundChanged = base.snapshot.currentRound?.id !== snapshot.currentRound?.id;
   const effectiveAnswerState = participantAnswer?.state ?? (roundChanged ? "not_answered" : base.currentAnswerState);
   const selected = participantAnswer?.optionId ?? (roundChanged ? null : base.selectedOptionId);
   const resolutionBelongsToCurrentRound = snapshot.lastResolution?.roundId === snapshot.currentRound?.id;
@@ -71,14 +77,7 @@ function stateFromSnapshot(base: ReplayState, incomingSnapshot: RoomSnapshot, pa
 }
 
 function displayNameFromSession(roomId: string, fallbackName?: string | null) {
-  const params = new URLSearchParams(window.location.search);
-  const nameFromUrl = params.get("name")?.trim();
   const storageKey = `vira:${roomId}:displayName`;
-  if (nameFromUrl) {
-    window.localStorage.setItem(storageKey, nameFromUrl);
-    window.localStorage.setItem("vira:displayName", nameFromUrl);
-    return nameFromUrl;
-  }
   return window.localStorage.getItem(storageKey) || window.localStorage.getItem("vira:displayName") || fallbackName?.trim() || null;
 }
 
@@ -152,11 +151,23 @@ export function useRoomRuntime(roomId: string, displayName?: string | null) {
       try {
         if (!effectiveDisplayName) return;
         let activeParticipantId = participantId;
+        let activeSessionToken = sessionToken;
         if (activeParticipantId && !sessionToken) {
           window.sessionStorage.removeItem(`vira:${roomId}:participantId`);
           window.sessionStorage.removeItem(`vira:${roomId}:sessionToken`);
           activeParticipantId = null;
           setParticipantId(null);
+        }
+        if (activeParticipantId && activeSessionToken) {
+          const validation = await validateRoomSession(roomId, activeParticipantId, activeSessionToken).catch(() => ({ valid: false, participant: null, roomVersion: 0 }));
+          if (!validation.valid) {
+            window.sessionStorage.removeItem(`vira:${roomId}:participantId`);
+            window.sessionStorage.removeItem(`vira:${roomId}:sessionToken`);
+            activeParticipantId = null;
+            activeSessionToken = null;
+            setParticipantId(null);
+            setSessionToken(null);
+          }
         }
         if (!activeParticipantId) {
           const joined = await joinRoom(roomId, effectiveDisplayName);
@@ -165,8 +176,10 @@ export function useRoomRuntime(roomId: string, displayName?: string | null) {
           window.sessionStorage.setItem(`vira:${roomId}:sessionToken`, joined.sessionToken);
           setParticipantId(activeParticipantId);
           setSessionToken(joined.sessionToken);
+          activeSessionToken = joined.sessionToken;
         }
-        let snapshot = await fetchRoomState(roomId, activeParticipantId);
+        if (!activeParticipantId || !activeSessionToken) return;
+        let snapshot = await fetchRoomState(roomId, activeParticipantId, activeSessionToken);
         if (activeParticipantId && !snapshot.participants.some((participant) => participant.id === activeParticipantId)) {
           window.sessionStorage.removeItem(`vira:${roomId}:participantId`);
           window.sessionStorage.removeItem(`vira:${roomId}:sessionToken`);
@@ -176,7 +189,8 @@ export function useRoomRuntime(roomId: string, displayName?: string | null) {
           window.sessionStorage.setItem(`vira:${roomId}:sessionToken`, joined.sessionToken);
           setParticipantId(activeParticipantId);
           setSessionToken(joined.sessionToken);
-          snapshot = await fetchRoomState(roomId, activeParticipantId);
+          activeSessionToken = joined.sessionToken;
+          snapshot = await fetchRoomState(roomId, activeParticipantId, activeSessionToken);
         }
         if (!cancelled) {
           setState((current) => stateFromSnapshot(current, snapshot, activeParticipantId));
@@ -226,7 +240,8 @@ export function useRoomRuntime(roomId: string, displayName?: string | null) {
       const previousRank = participantId
         ? previousSnapshot.leaderboard.find((entry) => entry.participantId === participantId)?.rank ?? null
         : null;
-      void fetchRoomState(roomId, participantId).then((snapshot) => {
+      if (!participantId || !sessionToken) return;
+      void fetchRoomState(roomId, participantId, sessionToken).then((snapshot) => {
         setState((current) => stateFromSnapshot(current, snapshot, participantId));
         const result = snapshot.lastResolution ?? resolution;
         const currentRank = participantId
@@ -264,13 +279,14 @@ export function useRoomRuntime(roomId: string, displayName?: string | null) {
       }));
     };
     return () => events.close();
-  }, [enqueuePresentationEvent, participantId, roomId]);
+  }, [enqueuePresentationEvent, participantId, roomId, sessionToken]);
 
   const controls = useMemo<RoomRuntimeControls>(() => ({
     play: () => undefined,
     pause: () => undefined,
     restart: () => {
-      void fetchRoomState(roomId, participantId).then((snapshot) => {
+      if (!participantId || !sessionToken) return;
+      void fetchRoomState(roomId, participantId, sessionToken).then((snapshot) => {
         setSelectedOptionId(null);
         setState((current) => stateFromSnapshot(current, snapshot, participantId));
       });
@@ -294,7 +310,7 @@ export function useRoomRuntime(roomId: string, displayName?: string | null) {
         participantId,
         sessionToken,
         optionId: selectedOptionId,
-        roundVersion: state.snapshot.version,
+        roundVersion: round.version,
       });
       enqueuePresentationEvent({
         id: `answer-registered:${roomId}:${response.eventId ?? `${round.id}:${participantId}`}`,
@@ -314,7 +330,8 @@ export function useRoomRuntime(roomId: string, displayName?: string | null) {
       try {
         await fetchLatestTxlineOdds(roomId);
         setTxlineFetchState("accepted");
-        const snapshot = await fetchRoomState(roomId, participantId);
+        if (!participantId || !sessionToken) throw new Error("invalid_session");
+        const snapshot = await fetchRoomState(roomId, participantId, sessionToken);
         setState((current) => stateFromSnapshot(current, snapshot, participantId));
       } catch {
         setTxlineFetchState("error");
@@ -340,9 +357,10 @@ export function useRoomRuntime(roomId: string, displayName?: string | null) {
   }), [enqueuePresentationEvent, participantId, roomId, selectedOptionId, sessionToken, state.snapshot.currentRound, state.snapshot.version]);
 
   const refresh = useCallback(async () => {
-    const snapshot = await fetchRoomState(roomId, participantId);
+    if (!participantId || !sessionToken) return;
+    const snapshot = await fetchRoomState(roomId, participantId, sessionToken);
     setState((current) => stateFromSnapshot(current, snapshot, participantId));
-  }, [participantId, roomId]);
+  }, [participantId, roomId, sessionToken]);
 
   return { state, controls, refresh, participantId, presentationEvents, acknowledgePresentationEvent, txlineFetchState, txlineStreamStatus };
 }

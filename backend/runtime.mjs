@@ -35,6 +35,23 @@ const matchSeed = {
 const dynamicFixtureSeeds = new Map();
 const dynamicPredictionSeeds = new Map();
 
+function openedRound(round, openedAtMs = Date.now()) {
+  const durationSec = Math.max(1, Number(round.locksAtClockSec) - Number(round.opensAtClockSec) || 90);
+  return {
+    ...round,
+    version: Number(round.version) || 1,
+    openedAt: round.openedAt ?? new Date(openedAtMs).toISOString(),
+    locksAt: round.locksAt ?? new Date(openedAtMs + durationSec * 1_000).toISOString(),
+    lockedAt: round.lockedAt ?? null,
+    state: round.state === "scheduled" ? "scheduled" : "open",
+  };
+}
+
+function eventServerTimeMs(event) {
+  const value = Date.parse(event?.receivedAt ?? event?.occurredAt ?? "");
+  return Number.isFinite(value) ? value : Date.now();
+}
+
 function teamFromName(id, name, accent) {
   const safeName = String(name || id);
   return {
@@ -145,6 +162,7 @@ export function createRoomRuntime({ eventStore = null } = {}) {
   const rooms = new Map();
   const clients = new Map();
   const roomLocks = new Map();
+  const roundTimers = new Map();
   let nextEventId = 1;
   let nextLocalSequence = 1;
 
@@ -152,9 +170,10 @@ export function createRoomRuntime({ eventStore = null } = {}) {
     const key = String(roomId);
     const previous = roomLocks.get(key) ?? Promise.resolve();
     const run = previous.catch(() => undefined).then(operation);
-    roomLocks.set(key, run.finally(() => {
-      if (roomLocks.get(key) === run) roomLocks.delete(key);
-    }));
+    const queued = run.catch(() => undefined).finally(() => {
+      if (roomLocks.get(key) === queued) roomLocks.delete(key);
+    });
+    roomLocks.set(key, queued);
     return run;
   }
 
@@ -210,10 +229,55 @@ export function createRoomRuntime({ eventStore = null } = {}) {
     return receipt.persistedEvents;
   }
 
+  function clearRoundTimer(roomId) {
+    const timer = roundTimers.get(String(roomId));
+    if (timer) clearTimeout(timer);
+    roundTimers.delete(String(roomId));
+  }
+
+  async function lockCurrentRound(room, reason, options = {}) {
+    const round = room.currentRound;
+    if (!round || round.state !== "open") return false;
+    const lockedAt = options.lockedAt ?? nowIso();
+    const lockedRound = { ...round, state: "locked", lockedAt, lockReason: reason, version: (Number(round.version) || 1) + 1 };
+    await appendDomainEvents(room, [domainEvent(room, "round.locked", {
+      roundId: round.id,
+      roundVersion: lockedRound.version,
+      lockedAt,
+      reason,
+    }, {
+      idempotencyKey: `round-locked:${room.roomId}:${round.id}`,
+      causationId: options.causationId,
+      correlationId: options.correlationId,
+    })]);
+    room.currentRound = lockedRound;
+    room.version += 1;
+    clearRoundTimer(room.roomId);
+    pushTimeline(room, { id: `timeline-${round.id}-locked`, matchClockSec: room.match.matchClockSec, title: "Respostas encerradas", description: "Somente respostas confirmadas antes do fechamento participam do resultado.", tone: "info" });
+    emitRoomSnapshot(room.roomId);
+    return true;
+  }
+
+  function scheduleRoundLock(room) {
+    clearRoundTimer(room.roomId);
+    const round = room.currentRound;
+    if (!round || round.state !== "open" || room.match.status !== "live" || !round.locksAt) return;
+    const delay = Math.max(0, Date.parse(round.locksAt) - Date.now());
+    const timer = setTimeout(() => {
+      void withRoomLock(room.roomId, async () => {
+        const current = getRoom(room.roomId).currentRound;
+        if (!current || current.id !== round.id || current.state !== "open") return;
+        await lockCurrentRound(getRoom(room.roomId), "deadline_elapsed");
+      });
+    }, Math.min(delay, 2_147_483_647));
+    timer.unref?.();
+    roundTimers.set(String(room.roomId), timer);
+  }
+
   function defaultRoom(roomId) {
     const match = matchForRoom(roomId);
     const matchRounds = roundSeedsForMatch(match);
-    const initialRound = match.status === "finished" ? null : { ...matchRounds[0] };
+    const initialRound = match.status === "finished" ? null : openedRound({ ...matchRounds[0] });
     const room = {
       roomId,
       roomLabel: `Sala VIRA · ${match.title}`,
@@ -288,6 +352,10 @@ export function createRoomRuntime({ eventStore = null } = {}) {
         room.currentRound = {
           ...updatedRounds[0],
           state: room.currentRound.state,
+          version: room.currentRound.version,
+          openedAt: room.currentRound.openedAt,
+          locksAt: room.currentRound.locksAt,
+          lockedAt: room.currentRound.lockedAt,
         };
         room.roomDistribution = {
           ...Object.fromEntries(updatedRounds[0].options.map((option) => [option.id, 0])),
@@ -297,11 +365,12 @@ export function createRoomRuntime({ eventStore = null } = {}) {
       room.version += 1;
       applySuggestedPrediction(room, context?.suggestedPrediction);
       emitRoomSnapshot(roomId);
+      scheduleRoundLock(room);
     }
   }
 
   function applySuggestedPrediction(room, suggestedPrediction) {
-    if (!suggestedPrediction || !room.currentRound || room.currentRound.state === "resolved") return;
+    if (!suggestedPrediction || !room.currentRound || room.currentRound.state !== "open") return;
     if (room.match.status === "finished") return;
     room.currentRound = {
       ...room.currentRound,
@@ -346,10 +415,10 @@ export function createRoomRuntime({ eventStore = null } = {}) {
   function emitRoomSnapshot(roomId) {
     const id = nextEventId++;
     const roomClients = clients.get(roomId) ?? new Map();
-    for (const [response, participantId] of roomClients.entries()) {
+    for (const [response] of roomClients.entries()) {
       response.write(`id: ${id}\n`);
       response.write("event: room.snapshot\n");
-      response.write(`data: ${JSON.stringify(snapshot(roomId, participantId))}\n\n`);
+      response.write(`data: ${JSON.stringify(snapshot(roomId, null))}\n\n`);
     }
     return { eventId: String(id), clientCount: roomClients.size };
   }
@@ -370,6 +439,12 @@ export function createRoomRuntime({ eventStore = null } = {}) {
       priceNames,
       payload.BookmakerId ?? payload.Bookmaker ?? "TxLINE",
     ].join("|");
+  }
+
+  function probabilityMapFromPayload(payload = {}) {
+    const names = Array.isArray(payload.PriceNames) ? payload.PriceNames.map((name) => String(name).toLowerCase()) : [];
+    const values = Array.isArray(payload.Pct) ? payload.Pct : [];
+    return Object.fromEntries(names.map((name, index) => [name, Number(values[index])]).filter(([, value]) => Number.isFinite(value)));
   }
 
   function eventProviderSequenceKey(event) {
@@ -399,6 +474,9 @@ export function createRoomRuntime({ eventStore = null } = {}) {
     const currentParticipant = participantId
       ? room.participants.find((participant) => participant.id === participantId) ?? null
       : null;
+    const currentAnswer = participantId ? currentRoundAnswers(room)[participantId] ?? null : null;
+    const roundClosed = Boolean(room.currentRound && ["locked", "resolved", "expired"].includes(room.currentRound.state));
+    const totalAnswers = Object.keys(currentRoundAnswers(room)).length;
     return {
       roomId: room.roomId,
       roomLabel: room.roomLabel,
@@ -411,14 +489,16 @@ export function createRoomRuntime({ eventStore = null } = {}) {
         ...participant,
         isCurrentUser: participant.id === participantId,
       })),
-      answers: currentRoundAnswers(room),
+      answers: currentAnswer ? { [participantId]: currentAnswer } : {},
+      currentParticipantAnswer: currentAnswer,
+      answerSummary: { total: totalAnswers, ...(roundClosed ? { byOption: { ...room.roomDistribution } } : {}) },
       leaderboard: room.leaderboard.map((entry) => ({
         ...entry,
         isCurrentUser: entry.participantId === participantId,
       })),
       timeline: room.timeline,
       marketDistribution: room.marketDistribution,
-      roomDistribution: room.roomDistribution,
+      roomDistribution: roundClosed ? { ...room.roomDistribution } : {},
       version: room.version,
       lastSequence: room.lastSequence,
       source: room.source,
@@ -434,6 +514,16 @@ export function createRoomRuntime({ eventStore = null } = {}) {
   }
 
   function snapshot(roomId, participantId = null) {
+    return publicSnapshot(getRoom(roomId), participantId);
+  }
+
+  function authenticatedSnapshot(roomId, participantId, sessionToken) {
+    const validation = validateSession(roomId, participantId, sessionToken);
+    if (!validation.valid) {
+      const error = new Error("invalid_session");
+      error.status = 401;
+      throw error;
+    }
     return publicSnapshot(getRoom(roomId), participantId);
   }
 
@@ -529,6 +619,23 @@ export function createRoomRuntime({ eventStore = null } = {}) {
       if (!sessionToken || room.participantSessions.get(participantId) !== sessionTokenHash(sessionToken)) {
         const error = new Error("invalid_session");
         error.status = 401;
+        throw error;
+      }
+      if (room.match.status !== "live") {
+        const error = new Error("match_not_live");
+        error.status = 409;
+        throw error;
+      }
+      if (Number(roundVersion) !== Number(room.currentRound.version)) {
+        const error = new Error("stale_round_version");
+        error.status = 409;
+        error.body = { expected: room.currentRound.version, received: roundVersion };
+        throw error;
+      }
+      if (!room.currentRound.locksAt || Date.now() >= Date.parse(room.currentRound.locksAt)) {
+        await lockCurrentRound(room, "deadline_elapsed");
+        const error = new Error("round_locked");
+        error.status = 409;
         throw error;
       }
       if (!room.currentRound.options.some((option) => option.id === optionId)) {
@@ -730,7 +837,7 @@ export function createRoomRuntime({ eventStore = null } = {}) {
       : resolvedPredicate.side === "away"
         ? room.match.awayTeam.name
         : room.match.homeTeam.name;
-    const nextRound = {
+    const nextRound = openedRound({
       id: `round-${nextSequence}`,
       matchId: room.match.id,
       sequence: nextSequence,
@@ -745,7 +852,7 @@ export function createRoomRuntime({ eventStore = null } = {}) {
         eventType: "odds_shift",
         predicate: nextPredicate,
       },
-    };
+    }, eventServerTimeMs(event));
     room.currentRound = nextRound;
     room.answersByRound[nextRound.id] ??= {};
     room.roomDistribution = optionDistributionForRound(nextRound);
@@ -756,6 +863,7 @@ export function createRoomRuntime({ eventStore = null } = {}) {
       description: nextRound.title,
       tone: "info",
     });
+    scheduleRoundLock(room);
     return nextRound;
   }
 
@@ -830,9 +938,8 @@ export function createRoomRuntime({ eventStore = null } = {}) {
 
   function resolveCurrentRound(room, event) {
     const round = room.currentRound;
-    if (!round || round.state === "resolved") return null;
+    if (!round || round.state !== "locked") return null;
     const answersForRound = room.answersByRound[round.id] ?? {};
-    if (Object.keys(answersForRound).length === 0) return null;
     const winningOptionId = winningOptionFor(round, event);
     if (!winningOptionId) return null;
 
@@ -846,7 +953,7 @@ export function createRoomRuntime({ eventStore = null } = {}) {
       const previousScore = entry.points;
       answersEvaluated += answer?.roundId === round.id ? 1 : 0;
       if (!answer || answer.roundId !== round.id || answer.optionId !== winningOptionId) {
-        return { ...entry, delta: 0, streak: entry.streak };
+        return { ...entry, delta: 0, streak: 0 };
       }
       answersCorrect += 1;
       const streak = entry.streak + 1;
@@ -864,7 +971,7 @@ export function createRoomRuntime({ eventStore = null } = {}) {
       return { ...entry, points: entry.points + delta, delta, streak };
     });
     room.leaderboard = rankLeaderboard(room.leaderboard);
-    const resolvedRound = { ...round, state: "resolved" };
+    const resolvedRound = { ...round, state: "resolved", version: (Number(round.version) || 1) + 1 };
     room.currentRound = resolvedRound;
     room.lastResolution = {
       roundId: round.id,
@@ -903,7 +1010,11 @@ export function createRoomRuntime({ eventStore = null } = {}) {
       ...room.currentRound,
       opensAtClockSec: event.matchClockSec,
       locksAtClockSec: event.matchClockSec + 90,
+      version: (Number(room.currentRound.version) || 1) + 1,
+      openedAt: new Date(eventServerTimeMs(event)).toISOString(),
+      locksAt: new Date(eventServerTimeMs(event) + 90_000).toISOString(),
     };
+    scheduleRoundLock(room);
     const openEntry = room.timeline.find((item) => item.id === "timeline-round-1-open");
     if (openEntry) openEntry.matchClockSec = event.matchClockSec;
   }
@@ -951,6 +1062,9 @@ export function createRoomRuntime({ eventStore = null } = {}) {
       title: round.title.replace(/ultrapassa \d+(?:\.\d+)?%/, `ultrapassa ${nextThreshold}%`),
       opensAtClockSec: event.matchClockSec || room.match.matchClockSec,
       locksAtClockSec: (event.matchClockSec || room.match.matchClockSec) + 90,
+      version: (Number(round.version) || 1) + 1,
+      openedAt: new Date(eventServerTimeMs(event)).toISOString(),
+      locksAt: new Date(eventServerTimeMs(event) + 90_000).toISOString(),
       resolution: {
         ...round.resolution,
         predicate: {
@@ -963,6 +1077,7 @@ export function createRoomRuntime({ eventStore = null } = {}) {
         },
       },
     };
+    scheduleRoundLock(room);
     const openEntry = room.timeline.find((item) => item.id === "timeline-round-1-open");
     if (openEntry) {
       openEntry.matchClockSec = room.currentRound.opensAtClockSec;
@@ -1099,7 +1214,7 @@ export function createRoomRuntime({ eventStore = null } = {}) {
         break;
       }
       case "round.opened": {
-        const round = payload.round;
+        const round = payload.round ? openedRound(payload.round, Date.parse(storedEvent.createdAt)) : null;
         if (!round) break;
         room.currentRound = round;
         room.answersByRound[round.id] ??= {};
@@ -1124,6 +1239,18 @@ export function createRoomRuntime({ eventStore = null } = {}) {
         room.answersByRound[answer.roundId] ??= {};
         room.answersByRound[answer.roundId][answer.participantId] = answer;
         room.roomDistribution[answer.optionId] = (room.roomDistribution[answer.optionId] ?? 0) + 1;
+        break;
+      }
+      case "round.locked": {
+        if (!room.currentRound || room.currentRound.id !== payload.roundId) break;
+        room.currentRound = {
+          ...room.currentRound,
+          state: "locked",
+          version: payload.roundVersion ?? (Number(room.currentRound.version) || 1) + 1,
+          lockedAt: payload.lockedAt ?? storedEvent.createdAt,
+          lockReason: payload.reason ?? "ledger_replay",
+        };
+        pushTimeline(room, { id: `timeline-${payload.roundId}-locked`, matchClockSec: room.match.matchClockSec, title: "Respostas encerradas", description: "Somente respostas confirmadas antes do fechamento participam do resultado.", tone: "info" });
         break;
       }
       case "txline.event.accepted": {
@@ -1167,7 +1294,7 @@ export function createRoomRuntime({ eventStore = null } = {}) {
         const awards = Array.isArray(payload.awards) ? payload.awards : [];
         room.leaderboard = room.leaderboard.map((entry) => {
           const award = awards.find((item) => item.participantId === entry.participantId);
-          if (!award) return { ...entry, delta: 0 };
+          if (!award) return { ...entry, delta: 0, streak: 0 };
           const points = Number(award.points) || 0;
           return {
             ...entry,
@@ -1238,9 +1365,12 @@ export function createRoomRuntime({ eventStore = null } = {}) {
     for await (const event of eventStore.readAll()) {
       streamIds.add(event.streamId);
       eventCount += 1;
+      const persistedLocalSequence = Number(event.payload?.event?.localSequence ?? event.payload?.normalizedObservation?.localSequence);
+      if (Number.isFinite(persistedLocalSequence)) nextLocalSequence = Math.max(nextLocalSequence, persistedLocalSequence + 1);
     }
     for (const streamId of streamIds) {
-      await projectRoomFromLedger(streamId);
+      const room = await projectRoomFromLedger(streamId);
+      scheduleRoundLock(room);
     }
     return { rooms: streamIds.size, events: eventCount };
   }
@@ -1314,9 +1444,10 @@ export function createRoomRuntime({ eventStore = null } = {}) {
     const liveProjectionHash = projectionHash(liveSnapshot);
     const replayedProjectionHash = projectionHash(replaySnapshot);
     const rankingMatches = projectionHash(liveSnapshot.leaderboard) === projectionHash(replaySnapshot.leaderboard);
+    const authorityValid = !events.some((event) => event.type === "txline.event.accepted" && event.payload?.acquisitionOrigin === "internal_test");
     return {
       roomId,
-      status: hashChainValid && liveProjectionHash === replayedProjectionHash ? "verified" : "diverged",
+      status: hashChainValid && liveProjectionHash === replayedProjectionHash && authorityValid ? "verified" : "diverged",
       eventCount: events.length,
       streamVersion: events[events.length - 1]?.streamVersion ?? 0,
       ledgerHeadHash: previousHash,
@@ -1326,6 +1457,7 @@ export function createRoomRuntime({ eventStore = null } = {}) {
       replayedProjectionHash,
       projectionMatches: liveProjectionHash === replayedProjectionHash,
       rankingMatches,
+      authorityValid,
       schemaVersion: 1,
     };
   }
@@ -1339,8 +1471,11 @@ export function createRoomRuntime({ eventStore = null } = {}) {
     const providerSequence = normalizedEvent.sequence || normalizedEvent.payload?.Seq || normalizedEvent.payload?.seq || undefined;
     const providerSequenceNumber = Number(providerSequence);
     const localSequence = nextLocalSequence++;
+    const acquisitionOrigin = acquisition.acquisitionOrigin ?? (normalizedEvent.source === "txline-live" ? "txline_live_stream" : normalizedEvent.source === "txline-snapshot" ? "txline_snapshot" : "verified_playback");
     const event = {
       ...normalizedEvent,
+      acquisitionOrigin,
+      receivedAt: acquisition.receivedAt ?? normalizedEvent.receivedAt ?? nowIso(),
       providerSequence,
       localSequence,
       sequence: localSequence,
@@ -1364,15 +1499,18 @@ export function createRoomRuntime({ eventStore = null } = {}) {
         matchClockSec: event.matchClockSec,
         teamId: event.teamId,
         normalizedValues: event.type === "odds_shift" && Array.isArray(event.payload?.Pct)
-          ? {
-              homeProbability: Number(event.payload.Pct[0]),
-              drawProbability: Number(event.payload.Pct[1]),
-              awayProbability: Number(event.payload.Pct[2]),
+          ? (() => {
+              const probabilityByPriceName = probabilityMapFromPayload(event.payload);
+              return {
+              homeProbability: probabilityByPriceName.part1,
+              drawProbability: probabilityByPriceName.draw,
+              awayProbability: probabilityByPriceName.part2,
+              probabilityByPriceName,
               marketType: event.payload.SuperOddsType ? String(event.payload.SuperOddsType) : undefined,
               line: event.payload.MarketParameters ?? null,
               period: event.payload.MarketPeriod ?? null,
               priceNames: Array.isArray(event.payload.PriceNames) ? event.payload.PriceNames.map(String) : undefined,
-            }
+            }; })()
           : {},
       },
       ruleEvaluation: ruleEvaluationFor(room.currentRound, event),
@@ -1387,6 +1525,7 @@ export function createRoomRuntime({ eventStore = null } = {}) {
       endpoint: evidenceBase.input.endpoint,
       rawPayloadHash: evidenceBase.input.rawPayloadHash,
       normalizedObservation: event,
+      acquisitionOrigin,
     }, {
       idempotencyKey: `txline-received:${room.roomId}:${receiptId}`,
       correlationId,
@@ -1496,6 +1635,7 @@ export function createRoomRuntime({ eventStore = null } = {}) {
         providerEventId: event.id,
         providerSequence,
         event,
+        acquisitionOrigin,
         sequenceWarning,
       }, {
         idempotencyKey: `txline-accepted:${room.roomId}:${event.id}`,
@@ -1544,6 +1684,12 @@ export function createRoomRuntime({ eventStore = null } = {}) {
       });
     }
     const currentRuleEvaluation = ruleEvaluationFor(room.currentRound, event);
+    if (room.currentRound?.state === "open") {
+      const deadlineElapsed = room.currentRound.locksAt && Date.now() >= Date.parse(room.currentRound.locksAt);
+      if (deadlineElapsed || currentRuleEvaluation.predicateResult) {
+        await lockCurrentRound(room, deadlineElapsed ? "deadline_elapsed" : "resolution_signal_received", { causationId: event.id, correlationId });
+      }
+    }
     const resolution = resolveCurrentRound(room, event);
     if (resolution) {
       await appendDomainEvents(room, [
@@ -1631,7 +1777,7 @@ export function createRoomRuntime({ eventStore = null } = {}) {
     if (!clients.has(roomId)) clients.set(roomId, new Map());
     clients.get(roomId).set(response, participantId);
     response.write("event: room.snapshot\n");
-    response.write(`data: ${JSON.stringify(snapshot(roomId, participantId))}\n\n`);
+    response.write(`data: ${JSON.stringify(snapshot(roomId, null))}\n\n`);
     const heartbeat = setInterval(() => {
       response.write(`: vira-heartbeat ${Date.now()}\n\n`);
     }, 15_000);
@@ -1641,5 +1787,5 @@ export function createRoomRuntime({ eventStore = null } = {}) {
     });
   }
 
-  return { getRoom, snapshot, join, validateSession, submitAnswer, applyNormalizedEvent, attachClient, emit, configureMatch, evidence, evidenceById, rehydrateFromLedger, publicEvents, hasPublicRoom, projectRoomFromLedger, verifyRoom };
+  return { getRoom, snapshot, authenticatedSnapshot, join, validateSession, submitAnswer, applyNormalizedEvent, attachClient, emit, configureMatch, evidence, evidenceById, rehydrateFromLedger, publicEvents, hasPublicRoom, projectRoomFromLedger, verifyRoom };
 }

@@ -29,8 +29,7 @@ export function MatchRoomScreen() {
   const [searchParams, setSearchParams] = useSearchParams();
   const inspect = searchParams.get("inspect") === "true";
   const navigate = useNavigate();
-  const initialName = searchParams.get("name")?.trim()
-    || window.localStorage.getItem(`vira:${matchId}:displayName`)
+  const initialName = window.localStorage.getItem(`vira:${matchId}:displayName`)
     || window.localStorage.getItem("vira:displayName")
     || "";
   const [playerName, setPlayerName] = useState(initialName);
@@ -46,9 +45,6 @@ export function MatchRoomScreen() {
     if (!safeName) return;
     window.localStorage.setItem("vira:displayName", safeName);
     window.localStorage.setItem(`vira:${matchId}:displayName`, safeName);
-    const nextParams = new URLSearchParams(searchParams);
-    nextParams.set("name", safeName);
-    setSearchParams(nextParams);
     setJoinDialogOpen(false);
   };
   const openOfficialReview = () => {
@@ -65,14 +61,8 @@ export function MatchRoomScreen() {
     if (!currentRound) {
       return {};
     }
-
-    return currentRound.options.reduce<Record<string, number>>((accumulator, option) => {
-      accumulator[option.id] = Object.values(state.snapshot.answers).filter(
-        (answer) => answer.roundId === currentRound.id && answer.optionId === option.id,
-      ).length;
-      return accumulator;
-    }, {});
-  }, [currentRound, state.snapshot.answers]);
+    return state.snapshot.answerSummary?.byOption ?? {};
+  }, [currentRound, state.snapshot.answerSummary]);
   const experienceModel = useMemo(() => createExperienceModel(state, latestPresentationEvent, verification), [latestPresentationEvent, state, verification]);
 
   useEffect(() => {

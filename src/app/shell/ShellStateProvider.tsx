@@ -70,7 +70,7 @@ export function ShellStateProvider({ children }: { children: ReactNode }) {
     }
     void Promise.all([
       validateRoomSession(reference.roomId, reference.participantId, sessionToken),
-      fetchRoomState(reference.roomId, reference.participantId),
+      fetchRoomState(reference.roomId, reference.participantId, sessionToken),
     ]).then(([session, snapshot]) => {
       if (cancelled) return;
       const participant = session.participant ?? snapshot.participants.find((item) => item.id === reference.participantId);

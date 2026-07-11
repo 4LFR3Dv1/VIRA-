@@ -67,6 +67,7 @@ export interface PredictionResolution {
 
 export interface PredictionRound {
   id: string;
+  version: number;
   matchId: string;
   sequence: number;
   title: string;
@@ -74,6 +75,10 @@ export interface PredictionRound {
   options: PredictionOption[];
   opensAtClockSec: number;
   locksAtClockSec: number;
+  openedAt: string;
+  locksAt: string;
+  lockedAt?: string | null;
+  lockReason?: string;
   state: RoundState;
   resolution: PredictionResolution;
 }
@@ -117,6 +122,7 @@ export interface NormalizedMatchEvent {
   playerId?: string;
   payload: Record<string, unknown>;
   source: EventSource;
+  providerSequence?: number;
 }
 
 export interface RoundResolutionResult {
@@ -281,6 +287,8 @@ export interface RoomSnapshot {
   currentParticipant?: Participant | null;
   participants: Participant[];
   answers: Record<string, PredictionAnswer>;
+  currentParticipantAnswer?: PredictionAnswer | null;
+  answerSummary?: { total: number; byOption?: Record<string, number> };
   leaderboard: ScoreEntry[];
   timeline: TimelineEntry[];
   marketDistribution: Record<string, number>;
@@ -310,6 +318,7 @@ export interface RoomVerification {
   replayedProjectionHash: string;
   projectionMatches: boolean;
   rankingMatches: boolean;
+  authorityValid?: boolean;
   schemaVersion: number;
 }
 

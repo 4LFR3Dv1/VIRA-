@@ -178,6 +178,7 @@ export function createTxlineStreamManager({ config, runtime }) {
               httpStatus: 200,
               receivedAt: streamState.lastMessageAt,
               rawPayload: rawEvent,
+              acquisitionOrigin: "txline_live_stream",
             });
           }
         }

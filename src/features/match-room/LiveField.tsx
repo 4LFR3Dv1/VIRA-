@@ -131,7 +131,7 @@ export function LiveField({ state }: LiveFieldProps) {
           ["Mercado", visibleMarketValue !== null ? <AnimatedNumber value={visibleMarketValue} suffix="%" /> : "--"],
           ["Seq", event?.sequence ? <AnimatedNumber value={event.sequence} /> : "--"],
         ].map(([label, value]) => (
-          <div key={label} className="rounded-xl bg-background/75 px-2 py-2 text-center">
+          <div key={String(label)} className="rounded-xl bg-background/75 px-2 py-2 text-center">
             <p className="font-['DM_Mono'] text-[9px] text-muted-foreground">{label}</p>
             <p className="mt-1 truncate font-['Chakra_Petch'] text-lg font-bold">{value}</p>
           </div>

@@ -1,5 +1,7 @@
 import http from "node:http";
-import { randomUUID } from "node:crypto";
+import { randomUUID, timingSafeEqual } from "node:crypto";
+import { readFile, stat } from "node:fs/promises";
+import path from "node:path";
 import { URL, fileURLToPath } from "node:url";
 
 import { loadLocalEnv } from "./env.mjs";
@@ -56,6 +58,11 @@ const txlineContextCache = new Map();
 const TXLINE_CONTEXT_CACHE_TTL_MS = 30_000;
 const TXLINE_ROOM_POLL_MS = Number(process.env.TXLINE_ROOM_POLL_MS || 10_000);
 const liveRoomFeeds = new Map();
+const internalIngestEnabled = String(process.env.VIRA_INTERNAL_INGEST_ENABLED || "false").toLowerCase() === "true";
+const adminToken = String(process.env.VIRA_ADMIN_TOKEN || "");
+const allowedOrigins = new Set(String(process.env.VIRA_ALLOWED_ORIGINS || "http://localhost:5173,http://127.0.0.1:5173").split(",").map((value) => value.trim()).filter(Boolean));
+const distDirectory = fileURLToPath(new URL("../dist/", import.meta.url));
+const staticMimeTypes = new Map([[".css", "text/css; charset=utf-8"], [".html", "text/html; charset=utf-8"], [".ico", "image/x-icon"], [".js", "text/javascript; charset=utf-8"], [".json", "application/json; charset=utf-8"], [".png", "image/png"], [".svg", "image/svg+xml"], [".webp", "image/webp"], [".woff2", "font/woff2"]]);
 
 function cryptoRandomId() {
   return randomUUID().slice(0, 8);
@@ -64,11 +71,54 @@ function cryptoRandomId() {
 function sendJson(response, status, body) {
   response.writeHead(status, {
     "Content-Type": "application/json",
-    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Origin": response.viraCorsOrigin || "http://localhost:5173",
     "Access-Control-Allow-Headers": "Content-Type, Authorization, Last-Event-ID",
     "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
   });
   response.end(JSON.stringify(body));
+}
+
+function safeTokenEqual(received, expected) {
+  const left = Buffer.from(String(received || ""));
+  const right = Buffer.from(String(expected || ""));
+  return left.length === right.length && left.length > 0 && timingSafeEqual(left, right);
+}
+
+async function serveFrontend(request, response, pathname) {
+  if (request.method !== "GET" && request.method !== "HEAD") return false;
+  const requested = pathname === "/" ? "index.html" : pathname.replace(/^\/+/, "");
+  const candidate = path.resolve(distDirectory, requested);
+  let filePath = candidate.startsWith(`${distDirectory}${path.sep}`) ? candidate : path.join(distDirectory, "index.html");
+  try {
+    if (!(await stat(filePath)).isFile()) filePath = path.join(distDirectory, "index.html");
+  } catch {
+    filePath = path.join(distDirectory, "index.html");
+  }
+  try {
+    const body = await readFile(filePath);
+    response.writeHead(200, {
+      "Content-Type": staticMimeTypes.get(path.extname(filePath).toLowerCase()) || "application/octet-stream",
+      "Cache-Control": path.basename(filePath) === "index.html" ? "no-cache" : "public, max-age=31536000, immutable",
+    });
+    response.end(request.method === "HEAD" ? undefined : body);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function requireInternalAdmin(request) {
+  if (!internalIngestEnabled) {
+    const error = new Error("internal_ingest_disabled");
+    error.status = 403;
+    throw error;
+  }
+  const token = request.headers["x-vira-admin-token"] ?? request.headers.authorization?.replace(/^Bearer\s+/i, "");
+  if (!adminToken || !safeTokenEqual(token, adminToken)) {
+    const error = new Error("admin_auth_required");
+    error.status = 401;
+    throw error;
+  }
 }
 
 function ensureReady() {
@@ -153,6 +203,7 @@ async function applyLatestScoreSnapshot(roomId, reason = "room-live-feed") {
       receivedAt: new Date().toISOString(),
       rawPayload: latestScore,
       requestId: `${reason}_${cryptoRandomId()}`,
+      acquisitionOrigin: "txline_snapshot",
     },
   );
 }
@@ -181,6 +232,7 @@ async function applyLatestOddsSnapshot(roomId, reason = "room-live-feed") {
       httpStatus: 200,
       receivedAt,
       rawPayload: selected,
+      acquisitionOrigin: "txline_snapshot",
     },
   );
 }
@@ -346,6 +398,8 @@ function filterCatalog(catalog, query = "") {
 
 async function handleRequest(request, response) {
   const url = new URL(request.url, `http://${request.headers.host}`);
+  const requestOrigin = String(request.headers.origin || "");
+  response.viraCorsOrigin = allowedOrigins.has(requestOrigin) ? requestOrigin : [...allowedOrigins][0];
 
   if (request.method === "OPTIONS") {
     sendJson(response, 204, {});
@@ -503,6 +557,8 @@ async function handleRequest(request, response) {
     if (route) {
       ensureReady();
       const { roomId, rest } = route;
+      const internalMutation = request.method === "POST" && ["txline-event", "txline/ingest-odds", "txline/connect", "txline/connect-odds", "txline/connect-scores", "txline/disconnect"].includes(rest);
+      if (internalMutation) requireInternalAdmin(request);
       await ensureRoomConfiguredFromTxline(roomId);
       startRoomLiveFeed(roomId);
 
@@ -513,7 +569,13 @@ async function handleRequest(request, response) {
       }
 
       if (request.method === "GET" && rest === "state") {
-        sendJson(response, 200, runtime.snapshot(roomId, url.searchParams.get("participantId")));
+        const participantId = url.searchParams.get("participantId");
+        const token = request.headers.authorization?.replace(/^Bearer\s+/i, "");
+        if (!participantId || !token) {
+          sendJson(response, 401, { error: "authenticated_state_required" });
+          return;
+        }
+        sendJson(response, 200, runtime.authenticatedSnapshot(roomId, participantId, token));
         return;
       }
 
@@ -543,7 +605,7 @@ async function handleRequest(request, response) {
           Connection: "keep-alive",
           "Access-Control-Allow-Origin": "*",
         });
-        runtime.attachClient(roomId, response, url.searchParams.get("participantId"));
+        runtime.attachClient(roomId, response, null);
         return;
       }
 
@@ -567,13 +629,15 @@ async function handleRequest(request, response) {
       }
 
       if (request.method === "POST" && rest === "txline-event") {
+        requireInternalAdmin(request);
         const body = await readJson(request);
         const normalized = body.normalizedEvent ?? normalizeTxlineScore(body.rawEvent ?? body, { matchId: roomId });
-        sendJson(response, 200, await runtime.applyNormalizedEvent(roomId, normalized));
+        sendJson(response, 200, await runtime.applyNormalizedEvent(roomId, normalized, { acquisitionOrigin: "internal_test" }));
         return;
       }
 
       if (request.method === "POST" && rest === "txline/ingest-odds") {
+        requireInternalAdmin(request);
         const body = await readJson(request);
         const fixtureId = body.fixtureId || url.searchParams.get("fixtureId") || roomId;
         const requestId = `txreq_${cryptoRandomId()}`;
@@ -603,6 +667,7 @@ async function handleRequest(request, response) {
           httpStatus: 200,
           receivedAt,
           rawPayload: selected,
+          acquisitionOrigin: "internal_test",
         });
         sendJson(response, 202, {
           accepted: true,
@@ -613,6 +678,7 @@ async function handleRequest(request, response) {
       }
 
       if (request.method === "POST" && rest === "txline/connect") {
+        requireInternalAdmin(request);
         const body = await readJson(request);
         const kind = body.kind || url.searchParams.get("kind") || "scores";
         const starter = kind === "odds" ? txlineStreams.startOdds : txlineStreams.startScores;
@@ -623,6 +689,7 @@ async function handleRequest(request, response) {
       }
 
       if (request.method === "POST" && rest === "txline/connect-odds") {
+        requireInternalAdmin(request);
         const body = await readJson(request);
         sendJson(response, 200, await txlineStreams.startOdds(roomId, {
           fixtureId: body.fixtureId || url.searchParams.get("fixtureId") || txlineConfig.fixtureId || roomId,
@@ -631,6 +698,7 @@ async function handleRequest(request, response) {
       }
 
       if (request.method === "POST" && rest === "txline/connect-scores") {
+        requireInternalAdmin(request);
         const body = await readJson(request);
         sendJson(response, 200, await txlineStreams.startScores(roomId, {
           fixtureId: body.fixtureId || url.searchParams.get("fixtureId") || txlineConfig.fixtureId || roomId,
@@ -639,6 +707,7 @@ async function handleRequest(request, response) {
       }
 
       if (request.method === "POST" && rest === "txline/disconnect") {
+        requireInternalAdmin(request);
         const body = await readJson(request).catch(() => ({}));
         sendJson(response, 200, txlineStreams.stop(roomId, body.kind || url.searchParams.get("kind")));
         return;
@@ -653,6 +722,7 @@ async function handleRequest(request, response) {
       }
     }
 
+    if (await serveFrontend(request, response, url.pathname)) return;
     sendJson(response, 404, { error: "not_found" });
   } catch (error) {
     sendJson(response, error.status || 500, {

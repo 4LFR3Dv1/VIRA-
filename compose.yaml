@@ -1,0 +1,22 @@
+services:
+  vira:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "8787:8787"
+    environment:
+      PORT: "8787"
+      VIRA_DATA_DIR: /var/lib/vira
+      VIRA_INTERNAL_INGEST_ENABLED: "false"
+      VIRA_ADMIN_TOKEN: ${VIRA_ADMIN_TOKEN:-}
+      VIRA_ALLOWED_ORIGINS: ${VIRA_ALLOWED_ORIGINS:-http://localhost:8787}
+      TXLINE_NETWORK: ${TXLINE_NETWORK:-mainnet}
+      TXLINE_JWT: ${TXLINE_JWT:-}
+      TXLINE_API_TOKEN: ${TXLINE_API_TOKEN:-}
+      TXLINE_SERVICE_LEVEL_ID: ${TXLINE_SERVICE_LEVEL_ID:-1}
+    volumes:
+      - vira-data:/var/lib/vira
+    deploy:
+      replicas: 1
+volumes:
+  vira-data:
