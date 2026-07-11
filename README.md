@@ -154,9 +154,12 @@ GET /public/rooms/:roomId/events
 GET /public/rooms/:roomId/projection
 GET /public/rooms/:roomId/verification
 GET /public/rooms/:roomId/rounds/:roundId/replay
+GET /public/rooms/:roomId/rounds/:roundId/commitment
 ```
 
 The round replay is a pure `VIRA:VERIFIED_ROUND_REPLAY:V1` projection derived from the internal ledger. It exposes aggregate participation only, records authority, timing, eligibility and rule evaluation, and includes a `replayHash` over canonical JSON. Six frozen vectors and the P1-B evidence artifact live in `tests/fixtures/replay` and `docs/p1-b-replay-evidence.json`.
+
+`RoundCommitmentPayloadV1` anchors that exact replay hash asynchronously on Solana devnet through the Memo Program. Resolution never waits for Solana. Enable it with `VIRA_SOLANA_COMMITMENT_ENABLED=true`, `VIRA_SOLANA_NETWORK=devnet` and either `VIRA_SOLANA_KEYPAIR_PATH` or the secret `VIRA_SOLANA_KEYPAIR_JSON`. The production wallet needs devnet SOL. The first verified proof is recorded in `docs/p1-c-devnet-evidence.json`.
 
 Internal mutation routes require both `VIRA_INTERNAL_INGEST_ENABLED=true` and a constant-time checked `X-Vira-Admin-Token`/Bearer credential matching `VIRA_ADMIN_TOKEN`. Keep them disabled in Consumer deployments.
 

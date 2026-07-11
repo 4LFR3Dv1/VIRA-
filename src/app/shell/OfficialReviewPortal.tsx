@@ -3,8 +3,8 @@ import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
-import type { PublicDomainEvent, RoomSnapshot, RoomVerification, VerifiedRoundReplayV1 } from "../../domain/types";
-import { fetchPublicRoomEvents, fetchPublicRoomProjection, fetchRoomVerification, fetchVerifiedRoundReplay } from "../../runtime/api";
+import type { PublicDomainEvent, RoundCommitmentStatus, RoomSnapshot, RoomVerification, VerifiedRoundReplayV1 } from "../../domain/types";
+import { fetchPublicRoomEvents, fetchPublicRoomProjection, fetchRoomVerification, fetchRoundCommitment, fetchVerifiedRoundReplay } from "../../runtime/api";
 
 interface Props { open: boolean; roomId: string | null; onClose: () => void }
 type VerificationVerdict = { kind: "verified" | "pending" | "failed"; title: string; reason: string };
@@ -40,26 +40,39 @@ export function OfficialReviewPortal({ open, roomId, onClose }: Props) {
   const [projection, setProjection] = useState<RoomSnapshot | null>(null);
   const [events, setEvents] = useState<PublicDomainEvent[]>([]);
   const [replay, setReplay] = useState<VerifiedRoundReplayV1 | null>(null);
+  const [commitment, setCommitment] = useState<RoundCommitmentStatus | null>(null);
 
   useEffect(() => {
     if (!open || !roomId) return;
     let cancelled = false;
     setState("loading");
     setReplay(null);
+    setCommitment(null);
     Promise.all([fetchRoomVerification(roomId), fetchPublicRoomProjection(roomId), fetchPublicRoomEvents(roomId)])
       .then(async ([nextVerification, nextProjection, nextEvents]) => {
         const roundId = latestResolvedRoundId(nextEvents.events);
-        const nextReplay = roundId ? await fetchVerifiedRoundReplay(roomId, roundId) : null;
+        const [nextReplay, nextCommitment] = roundId
+          ? await Promise.all([fetchVerifiedRoundReplay(roomId, roundId), fetchRoundCommitment(roomId, roundId)])
+          : [null, null];
         if (cancelled) return;
         setVerification(nextVerification);
         setProjection(nextProjection);
         setEvents(nextEvents.events);
         setReplay(nextReplay);
+        setCommitment(nextCommitment);
         setState("ready");
       })
       .catch(() => !cancelled && setState("error"));
     return () => { cancelled = true; };
   }, [open, roomId]);
+
+  useEffect(() => {
+    if (!open || !roomId || !replay || !commitment || !["pending", "confirming"].includes(commitment.status)) return;
+    const timer = window.setTimeout(() => {
+      void fetchRoundCommitment(roomId, replay.roundId).then(setCommitment).catch(() => undefined);
+    }, 2_000);
+    return () => window.clearTimeout(timer);
+  }, [commitment, open, replay, roomId]);
 
   useEffect(() => {
     if (!open) return;
@@ -122,6 +135,8 @@ export function OfficialReviewPortal({ open, roomId, onClose }: Props) {
                 <Invariant label="Reprodutibilidade" valid={replay.proof.hashChainValid && replay.proof.projectionMatches && replay.proof.rankingMatches} description="Ledger, projeção e ranking coincidem." />
               </div></section>
 
+              <SolanaCommitment commitment={commitment} replayHash={replay.replayHash} />
+
               <details className="mt-8 border border-white/10"><summary className="cursor-pointer px-4 py-4 font-['DM_Mono'] text-[9px] uppercase tracking-[.12em] text-white/50">Detalhes técnicos · rodada {replay.roundVersion}</summary><dl className="grid border-t border-white/10 sm:grid-cols-2">
                 <Technical label="Round ID" value={replay.roundId} /><Technical label="Stream range" value={`${replay.proof.firstStreamVersion} → ${replay.proof.lastStreamVersion}`} /><Technical label="Market signature" value={replay.prompt.marketSignature} /><Technical label="Provider sequence" value={String(replay.resolution.providerSequence ?? "--")} /><Technical label="Lock" value={replay.lock.lockedAt} /><Technical label="Causation" value={replay.technical.causationId ?? "--"} /><Technical label="Correlation" value={replay.technical.correlationId ?? "--"} /><Technical label="Round range hash" value={shortHash(replay.proof.roundEventRangeHash)} /><Technical label="Leaderboard before" value={shortHash(replay.scoring.leaderboardBeforeHash)} /><Technical label="Leaderboard after" value={shortHash(replay.scoring.leaderboardAfterHash)} />
               </dl></details>
@@ -138,3 +153,11 @@ export function OfficialReviewPortal({ open, roomId, onClose }: Props) {
 function TimelineItem({ icon: Icon, label, title, description }: { icon: typeof Clock3; label: string; title: string; description: string }) { return <li className="grid grid-cols-[40px_1fr] gap-4 border-b border-white/15 py-5"><span className="grid size-10 place-items-center border border-primary/30 text-primary"><Icon className="size-4" /></span><div><p className="font-['DM_Mono'] text-[9px] font-black uppercase tracking-[.14em] text-primary">{label}</p><strong className="mt-1 block text-sm uppercase">{title}</strong><p className="mt-1 text-xs leading-relaxed text-white/40">{description}</p></div></li>; }
 function Invariant({ label, valid, description }: { label: string; valid: boolean; description: string }) { return <article className="bg-[#080d19] p-4"><div className="flex items-center gap-2">{valid ? <Check className="size-4 text-primary" /> : <X className="size-4 text-red-300" />}<strong className="text-xs uppercase">{label}</strong></div><p className="mt-2 text-xs leading-relaxed text-white/40">{description}</p><p className={`mt-3 font-['DM_Mono'] text-[9px] uppercase ${valid ? "text-primary" : "text-red-300"}`}>{valid ? "VALID" : "PENDING"}</p></article>; }
 function Technical({ label, value }: { label: string; value: string }) { return <div className="min-w-0 border-b border-white/10 p-4 sm:border-r"><dt className="font-['DM_Mono'] text-[9px] uppercase text-white/30">{label}</dt><dd className="mt-1 break-all font-['DM_Mono'] text-[10px] text-white/65">{value}</dd></div>; }
+function ReviewMetric({ label, value }: { label: string; value: string }) { return <div className="bg-[#080d19] p-3"><span className="block font-['DM_Mono'] text-[9px] uppercase text-white/35">{label}</span><strong className="mt-1 block text-xs text-primary">{value}</strong></div>; }
+
+function SolanaCommitment({ commitment, replayHash }: { commitment: RoundCommitmentStatus | null; replayHash: string }) {
+  const confirmed = commitment?.status === "confirmed";
+  const matched = confirmed && commitment.replayHash === replayHash && commitment.onChainMatches !== false;
+  const labels: Record<string, string> = { unsupported: "Não habilitado", pending: "Pendente", confirming: "Confirmando", confirmed: "Confirmado", failed: "Falhou" };
+  return <section className="mt-8 border border-white/10 p-5"><div className="flex items-start justify-between gap-4"><div><p className="font-['DM_Mono'] text-[10px] uppercase tracking-[.16em] text-primary">Solana commitment</p><h3 className="mt-1 font-['Chakra_Petch'] text-2xl font-black uppercase">{labels[commitment?.status ?? "unsupported"]}</h3></div><span className={`border px-3 py-1 font-['DM_Mono'] text-[9px] uppercase ${matched ? "border-primary/35 text-primary" : "border-white/15 text-white/40"}`}>{matched ? "ON-CHAIN MATCH" : commitment?.network ?? "DEVNET"}</span></div><p className="mt-3 text-sm text-white/45">{confirmed ? "O hash do replay exibido foi ancorado depois da resolução, sem bloquear o resultado competitivo." : commitment?.status === "failed" ? "O resultado local permanece verificável; a publicação poderá ser repetida." : commitment?.status === "unsupported" ? "Este ambiente mantém a prova local, mas não publica commitments on-chain." : "A resolução já está finalizada e a âncora está sendo processada de forma assíncrona."}</p>{commitment?.commitmentHash ? <p className="mt-4 break-all font-['DM_Mono'] text-[9px] text-white/30">COMMITMENT {commitment.commitmentHash}</p> : null}{confirmed ? <div className="mt-4 grid gap-px bg-white/10 sm:grid-cols-2"><ReviewMetric label="Local" value={matched ? "MATCH" : "DIVERGED"} /><ReviewMetric label="On-chain" value={matched ? "MATCH" : "PENDING"} /></div> : null}{commitment?.explorerUrl ? <a href={commitment.explorerUrl} target="_blank" rel="noreferrer" className="mt-5 inline-flex min-h-11 items-center border border-primary/35 px-4 font-['DM_Mono'] text-[9px] font-black uppercase tracking-[.12em] text-primary hover:bg-primary hover:text-[#050814]">Abrir no Solana Explorer</a> : null}</section>;
+}

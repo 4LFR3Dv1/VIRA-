@@ -140,6 +140,10 @@ test("public round replay endpoint is canonical and public answers stay private"
     assert.equal(replay.participation.confirmedAnswers, 1);
     assert.equal(JSON.stringify(replay).includes(participant.participant.id), false);
 
+    const commitmentResponse = await fetch(`${origin}/public/rooms/${roomId}/rounds/${round.id}/commitment`);
+    assert.equal(commitmentResponse.status, 200);
+    assert.deepEqual(await commitmentResponse.json(), { status: "unsupported", roomId, roundId: round.id, network: "unsupported" });
+
     const eventsResponse = await fetch(`${origin}/public/rooms/${roomId}/events`);
     assert.equal(eventsResponse.status, 200);
     const publicEvents = (await eventsResponse.json()).events;

@@ -7,6 +7,7 @@ import { URL, fileURLToPath } from "node:url";
 import { loadLocalEnv } from "./env.mjs";
 import { createFileEventStore } from "./event-store.mjs";
 import { createRoomRuntime } from "./runtime.mjs";
+import { createSolanaCommitmentPublisherFromEnv } from "./solana-commitment-publisher.mjs";
 import { txlineCapabilities } from "./txline-endpoints.mjs";
 import { buildTxlineContext } from "./txline-context.mjs";
 import { discoverTxlineFixtures } from "./txline-discovery.mjs";
@@ -29,7 +30,8 @@ import { createTxlineCatalogCache } from "./txline-catalog-cache.mjs";
 loadLocalEnv();
 
 const eventStore = await createFileEventStore();
-const runtime = createRoomRuntime({ eventStore });
+const commitmentPublisher = createSolanaCommitmentPublisherFromEnv();
+const runtime = createRoomRuntime({ eventStore, commitmentPublisher });
 const runtimeBoot = {
   liveness: true,
   readiness: false,
@@ -559,6 +561,19 @@ async function handleRequest(request, response) {
         return;
       }
       sendJson(response, 200, await runtime.verifiedRoundReplay(roomId, roundId));
+      return;
+    }
+
+    const publicRoundCommitmentRoute = url.pathname.match(/^\/public\/rooms\/([^/]+)\/rounds\/([^/]+)\/commitment$/);
+    if (request.method === "GET" && publicRoundCommitmentRoute) {
+      ensureReady();
+      const roomId = decodeURIComponent(publicRoundCommitmentRoute[1]);
+      const roundId = decodeURIComponent(publicRoundCommitmentRoute[2]);
+      if (!(await runtime.hasPublicRoom(roomId))) {
+        sendJson(response, 404, { error: "room_not_found", roomId });
+        return;
+      }
+      sendJson(response, 200, await runtime.roundCommitment(roomId, roundId));
       return;
     }
 

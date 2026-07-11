@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
 
 import { hashStoredEvent, projectionHash, redactInternalEvent } from "./event-codec.mjs";
+import { deriveRoundCommitment } from "./round-commitment.mjs";
 import { deriveVerifiedRoundReplay } from "./verified-round-replay.mjs";
 
 const nowIso = () => new Date().toISOString();
@@ -159,11 +160,12 @@ const roundSeeds = [
   },
 ];
 
-export function createRoomRuntime({ eventStore = null } = {}) {
+export function createRoomRuntime({ eventStore = null, commitmentPublisher = null } = {}) {
   const rooms = new Map();
   const clients = new Map();
   const roomLocks = new Map();
   const roundTimers = new Map();
+  const pendingCommitments = new Set();
   let nextEventId = 1;
   let nextLocalSequence = 1;
 
@@ -1427,6 +1429,11 @@ export function createRoomRuntime({ eventStore = null } = {}) {
     for (const streamId of streamIds) {
       const room = await projectRoomFromLedger(streamId);
       scheduleRoundLock(room);
+      if (commitmentPublisher?.enabled) {
+        for await (const event of eventStore.readStream(streamId)) {
+          if (event.type === "round.resolved" && event.payload?.roundId) scheduleRoundCommitment(streamId, String(event.payload.roundId));
+        }
+      }
     }
     return { rooms: streamIds.size, events: eventCount };
   }
@@ -1519,19 +1526,110 @@ export function createRoomRuntime({ eventStore = null } = {}) {
   }
 
   async function verifiedRoundReplay(roomId, roundId) {
-    if (!eventStore) {
-      const error = new Error("round_replay_event_store_required");
-      error.status = 503;
-      throw error;
+    return withRoomLock(roomId, async () => {
+      if (!eventStore) {
+        const error = new Error("round_replay_event_store_required");
+        error.status = 503;
+        throw error;
+      }
+      const events = [];
+      for await (const event of eventStore.readStream(roomId)) events.push(event);
+      if (!events.length) {
+        const error = new Error("room_not_found");
+        error.status = 404;
+        throw error;
+      }
+      return deriveVerifiedRoundReplay(events, roundId, await verifyRoom(roomId));
+    });
+  }
+
+  async function commitmentEvents(roomId, roundId) {
+    const events = [];
+    if (!eventStore) return events;
+    for await (const event of eventStore.readStream(roomId)) {
+      if (String(event.payload?.roundId ?? "") === String(roundId) && event.type.startsWith("round.commitment.")) events.push(event);
     }
+    return events;
+  }
+
+  async function roundCommitment(roomId, roundId) {
+    const events = await commitmentEvents(roomId, roundId);
+    const confirmed = events.findLast((event) => event.type === "round.commitment.confirmed");
+    const failed = events.findLast((event) => event.type === "round.commitment.failed");
+    const requested = events.findLast((event) => event.type === "round.commitment.requested");
+    if (confirmed) return { status: "confirmed", ...confirmed.payload };
+    if (pendingCommitments.has(`${roomId}:${roundId}`)) return { status: "confirming", ...(requested?.payload ?? {}), network: commitmentPublisher?.network ?? "devnet" };
+    if (failed) return { status: "failed", ...failed.payload };
+    if (requested) return { status: "pending", ...requested.payload };
+    if (!commitmentPublisher?.enabled) return { status: "unsupported", roomId, roundId, network: "unsupported" };
+    return { status: "pending", roomId, roundId, network: commitmentPublisher.network };
+  }
+
+  async function prepareRoundCommitment(roomId, roundId) {
     const events = [];
     for await (const event of eventStore.readStream(roomId)) events.push(event);
-    if (!events.length) {
-      const error = new Error("room_not_found");
-      error.status = 404;
-      throw error;
+    const replay = deriveVerifiedRoundReplay(events, roundId, await verifyRoom(roomId));
+    return deriveRoundCommitment(events, replay);
+  }
+
+  async function publishRoundCommitment(roomId, roundId) {
+    if (!commitmentPublisher?.enabled || !eventStore) return roundCommitment(roomId, roundId);
+    const key = `${roomId}:${roundId}`;
+    if (pendingCommitments.has(key)) return roundCommitment(roomId, roundId);
+    pendingCommitments.add(key);
+    let commitment = null;
+    try {
+      const existing = await commitmentEvents(roomId, roundId);
+      if (existing.some((event) => event.type === "round.commitment.confirmed")) return roundCommitment(roomId, roundId);
+      commitment = await withRoomLock(roomId, async () => {
+        const prepared = await prepareRoundCommitment(roomId, roundId);
+        if (!existing.some((event) => event.type === "round.commitment.requested")) {
+          const room = getRoom(roomId);
+          await appendDomainEvents(room, [domainEvent(room, "round.commitment.requested", {
+            roundId,
+            commitmentHash: prepared.commitmentHash,
+            payload: prepared.payload,
+            canonicalHex: prepared.canonicalHex,
+            requestedAt: nowIso(),
+            network: commitmentPublisher.network,
+          }, { idempotencyKey: `round-commitment-requested:${prepared.commitmentHash}` })]);
+        }
+        return prepared;
+      });
+      const receipt = await commitmentPublisher.publish(commitment);
+      await withRoomLock(roomId, async () => {
+        const room = getRoom(roomId);
+        await appendDomainEvents(room, [domainEvent(room, "round.commitment.confirmed", {
+          roundId,
+          commitmentHash: commitment.commitmentHash,
+          replayHash: commitment.payload.replayHash,
+          ...receipt,
+        }, { idempotencyKey: `round-commitment-confirmed:${commitment.commitmentHash}` })]);
+      });
+    } catch (error) {
+      if (commitment) {
+        await withRoomLock(roomId, async () => {
+          const room = getRoom(roomId);
+          await appendDomainEvents(room, [domainEvent(room, "round.commitment.failed", {
+            roundId,
+            commitmentHash: commitment.commitmentHash,
+            replayHash: commitment.payload.replayHash,
+            network: commitmentPublisher.network,
+            failedAt: nowIso(),
+            reason: String(error?.message ?? "solana_commitment_failed").slice(0, 160),
+          }, { idempotencyKey: `round-commitment-failed:${commitment.commitmentHash}:${Date.now()}` })]);
+        });
+      }
+    } finally {
+      pendingCommitments.delete(key);
     }
-    return deriveVerifiedRoundReplay(events, roundId, await verifyRoom(roomId));
+    return roundCommitment(roomId, roundId);
+  }
+
+  function scheduleRoundCommitment(roomId, roundId) {
+    if (!commitmentPublisher?.enabled) return;
+    const timer = setTimeout(() => void publishRoundCommitment(roomId, roundId), 0);
+    timer.unref?.();
   }
 
   async function applyNormalizedEvent(roomId, normalizedEvent, acquisition = {}) {
@@ -1801,6 +1899,7 @@ export function createRoomRuntime({ eventStore = null } = {}) {
             })]
           : []),
       ]);
+      scheduleRoundCommitment(room.roomId, resolution.roundId);
     }
     room.version += 1;
     const outputs = [
@@ -1859,5 +1958,5 @@ export function createRoomRuntime({ eventStore = null } = {}) {
     });
   }
 
-  return { getRoom, snapshot, authenticatedSnapshot, join, validateSession, submitAnswer, castFanPulse, applyNormalizedEvent, attachClient, emit, configureMatch, evidence, evidenceById, rehydrateFromLedger, publicEvents, hasPublicRoom, projectRoomFromLedger, verifyRoom, verifiedRoundReplay };
+  return { getRoom, snapshot, authenticatedSnapshot, join, validateSession, submitAnswer, castFanPulse, applyNormalizedEvent, attachClient, emit, configureMatch, evidence, evidenceById, rehydrateFromLedger, publicEvents, hasPublicRoom, projectRoomFromLedger, verifyRoom, verifiedRoundReplay, roundCommitment, publishRoundCommitment };
 }

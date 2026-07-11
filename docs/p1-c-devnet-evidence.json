@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "gate": "P1-C",
+  "testedAt": "2026-07-11T21:10:26.795Z",
+  "contract": "VIRA:ROUND_COMMITMENT:V1",
+  "sourceVector": "tests/fixtures/commitment/round-v1-success.json",
+  "replayHash": "sha256:34fddc808df78063b2f31840717a4fe9690db40c1a8d229a4b6eff3feabc6ab7",
+  "commitmentHash": "sha256:ff05726088281670c307e3a1c18681db405a09459af16f0b61f53a7f3296bad0",
+  "answersRoot": "sha256:c22b0203ba2144caca319bb3f3acec6e8704e49408776d04ab81515b125d2ffd",
+  "resultRoot": "sha256:0767e7812576e166c18152669ce3c3ac809f932aaeb51e59a79ec50345538431",
+  "solana": {
+    "network": "devnet",
+    "program": "MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr",
+    "signature": "2P4ZUus1epocVRUr8BvC59VvQTTJGjRPNGUDQ3K2gfTJqvPzG8r66U8PsKdEPxQzsfJxCN9GMXhKBXNA23G6XTJh",
+    "slot": 475599296,
+    "authority": "E5yeUyBjvHmf6J2KzovToPBDY55v9bgQiXqYozTU9NxC",
+    "onChainCommitmentHash": "sha256:ff05726088281670c307e3a1c18681db405a09459af16f0b61f53a7f3296bad0",
+    "onChainMatches": true,
+    "confirmedAt": "2026-07-11T21:10:26.794Z",
+    "explorerUrl": "https://explorer.solana.com/tx/2P4ZUus1epocVRUr8BvC59VvQTTJGjRPNGUDQ3K2gfTJqvPzG8r66U8PsKdEPxQzsfJxCN9GMXhKBXNA23G6XTJh?cluster=devnet"
+  },
+  "runtime": {
+    "publication": "asynchronous",
+    "resolutionDependsOnSolana": false,
+    "idempotencyKey": "commitmentHash",
+    "states": ["unsupported", "pending", "confirming", "confirmed", "failed"],
+    "restartResumesPending": true
+  }
+}

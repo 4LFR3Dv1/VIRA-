@@ -369,6 +369,24 @@ export interface VerifiedRoundReplayV1 {
   };
 }
 
+export interface RoundCommitmentStatus {
+  status: "unsupported" | "pending" | "confirming" | "confirmed" | "failed";
+  roomId?: string;
+  roundId: string;
+  network: string;
+  commitmentHash?: string;
+  replayHash?: string;
+  signature?: string;
+  slot?: number | null;
+  authority?: string;
+  confirmedAt?: string;
+  explorerUrl?: string;
+  onChainCommitmentHash?: string;
+  onChainMatches?: boolean;
+  failedAt?: string;
+  reason?: string;
+}
+
 export interface PublicDomainEvent {
   eventId: string;
   streamId: string;

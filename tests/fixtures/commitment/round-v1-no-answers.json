@@ -1,0 +1,385 @@
+{
+  "schemaVersion": 1,
+  "sourceReplayVector": "../replay/round-v1-no-answers.json",
+  "events": [
+    {
+      "eventId": "evt-1",
+      "streamId": "room-vector",
+      "roomId": "room-vector",
+      "type": "room.configured",
+      "globalPosition": 1,
+      "streamVersion": 1,
+      "idempotencyKey": "room.configured:1",
+      "causationId": null,
+      "correlationId": "corr-vector",
+      "createdAt": "2026-07-11T18:00:01.000Z",
+      "schemaVersion": 1,
+      "previousStreamEventHash": null,
+      "eventHash": "sha256:event-1",
+      "payload": {
+        "match": {
+          "id": "fixture-vector"
+        }
+      }
+    },
+    {
+      "eventId": "evt-2",
+      "streamId": "room-vector",
+      "roomId": "room-vector",
+      "type": "round.opened",
+      "globalPosition": 2,
+      "streamVersion": 2,
+      "idempotencyKey": "round.opened:2",
+      "causationId": null,
+      "correlationId": "corr-vector",
+      "createdAt": "2026-07-11T18:00:02.000Z",
+      "schemaVersion": 1,
+      "previousStreamEventHash": "sha256:event-1",
+      "eventHash": "sha256:event-2",
+      "payload": {
+        "round": {
+          "id": "round-vector-1",
+          "version": 1,
+          "sequence": 1,
+          "title": "Empate chega a 43% ou mais no proximo sinal?",
+          "openedAt": "2026-07-11T18:00:02.000Z",
+          "locksAt": "2026-07-11T18:01:30.000Z",
+          "options": [
+            {
+              "id": "yes",
+              "label": "Sim"
+            },
+            {
+              "id": "no",
+              "label": "Nao"
+            }
+          ],
+          "resolution": {
+            "mode": "first_matching_event",
+            "eventType": "odds_shift",
+            "predicate": {
+              "market": "1X2_PARTICIPANT_RESULT",
+              "marketSignature": "1X2_PARTICIPANT_RESULT|null|null|book-1",
+              "priceName": "draw",
+              "side": "draw",
+              "openingValue": 42.2,
+              "pctGte": 43,
+              "openedFromEventId": "odds-opening",
+              "minimumProviderSequence": 102
+            }
+          }
+        }
+      }
+    },
+    {
+      "eventId": "evt-3",
+      "streamId": "room-vector",
+      "roomId": "room-vector",
+      "type": "participant.joined",
+      "globalPosition": 3,
+      "streamVersion": 3,
+      "idempotencyKey": "participant.joined:3",
+      "causationId": null,
+      "correlationId": "corr-vector",
+      "createdAt": "2026-07-11T18:00:03.000Z",
+      "schemaVersion": 1,
+      "previousStreamEventHash": "sha256:event-2",
+      "eventHash": "sha256:event-3",
+      "payload": {
+        "participant": {
+          "id": "participant-a",
+          "displayName": "A"
+        }
+      }
+    },
+    {
+      "eventId": "evt-4",
+      "streamId": "room-vector",
+      "roomId": "room-vector",
+      "type": "participant.joined",
+      "globalPosition": 4,
+      "streamVersion": 4,
+      "idempotencyKey": "participant.joined:4",
+      "causationId": null,
+      "correlationId": "corr-vector",
+      "createdAt": "2026-07-11T18:00:04.000Z",
+      "schemaVersion": 1,
+      "previousStreamEventHash": "sha256:event-3",
+      "eventHash": "sha256:event-4",
+      "payload": {
+        "participant": {
+          "id": "participant-b",
+          "displayName": "B"
+        }
+      }
+    },
+    {
+      "eventId": "evt-5",
+      "streamId": "room-vector",
+      "roomId": "room-vector",
+      "type": "txline.event.received",
+      "globalPosition": 5,
+      "streamVersion": 5,
+      "idempotencyKey": "txline.event.received:5",
+      "causationId": null,
+      "correlationId": "corr-vector",
+      "createdAt": "2026-07-11T18:00:05.000Z",
+      "schemaVersion": 1,
+      "previousStreamEventHash": "sha256:event-4",
+      "eventHash": "sha256:event-5",
+      "payload": {
+        "providerEventId": "odds-resolution",
+        "providerSequence": 102,
+        "normalizedObservation": {
+          "id": "odds-resolution",
+          "type": "odds_shift",
+          "source": "txline-live",
+          "acquisitionOrigin": "txline_live_stream",
+          "providerSequence": 102,
+          "receivedAt": "2026-07-11T18:01:31.000Z",
+          "payload": {
+            "SuperOddsType": "1X2_PARTICIPANT_RESULT",
+            "MarketParameters": null,
+            "MarketPeriod": null,
+            "PriceNames": [
+              "part1",
+              "draw",
+              "part2"
+            ],
+            "Pct": [
+              21.3,
+              43.4,
+              35.3
+            ],
+            "Seq": 102
+          }
+        },
+        "acquisitionOrigin": "txline_live_stream"
+      }
+    },
+    {
+      "eventId": "evt-6",
+      "streamId": "room-vector",
+      "roomId": "room-vector",
+      "type": "txline.event.accepted",
+      "globalPosition": 6,
+      "streamVersion": 6,
+      "idempotencyKey": "txline.event.accepted:6",
+      "causationId": null,
+      "correlationId": "corr-vector",
+      "createdAt": "2026-07-11T18:00:06.000Z",
+      "schemaVersion": 1,
+      "previousStreamEventHash": "sha256:event-5",
+      "eventHash": "sha256:event-6",
+      "payload": {
+        "providerEventId": "odds-resolution",
+        "providerSequence": 102,
+        "event": {
+          "id": "odds-resolution",
+          "type": "odds_shift",
+          "source": "txline-live",
+          "acquisitionOrigin": "txline_live_stream",
+          "providerSequence": 102,
+          "receivedAt": "2026-07-11T18:01:31.000Z",
+          "payload": {
+            "SuperOddsType": "1X2_PARTICIPANT_RESULT",
+            "MarketParameters": null,
+            "MarketPeriod": null,
+            "PriceNames": [
+              "part1",
+              "draw",
+              "part2"
+            ],
+            "Pct": [
+              21.3,
+              43.4,
+              35.3
+            ],
+            "Seq": 102
+          }
+        },
+        "acquisitionOrigin": "txline_live_stream"
+      }
+    },
+    {
+      "eventId": "evt-7",
+      "streamId": "room-vector",
+      "roomId": "room-vector",
+      "type": "round.locked",
+      "globalPosition": 7,
+      "streamVersion": 7,
+      "idempotencyKey": "round.locked:7",
+      "causationId": "odds-resolution",
+      "correlationId": "corr-vector",
+      "createdAt": "2026-07-11T18:01:30.000Z",
+      "schemaVersion": 1,
+      "previousStreamEventHash": "sha256:event-6",
+      "eventHash": "sha256:event-7",
+      "payload": {
+        "roundId": "round-vector-1",
+        "roundVersion": 2,
+        "lockedAt": "2026-07-11T18:01:30.000Z",
+        "reason": "resolution_signal_received"
+      }
+    },
+    {
+      "eventId": "evt-8",
+      "streamId": "room-vector",
+      "roomId": "room-vector",
+      "type": "round.resolved",
+      "globalPosition": 8,
+      "streamVersion": 8,
+      "idempotencyKey": "round.resolved:8",
+      "causationId": "odds-resolution",
+      "correlationId": "corr-vector",
+      "createdAt": "2026-07-11T18:01:31.000Z",
+      "schemaVersion": 1,
+      "previousStreamEventHash": "sha256:event-7",
+      "eventHash": "sha256:event-8",
+      "payload": {
+        "roundId": "round-vector-1",
+        "causedByTxlineEventId": "odds-resolution",
+        "winningOptionId": "yes",
+        "answersEvaluated": 0,
+        "answersCorrect": 0,
+        "totalPointsApplied": 0,
+        "awards": [],
+        "event": {
+          "id": "odds-resolution",
+          "type": "odds_shift",
+          "source": "txline-live",
+          "acquisitionOrigin": "txline_live_stream",
+          "providerSequence": 102,
+          "receivedAt": "2026-07-11T18:01:31.000Z",
+          "payload": {
+            "SuperOddsType": "1X2_PARTICIPANT_RESULT",
+            "MarketParameters": null,
+            "MarketPeriod": null,
+            "PriceNames": [
+              "part1",
+              "draw",
+              "part2"
+            ],
+            "Pct": [
+              21.3,
+              43.4,
+              35.3
+            ],
+            "Seq": 102
+          }
+        }
+      }
+    }
+  ],
+  "replay": {
+    "domain": "VIRA:VERIFIED_ROUND_REPLAY:V1",
+    "schemaVersion": 1,
+    "roomId": "room-vector",
+    "roundId": "round-vector-1",
+    "roundVersion": 1,
+    "prompt": {
+      "text": "Empate chega a 43% ou mais no proximo sinal?",
+      "operator": ">=",
+      "targetValue": 43,
+      "priceName": "draw",
+      "marketSignature": "1X2_PARTICIPANT_RESULT|null|null|book-1"
+    },
+    "opening": {
+      "eventId": "odds-opening",
+      "providerSequence": 101,
+      "value": 42.2,
+      "observedAt": "2026-07-11T18:00:02.000Z",
+      "acquisitionOrigin": "txline_snapshot"
+    },
+    "participation": {
+      "confirmedAnswers": 0,
+      "distributionVisible": true,
+      "distribution": {}
+    },
+    "lock": {
+      "lockedAt": "2026-07-11T18:01:30.000Z",
+      "reason": "eligible_signal",
+      "causedByEventId": "odds-resolution",
+      "temporalIntegrityValid": true
+    },
+    "resolution": {
+      "eventId": "odds-resolution",
+      "providerSequence": 102,
+      "observedValue": 43.4,
+      "winningOptionId": "yes",
+      "expression": "43.4 >= 43",
+      "predicateResult": true,
+      "resolvedAt": "2026-07-11T18:01:31.000Z",
+      "acquisitionOrigin": "txline_live_stream"
+    },
+    "scoring": {
+      "answersEvaluated": 0,
+      "answersCorrect": 0,
+      "totalPointsApplied": 0,
+      "leaderboardBeforeHash": "sha256:694428b8ec275930005ea170bfb2407c7e56c37823b1604d8e15818cd0769c8f",
+      "leaderboardAfterHash": "sha256:694428b8ec275930005ea170bfb2407c7e56c37823b1604d8e15818cd0769c8f"
+    },
+    "proof": {
+      "firstStreamVersion": 2,
+      "lastStreamVersion": 8,
+      "roundEventRangeHash": "sha256:event-8",
+      "hashChainValid": true,
+      "projectionMatches": true,
+      "rankingMatches": true,
+      "authorityValid": true,
+      "temporalIntegrityValid": true,
+      "eligibilityValid": true,
+      "determinismValid": true
+    },
+    "technical": {
+      "openingStreamVersion": 2,
+      "lockStreamVersion": 7,
+      "resolutionStreamVersion": 8,
+      "marketType": "1X2_PARTICIPANT_RESULT",
+      "line": null,
+      "period": null,
+      "minimumProviderSequence": 102,
+      "eligibilityChecks": {
+        "differentFromOpening": true,
+        "minimumProviderSequence": true,
+        "market": true,
+        "line": true,
+        "period": true,
+        "priceName": true
+      },
+      "causationId": "odds-resolution",
+      "correlationId": "corr-vector",
+      "openingEventHash": "sha256:event-2",
+      "lockEventHash": "sha256:event-7",
+      "resolutionEventHash": "sha256:event-8"
+    },
+    "replayHash": "sha256:52c0246cbaf00af7df9d8d29cd36ab2bb4c4e1d1c3547abc6463d9883d1aeed9"
+  },
+  "expectedCommitment": {
+    "payload": {
+      "domain": "VIRA:ROUND_COMMITMENT:V1",
+      "schemaVersion": 1,
+      "roomIdHash": "sha256:fab38ea72741b5150c1ed9ec782773dbcc5cf94396ac1a6b782582d17c7f551c",
+      "fixtureIdHash": "sha256:6e2dc8d4f691bbd97659083464b5ab4c432b6c448c2843bf1fcdcc69e555b2ac",
+      "roundIdHash": "sha256:4d68c29e90eeaa06f0719e89bd45ac5b367b12bc069c23fbc670694c3146967b",
+      "roundVersion": 1,
+      "answersRoot": "sha256:0b28073749732b7281ba8f0c8226d86a04a1f235ff732e7157b8b2177971a984",
+      "resultRoot": "sha256:bc0847f22b30c46e7bf7776a251a34b0cfb2dad5c1f758382c8562c6feae93b8",
+      "replayHash": "sha256:52c0246cbaf00af7df9d8d29cd36ab2bb4c4e1d1c3547abc6463d9883d1aeed9",
+      "ledgerHeadHash": "sha256:event-8",
+      "openedAtUnixMs": 1783792802000,
+      "lockedAtUnixMs": 1783792890000,
+      "resolvedAtUnixMs": 1783792891000
+    },
+    "canonical": "VIRA:ROUND_COMMITMENT:V1|1|sha256:fab38ea72741b5150c1ed9ec782773dbcc5cf94396ac1a6b782582d17c7f551c|sha256:6e2dc8d4f691bbd97659083464b5ab4c432b6c448c2843bf1fcdcc69e555b2ac|sha256:4d68c29e90eeaa06f0719e89bd45ac5b367b12bc069c23fbc670694c3146967b|1|sha256:0b28073749732b7281ba8f0c8226d86a04a1f235ff732e7157b8b2177971a984|sha256:bc0847f22b30c46e7bf7776a251a34b0cfb2dad5c1f758382c8562c6feae93b8|sha256:52c0246cbaf00af7df9d8d29cd36ab2bb4c4e1d1c3547abc6463d9883d1aeed9|sha256:event-8|1783792802000|1783792890000|1783792891000",
+    "canonicalHex": "564952413a524f554e445f434f4d4d49544d454e543a56317c317c7368613235363a666162333865613732373431623531353063316564396563373832373733646263633563663934333936616331613662373832353832643137633766353531637c7368613235363a366532646338643466363931626264393736353930383334363462356162346334333262366334343863323834336266316663646363363965353535623261637c7368613235363a346436386332396539306565616130366630373139653839626434356163356233363762313262633036396332336662633637303639346333313436393637627c317c7368613235363a306232383037333734393733326237323831626138663063383232366438366130346131663233356666373332653731353762386232313737393731613938347c7368613235363a626330383437663232623330633436653762663737373661323531613334623063666232646164356331663735383338326338353632633666656165393362387c7368613235363a353263303234366362616630306166376466396438643239636433366162326262346334653164316333353437616263363436336439383833643161656564397c7368613235363a6576656e742d387c313738333739323830323030307c313738333739323839303030307c31373833373932383931303030",
+    "commitmentHash": "sha256:3dfb07b6150b2b18e9f90e6f7b12f033b7772cbcadb67bbdb353cd1138c1b744",
+    "metadata": {
+      "answerCount": 0,
+      "resultEventId": "evt-8",
+      "generatedFromReplaySchema": 1,
+      "payloadJson": "{\"answersRoot\":\"sha256:0b28073749732b7281ba8f0c8226d86a04a1f235ff732e7157b8b2177971a984\",\"domain\":\"VIRA:ROUND_COMMITMENT:V1\",\"fixtureIdHash\":\"sha256:6e2dc8d4f691bbd97659083464b5ab4c432b6c448c2843bf1fcdcc69e555b2ac\",\"ledgerHeadHash\":\"sha256:event-8\",\"lockedAtUnixMs\":1783792890000,\"openedAtUnixMs\":1783792802000,\"replayHash\":\"sha256:52c0246cbaf00af7df9d8d29cd36ab2bb4c4e1d1c3547abc6463d9883d1aeed9\",\"resolvedAtUnixMs\":1783792891000,\"resultRoot\":\"sha256:bc0847f22b30c46e7bf7776a251a34b0cfb2dad5c1f758382c8562c6feae93b8\",\"roomIdHash\":\"sha256:fab38ea72741b5150c1ed9ec782773dbcc5cf94396ac1a6b782582d17c7f551c\",\"roundIdHash\":\"sha256:4d68c29e90eeaa06f0719e89bd45ac5b367b12bc069c23fbc670694c3146967b\",\"roundVersion\":1,\"schemaVersion\":1}"
+    }
+  },
+  "expectedCommitmentHash": "sha256:3dfb07b6150b2b18e9f90e6f7b12f033b7772cbcadb67bbdb353cd1138c1b744"
+}
