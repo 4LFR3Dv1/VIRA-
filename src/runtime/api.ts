@@ -225,6 +225,16 @@ export async function validateRoomSession(roomId: string, participantId: string,
   return response.json();
 }
 
+export async function castRoomFanPulse(input: { roomId: string; participantId: string; sessionToken: string; side: "home" | "away" }): Promise<{ accepted: boolean; side: "home" | "away"; eventId: string; roomVersion: number }> {
+  const response = await fetch(`${API_ORIGIN}/rooms/${encodeURIComponent(input.roomId)}/fan-pulse`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${input.sessionToken}` },
+    body: JSON.stringify({ participantId: input.participantId, side: input.side }),
+  });
+  if (!response.ok) throw new Error(`fan_pulse_failed:${response.status}`);
+  return response.json();
+}
+
 export async function fetchRoomVerification(roomId: string): Promise<RoomVerification> {
   const response = await fetch(`${API_ORIGIN}/public/rooms/${encodeURIComponent(roomId)}/verification`);
   if (!response.ok) throw new Error(`verification_failed:${response.status}`);

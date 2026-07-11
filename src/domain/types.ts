@@ -289,6 +289,11 @@ export interface RoomSnapshot {
   answers: Record<string, PredictionAnswer>;
   currentParticipantAnswer?: PredictionAnswer | null;
   answerSummary?: { total: number; byOption?: Record<string, number> };
+  fanPulse?: {
+    total: number;
+    byTeam: { home: number; away: number };
+    currentParticipantChoice: "home" | "away" | null;
+  };
   leaderboard: ScoreEntry[];
   timeline: TimelineEntry[];
   marketDistribution: Record<string, number>;

@@ -4,6 +4,7 @@ import type { NormalizedMatchEvent, PresentationEvent, ReplayState, RoomSnapshot
 import { createInitialReplayState } from "../replay/initial-state";
 import {
   connectTxlineOddsStream,
+  castRoomFanPulse,
   disconnectTxlineStream,
   fetchLatestTxlineOdds,
   fetchRoomState,
@@ -22,6 +23,7 @@ interface RoomRuntimeControls {
   setSpeed: (speed: ReplayState["speed"]) => void;
   selectAnswer: (optionId: string) => void;
   submitAnswer: () => Promise<void>;
+  castFanPulse: (side: "home" | "away") => Promise<void>;
   fetchLatestTxlineOdds: () => Promise<void>;
   connectOddsStream: () => Promise<void>;
   disconnectOddsStream: () => Promise<void>;
@@ -48,6 +50,10 @@ function stateFromSnapshot(base: ReplayState, incomingSnapshot: RoomSnapshot, pa
   const preservedAnswer = roundChanged ? null : incomingSnapshot.currentParticipantAnswer ?? base.snapshot.currentParticipantAnswer ?? (participantId ? base.snapshot.answers[participantId] : null);
   const snapshot = withCurrentParticipant({
     ...incomingSnapshot,
+    fanPulse: incomingSnapshot.fanPulse ? {
+      ...incomingSnapshot.fanPulse,
+      currentParticipantChoice: incomingSnapshot.fanPulse.currentParticipantChoice ?? base.snapshot.fanPulse?.currentParticipantChoice ?? null,
+    } : base.snapshot.fanPulse,
     currentParticipantAnswer: preservedAnswer,
     answers: preservedAnswer && participantId ? { [participantId]: preservedAnswer } : {},
   }, participantId);
@@ -293,7 +299,7 @@ export function useRoomRuntime(roomId: string, displayName?: string | null) {
     },
     setSpeed: () => undefined,
     selectAnswer: (optionId: string) => {
-      if (state.snapshot.currentRound?.state !== "open") return;
+      if (state.snapshot.match.status !== "live" || state.snapshot.currentRound?.state !== "open") return;
       setSelectedOptionId(optionId);
       setState((current) => ({
         ...current,
@@ -303,7 +309,7 @@ export function useRoomRuntime(roomId: string, displayName?: string | null) {
     },
     submitAnswer: async () => {
       const round = state.snapshot.currentRound;
-      if (!participantId || !sessionToken || !round || !selectedOptionId) return;
+      if (!participantId || !sessionToken || state.snapshot.match.status !== "live" || !round || !selectedOptionId) return;
       const response = await submitRoomAnswer({
         roomId,
         roundId: round.id,
@@ -324,6 +330,12 @@ export function useRoomRuntime(roomId: string, displayName?: string | null) {
         currentAnswerState: "submitted",
         currentUiState: "awaiting_resolution",
       }));
+    },
+    castFanPulse: async (side) => {
+      if (!participantId || !sessionToken || state.snapshot.match.status !== "scheduled") return;
+      await castRoomFanPulse({ roomId, participantId, sessionToken, side });
+      const snapshot = await fetchRoomState(roomId, participantId, sessionToken);
+      setState((current) => stateFromSnapshot(current, snapshot, participantId));
     },
     fetchLatestTxlineOdds: async () => {
       setTxlineFetchState("loading");

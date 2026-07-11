@@ -81,6 +81,7 @@ export function MatchRoomScreen() {
     if (
       (previewChoice === "yes" || previewChoice === "no")
       && currentRound?.state === "open"
+      && state.snapshot.match.status === "live"
       && !state.selectedOptionId
       && state.currentAnswerState === "not_answered"
     ) {
@@ -146,6 +147,7 @@ export function MatchRoomScreen() {
             latestPresentationEvent={latestPresentationEvent}
             onSelect={controls.selectAnswer}
             onSubmit={controls.submitAnswer}
+            onFanPulse={controls.castFanPulse}
             preMatchContext={preMatchContext}
           />
 

@@ -15,17 +15,18 @@ interface RoomStageProps {
   latestPresentationEvent: PresentationEvent | null;
   onSelect: (optionId: string) => void;
   onSubmit: () => void;
+  onFanPulse: (side: "home" | "away") => Promise<void>;
   preMatchContext: MatchTxlineContext | null;
 }
 
-export function RoomStage({ state, model, answerSummary, latestPresentationEvent, onSelect, onSubmit, preMatchContext }: RoomStageProps) {
+export function RoomStage({ state, model, answerSummary, latestPresentationEvent, onSelect, onSubmit, onFanPulse, preMatchContext }: RoomStageProps) {
   const round = state.snapshot.currentRound;
   const experience = model.scene;
 
   if (experience === "provider_unavailable") return <OperationalStage state={state} kind="provider" />;
   if (experience === "no_live_fixture") return <OperationalStage state={state} kind="no-fixture" />;
-  if (experience === "scheduled_without_market") return <OperationalStage state={state} kind="scheduled-empty" context={preMatchContext} />;
-  if (experience === "scheduled_with_market") return <OperationalStage state={state} kind="scheduled-ready" context={preMatchContext} />;
+  if (experience === "scheduled_without_market") return <OperationalStage state={state} kind="scheduled-empty" context={preMatchContext} onFanPulse={onFanPulse} />;
+  if (experience === "scheduled_with_market") return <OperationalStage state={state} kind="scheduled-ready" context={preMatchContext} onFanPulse={onFanPulse} />;
   if (experience === "live_waiting_for_market") return <PreparingRoundStage state={state} kind="market" />;
   if (experience === "live_waiting_for_round") return <PreparingRoundStage state={state} kind="round" />;
 
@@ -78,7 +79,7 @@ function PreparingRoundStage({ state, kind }: { state: ReplayState; kind: "marke
   );
 }
 
-function OperationalStage({ state, kind, context = null }: { state: ReplayState; kind: "provider" | "no-fixture" | "scheduled-empty" | "scheduled-ready"; context?: MatchTxlineContext | null }) {
+function OperationalStage({ state, kind, context = null, onFanPulse }: { state: ReplayState; kind: "provider" | "no-fixture" | "scheduled-empty" | "scheduled-ready"; context?: MatchTxlineContext | null; onFanPulse?: (side: "home" | "away") => Promise<void> }) {
   const match = state.snapshot.match;
   const scheduled = kind === "scheduled-empty" || kind === "scheduled-ready";
   const [now, setNow] = useState(() => Date.now());
@@ -103,21 +104,69 @@ function OperationalStage({ state, kind, context = null }: { state: ReplayState;
       <div className="absolute inset-0 opacity-20 [background-image:linear-gradient(rgba(255,255,255,.05)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,.04)_1px,transparent_1px)] [background-size:100%_72px,110px_100%]" />
       <div className={`relative grid min-h-[31rem] items-center gap-10 px-6 py-14 md:px-10 ${scheduled ? "lg:grid-cols-[minmax(0,1.15fr)_minmax(300px,.85fr)]" : ""}`}>
         <div><p className={`font-['DM_Mono'] text-[10px] font-black uppercase tracking-[.2em] ${copy.tone}`}>{copy.eyebrow}</p><h1 className="mt-6 max-w-5xl font-['Chakra_Petch'] text-[clamp(2.6rem,6vw,6.2rem)] font-black uppercase leading-[.82]">{copy.title}</h1><p className="mt-8 max-w-xl text-sm leading-6 text-white/50 md:text-base">{copy.body}</p><div className="mt-10 flex flex-wrap gap-6 font-['DM_Mono'] text-[10px] uppercase tracking-[.12em] text-white/45">{scheduled ? <StatusMetric label={`${state.snapshot.roomPopulation} aguardando`} /> : null}{kind === "provider" ? <StatusMetric active={false} label="Reconectando automaticamente" /> : <StatusMetric label={scheduled ? "Sala aberta" : "Agenda TxLINE"} />}{kind === "scheduled-ready" ? <StatusMetric label="Mercados disponíveis" /> : null}</div></div>
-        {scheduled ? <PreMatchMarketWatch context={context} participantCount={state.snapshot.roomPopulation} /> : null}
+        {scheduled ? <PreMatchMarketWatch state={state} context={context} participantCount={state.snapshot.roomPopulation} onFanPulse={onFanPulse} /> : null}
       </div>
     </section>
   );
 }
 
-function PreMatchMarketWatch({ context, participantCount }: { context: MatchTxlineContext | null; participantCount: number }) {
+function PreMatchMarketWatch({ state, context, participantCount, onFanPulse }: { state: ReplayState; context: MatchTxlineContext | null; participantCount: number; onFanPulse?: (side: "home" | "away") => Promise<void> }) {
+  const [submitting, setSubmitting] = useState<"home" | "away" | null>(null);
+  const [pulseError, setPulseError] = useState(false);
   const probability = context?.endpoints.odds.data?.winProbability ?? null;
   const markets = context?.availableMarkets.length ?? 0;
+  const homeName = context?.fixture.homeTeam ?? state.snapshot.match.homeTeam.name;
+  const awayName = context?.fixture.awayTeam ?? state.snapshot.match.awayTeam.name;
+  const pulse = state.snapshot.fanPulse ?? { total: 0, byTeam: { home: 0, away: 0 }, currentParticipantChoice: null };
+  const homeShare = pulse.total ? Math.round((pulse.byTeam.home / pulse.total) * 100) : 50;
+  const awayShare = pulse.total ? 100 - homeShare : 50;
   const options = probability ? [
-    { label: context?.fixture.homeTeam ?? "Casa", value: probability.home },
+    { label: homeName, value: probability.home },
     { label: "Empate", value: probability.draw },
-    { label: context?.fixture.awayTeam ?? "Visitante", value: probability.away },
+    { label: awayName, value: probability.away },
   ] : [];
-  return <aside className="border-y border-white/15 bg-[#050814]/55 py-6 lg:border lg:p-6"><div className="flex items-center justify-between"><div><p className="font-['DM_Mono'] text-[10px] font-black uppercase tracking-[.16em] text-primary">Mercado agora</p><h2 className="mt-2 font-['Chakra_Petch'] text-2xl font-black uppercase">Market Watch</h2></div><Radio className="size-4 text-primary" /></div>{options.length ? <div className="mt-6 border-t border-white/15">{options.map((option) => <div key={option.label} className="flex items-center justify-between border-b border-white/15 py-4"><span className="font-['DM_Mono'] text-[10px] uppercase text-white/45">{option.label}</span><strong className="font-['Chakra_Petch'] text-2xl font-black text-primary"><AnimatedNumber value={option.value} suffix="%" format={{ minimumFractionDigits: 1, maximumFractionDigits: 1 }} /></strong></div>)}</div> : <p className="mt-6 border-y border-white/15 py-6 text-sm text-white/45">Aguardando a primeira distribuição 1X2 confirmada.</p>}<div className="mt-5 flex items-center justify-between font-['DM_Mono'] text-[9px] uppercase text-white/35"><span>{markets} mercados disponíveis</span><span>{participantCount} aguardando</span></div><p className="mt-5 text-xs leading-5 text-white/40">A primeira rodada competitiva abre somente quando a partida entrar ao vivo.</p></aside>;
+  const cast = async (side: "home" | "away") => {
+    if (!onFanPulse || pulse.currentParticipantChoice || submitting) return;
+    setSubmitting(side);
+    setPulseError(false);
+    try {
+      await onFanPulse(side);
+    } catch {
+      setPulseError(true);
+    } finally {
+      setSubmitting(null);
+    }
+  };
+
+  return (
+    <aside className="border-y border-white/15 bg-[#050814]/55 lg:border">
+      <div className="p-6">
+        <div className="flex items-center justify-between">
+          <div><p className="font-['DM_Mono'] text-[10px] font-black uppercase tracking-[.16em] text-primary">Mercado agora</p><h2 className="mt-2 font-['Chakra_Petch'] text-2xl font-black uppercase">Market Watch</h2></div>
+          <Radio className="size-4 text-primary" />
+        </div>
+        {options.length ? <div className="mt-5 grid grid-cols-3 border-y border-white/15">{options.map((option) => <div key={option.label} className="border-r border-white/15 px-2 py-4 text-center last:border-r-0"><span className="block truncate font-['DM_Mono'] text-[9px] uppercase text-white/45">{option.label}</span><strong className="mt-2 block font-['Chakra_Petch'] text-xl font-black text-primary"><AnimatedNumber value={option.value} suffix="%" format={{ minimumFractionDigits: 1, maximumFractionDigits: 1 }} /></strong></div>)}</div> : <p className="mt-5 border-y border-white/15 py-5 text-sm text-white/45">Aguardando a primeira distribuição 1X2 confirmada.</p>}
+      </div>
+
+      <div className="border-t border-white/15 p-6">
+        <p className="font-['DM_Mono'] text-[10px] font-black uppercase tracking-[.16em] text-primary">Fan Pulse</p>
+        <h3 className="mt-2 font-['Chakra_Petch'] text-2xl font-black uppercase">Com quem voce esta?</h3>
+        <p className="mt-2 text-xs text-white/40">Torcida pre-jogo. Nao vale pontos e nao interfere no mercado.</p>
+        <div className="mt-5 grid grid-cols-2 border-y border-white/15">
+          {(["home", "away"] as const).map((side) => {
+            const selected = pulse.currentParticipantChoice === side;
+            const label = side === "home" ? homeName : awayName;
+            const share = side === "home" ? homeShare : awayShare;
+            return <button key={side} type="button" disabled={Boolean(pulse.currentParticipantChoice) || Boolean(submitting)} onClick={() => void cast(side)} className={`relative min-h-24 overflow-hidden border-r border-white/15 p-4 text-left last:border-r-0 ${selected ? "bg-primary text-[#050814]" : "bg-white/[.02] hover:bg-white/[.06]"}`}><span className="relative z-10 block truncate font-['Chakra_Petch'] text-lg font-black uppercase">{label}</span><span className={`relative z-10 mt-5 block font-['DM_Mono'] text-[9px] uppercase ${selected ? "text-[#050814]/60" : "text-white/35"}`}>{submitting === side ? "Confirmando..." : selected ? "Seu lado" : pulse.total ? `${share}% da torcida` : "Escolher lado"}</span>{pulse.total ? <span className="absolute bottom-1 right-2 font-['Chakra_Petch'] text-5xl font-black opacity-10">{share}%</span> : null}</button>;
+          })}
+        </div>
+        <div className="mt-4 flex items-center justify-between font-['DM_Mono'] text-[9px] uppercase text-white/35"><span>{pulse.total} no Fan Pulse</span><span>{participantCount} aguardando</span></div>
+        {pulseError ? <p className="mt-3 text-xs text-amber-300">Nao foi possivel registrar sua torcida. Tente novamente.</p> : null}
+      </div>
+
+      <div className="border-t border-white/15 px-6 py-4 font-['DM_Mono'] text-[9px] uppercase text-white/35"><span>{markets} mercados disponíveis</span><p className="mt-2 normal-case leading-5">A primeira rodada competitiva abre somente quando a partida entrar ao vivo.</p></div>
+    </aside>
+  );
 }
 
 function formatCountdown(remainingMs: number) {

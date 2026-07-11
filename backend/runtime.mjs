@@ -289,6 +289,7 @@ export function createRoomRuntime({ eventStore = null } = {}) {
       answersByRound: initialRound ? { [initialRound.id]: {} } : {},
       answerKeys: new Set(),
       participantSessions: new Map(),
+      fanPulseChoices: new Map(),
       leaderboard: [],
       timeline: [
         { id: "timeline-room-started", matchClockSec: match.matchClockSec, title: match.status === "finished" ? "Partida encerrada" : "Sala ativa", description: match.status === "finished" ? "A fixture da TxLINE ja esta encerrada; a sala live permanece somente leitura." : "A sala esta pronta para receber participantes reais.", tone: "info" },
@@ -477,6 +478,8 @@ export function createRoomRuntime({ eventStore = null } = {}) {
     const currentAnswer = participantId ? currentRoundAnswers(room)[participantId] ?? null : null;
     const roundClosed = Boolean(room.currentRound && ["locked", "resolved", "expired"].includes(room.currentRound.state));
     const totalAnswers = Object.keys(currentRoundAnswers(room)).length;
+    const fanPulseHome = [...room.fanPulseChoices.values()].filter((side) => side === "home").length;
+    const fanPulseAway = [...room.fanPulseChoices.values()].filter((side) => side === "away").length;
     return {
       roomId: room.roomId,
       roomLabel: room.roomLabel,
@@ -492,6 +495,11 @@ export function createRoomRuntime({ eventStore = null } = {}) {
       answers: currentAnswer ? { [participantId]: currentAnswer } : {},
       currentParticipantAnswer: currentAnswer,
       answerSummary: { total: totalAnswers, ...(roundClosed ? { byOption: { ...room.roomDistribution } } : {}) },
+      fanPulse: {
+        total: fanPulseHome + fanPulseAway,
+        byTeam: { home: fanPulseHome, away: fanPulseAway },
+        currentParticipantChoice: participantId ? room.fanPulseChoices.get(participantId) ?? null : null,
+      },
       leaderboard: room.leaderboard.map((entry) => ({
         ...entry,
         isCurrentUser: entry.participantId === participantId,
@@ -683,6 +691,44 @@ export function createRoomRuntime({ eventStore = null } = {}) {
         answeredAt: answer.answeredAt,
         answerState: answer.state,
       };
+    });
+  }
+
+  async function castFanPulse(roomId, participantId, side, sessionToken) {
+    return withRoomLock(roomId, async () => {
+      const room = getRoom(roomId);
+      if (room.match.status !== "scheduled") {
+        const error = new Error("fan_pulse_pre_match_only");
+        error.status = 409;
+        throw error;
+      }
+      if (!sessionToken || room.participantSessions.get(participantId) !== sessionTokenHash(sessionToken)) {
+        const error = new Error("invalid_session");
+        error.status = 401;
+        throw error;
+      }
+      if (side !== "home" && side !== "away") {
+        const error = new Error("invalid_fan_pulse_side");
+        error.status = 400;
+        throw error;
+      }
+      if (room.fanPulseChoices.has(participantId)) {
+        const error = new Error("fan_pulse_already_cast");
+        error.status = 409;
+        throw error;
+      }
+      const event = domainEvent(room, "fan_pulse.cast", {
+        participantId,
+        side,
+        castAt: nowIso(),
+      }, {
+        idempotencyKey: `fan-pulse:${room.roomId}:${participantId}`,
+      });
+      const persisted = await appendDomainEvents(room, [event]);
+      room.fanPulseChoices.set(participantId, side);
+      room.version += 1;
+      emitRoomSnapshot(roomId);
+      return { accepted: true, side, eventId: persisted[0]?.eventId ?? event.eventId, roomVersion: room.version };
     });
   }
 
@@ -1170,6 +1216,7 @@ export function createRoomRuntime({ eventStore = null } = {}) {
     room.answersByRound = {};
     room.answerKeys = new Set();
     room.participantSessions = new Map();
+    room.fanPulseChoices = new Map();
     room.leaderboard = [];
     room.timeline = [];
     room.marketDistribution = {};
@@ -1211,6 +1258,12 @@ export function createRoomRuntime({ eventStore = null } = {}) {
         if (payload.sessionTokenHash) room.participantSessions.set(participant.id, payload.sessionTokenHash);
         room.leaderboard.push({ participantId: participant.id, displayName: participant.displayName, points: 0, rank: room.leaderboard.length + 1, streak: 0, movement: "steady", delta: 0 });
         room.leaderboard = rankLeaderboard(room.leaderboard);
+        break;
+      }
+      case "fan_pulse.cast": {
+        if (payload.participantId && (payload.side === "home" || payload.side === "away")) {
+          room.fanPulseChoices.set(payload.participantId, payload.side);
+        }
         break;
       }
       case "round.opened": {
@@ -1787,5 +1840,5 @@ export function createRoomRuntime({ eventStore = null } = {}) {
     });
   }
 
-  return { getRoom, snapshot, authenticatedSnapshot, join, validateSession, submitAnswer, applyNormalizedEvent, attachClient, emit, configureMatch, evidence, evidenceById, rehydrateFromLedger, publicEvents, hasPublicRoom, projectRoomFromLedger, verifyRoom };
+  return { getRoom, snapshot, authenticatedSnapshot, join, validateSession, submitAnswer, castFanPulse, applyNormalizedEvent, attachClient, emit, configureMatch, evidence, evidenceById, rehydrateFromLedger, publicEvents, hasPublicRoom, projectRoomFromLedger, verifyRoom };
 }

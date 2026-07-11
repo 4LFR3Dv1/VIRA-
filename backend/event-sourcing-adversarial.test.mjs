@@ -85,6 +85,34 @@ async function setupRuntimeRoom(dataDir, roomId = "fixture-live") {
   return { eventStore, runtime, renan, ana, roomId };
 }
 
+test("pre-match Fan Pulse is authenticated, aggregated and restored from the ledger", async () => {
+  const dataDir = await mkdtemp(path.join(os.tmpdir(), "vira-fan-pulse-"));
+  try {
+    const eventStore = await createFileEventStore({ dataDir });
+    const runtime = createRoomRuntime({ eventStore });
+    const roomId = "fixture-scheduled";
+    runtime.configureMatch({ fixtureId: roomId, title: "Norway vs England", competitionLabel: "World Cup", status: "scheduled", homeTeam: "Norway", awayTeam: "England" });
+    const renan = await runtime.join(roomId, "Renan");
+    const ana = await runtime.join(roomId, "Ana");
+
+    await runtime.castFanPulse(roomId, renan.participant.id, "home", renan.sessionToken);
+    await runtime.castFanPulse(roomId, ana.participant.id, "away", ana.sessionToken);
+    const publicSnapshot = runtime.snapshot(roomId, null);
+    assert.deepEqual(publicSnapshot.fanPulse, { total: 2, byTeam: { home: 1, away: 1 }, currentParticipantChoice: null });
+    assert.equal(runtime.authenticatedSnapshot(roomId, renan.participant.id, renan.sessionToken).fanPulse.currentParticipantChoice, "home");
+    await assert.rejects(() => runtime.castFanPulse(roomId, renan.participant.id, "away", renan.sessionToken), /fan_pulse_already_cast/);
+    await assert.rejects(() => runtime.castFanPulse(roomId, ana.participant.id, "home", renan.sessionToken), /invalid_session/);
+
+    const restoredStore = await createFileEventStore({ dataDir });
+    const restored = createRoomRuntime({ eventStore: restoredStore });
+    await restored.rehydrateFromLedger();
+    assert.deepEqual(restored.snapshot(roomId, null).fanPulse.byTeam, { home: 1, away: 1 });
+    assert.equal((await restored.publicEvents(roomId)).filter((event) => event.type === "fan_pulse.cast").length, 2);
+  } finally {
+    await rm(dataDir, { recursive: true, force: true });
+  }
+});
+
 test("optimistic concurrency rejects stale append and succeeds after reload/redecision", async () => {
   const dataDir = await mkdtemp(path.join(os.tmpdir(), "vira-concurrency-"));
   try {

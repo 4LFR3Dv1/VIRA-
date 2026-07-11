@@ -46,8 +46,11 @@ export function createExperienceModel(state: ReplayState, event: PresentationEve
   const eventValue = event?.kind === "txline_update" ? event.currentValue : null;
   const currentValue = eventValue ?? (typeof snapshot.marketDistribution.yes === "number" ? snapshot.marketDistribution.yes : openingValue);
   const baseScene = deriveRoomExperience(state);
+  const nonCompetitiveScene = baseScene === "scheduled_without_market" || baseScene === "scheduled_with_market" || baseScene === "no_live_fixture" || baseScene === "provider_unavailable";
   const verified = Boolean(verification?.hashChainValid && verification.projectionMatches && verification.rankingMatches);
-  const scene: ExperienceScene = verified && snapshot.match.status === "finished"
+  const scene: ExperienceScene = nonCompetitiveScene
+    ? baseScene
+    : verified && snapshot.match.status === "finished"
     ? "verified_final"
     : event?.kind === "round_resolved" || state.currentUiState === "resolved_success" || state.currentUiState === "resolved_failure"
       ? "round_resolved"

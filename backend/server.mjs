@@ -616,6 +616,17 @@ async function handleRequest(request, response) {
         return;
       }
 
+      if (request.method === "POST" && rest === "fan-pulse") {
+        const body = await readJson(request);
+        sendJson(response, 200, await runtime.castFanPulse(
+          roomId,
+          body.participantId,
+          body.side,
+          body.sessionToken ?? request.headers.authorization?.replace(/^Bearer\s+/i, ""),
+        ));
+        return;
+      }
+
       if (request.method === "GET" && rest === "evidence") {
         sendJson(response, 200, runtime.evidence(roomId, Number(url.searchParams.get("limit") || 10)));
         return;
