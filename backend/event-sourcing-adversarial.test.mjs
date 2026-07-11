@@ -175,6 +175,39 @@ test("authoritative TxLINE score snapshot updates, corrects and restores the sco
   }
 });
 
+test("concurrent admission is idempotent and remains reusable after restart", async () => {
+  const dataDir = await mkdtemp(path.join(os.tmpdir(), "vira-admission-idempotency-"));
+  try {
+    const roomId = "fixture-admission";
+    const admissionToken = "admission-token-ana-000000000001";
+    const eventStore = await createFileEventStore({ dataDir });
+    const runtime = createRoomRuntime({ eventStore });
+    runtime.configureMatch({ fixtureId: roomId, title: "Norway vs England", status: "live", homeTeam: "Norway", awayTeam: "England" });
+
+    const [first, second] = await Promise.all([
+      runtime.join(roomId, "Ana", admissionToken),
+      runtime.join(roomId, "Ana", admissionToken),
+    ]);
+    assert.equal(first.participant.id, second.participant.id);
+    assert.equal(first.sessionToken, admissionToken);
+    assert.equal(second.sessionToken, admissionToken);
+    assert.equal(runtime.snapshot(roomId).participants.length, 1);
+    assert.equal(runtime.snapshot(roomId).leaderboard.length, 1);
+    assert.equal((await runtime.publicEvents(roomId)).filter((event) => event.type === "participant.joined").length, 1);
+
+    const restoredStore = await createFileEventStore({ dataDir });
+    const restoredRuntime = createRoomRuntime({ eventStore: restoredStore });
+    await restoredRuntime.rehydrateFromLedger();
+    const reused = await restoredRuntime.join(roomId, "Ana", admissionToken);
+    assert.equal(reused.participant.id, first.participant.id);
+    assert.equal(reused.reused, true);
+    assert.equal(restoredRuntime.snapshot(roomId).participants.length, 1);
+    assert.equal((await restoredRuntime.publicEvents(roomId)).filter((event) => event.type === "participant.joined").length, 1);
+  } finally {
+    await rm(dataDir, { recursive: true, force: true });
+  }
+});
+
 test("optimistic concurrency rejects stale append and succeeds after reload/redecision", async () => {
   const dataDir = await mkdtemp(path.join(os.tmpdir(), "vira-concurrency-"));
   try {

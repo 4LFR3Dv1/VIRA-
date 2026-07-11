@@ -559,19 +559,26 @@ export function createRoomRuntime({ eventStore = null, commitmentPublisher = nul
       });
   }
 
-  async function join(roomId, displayName) {
+  async function join(roomId, displayName, admissionToken = null) {
     return withRoomLock(roomId, async () => {
       const room = getRoom(roomId);
       const safeName = String(displayName || "Fan").trim().slice(0, 40) || "Fan";
+      const suppliedToken = typeof admissionToken === "string" && admissionToken.length >= 16 ? admissionToken : null;
+      const sessionToken = suppliedToken ?? crypto.randomUUID();
+      const tokenHash = sessionTokenHash(sessionToken);
+      const existingParticipant = room.participants.find((item) => room.participantSessions.get(item.id) === tokenHash);
+      if (existingParticipant) {
+        return { participant: existingParticipant, sessionToken, roomVersion: room.version, reused: true };
+      }
       const participant = {
-        id: `participant-${crypto.randomUUID()}`,
+        id: suppliedToken
+          ? `participant-${crypto.createHash("sha256").update(`${roomId}:${suppliedToken}`).digest("hex").slice(0, 24)}`
+          : `participant-${crypto.randomUUID()}`,
         displayName: safeName,
         initials: safeName.slice(0, 1).toUpperCase(),
         accent: "bg-primary",
         joinedAt: nowIso(),
       };
-      const sessionToken = crypto.randomUUID();
-      const tokenHash = sessionTokenHash(sessionToken);
       const initialEvents = room.streamVersion === 0
         ? [
             domainEvent(room, "room.configured", {
@@ -606,7 +613,7 @@ export function createRoomRuntime({ eventStore = null, commitmentPublisher = nul
       room.version += 1;
       emit(roomId, "participant.joined", { participant, version: room.version });
       emitRoomSnapshot(roomId);
-      return { participant, sessionToken, roomVersion: room.version };
+      return { participant, sessionToken, roomVersion: room.version, reused: false };
     });
   }
 

@@ -195,13 +195,14 @@ export interface JoinRoomResponse {
   };
   sessionToken: string;
   roomVersion: number;
+  reused?: boolean;
 }
 
-export async function joinRoom(roomId: string, displayName: string): Promise<JoinRoomResponse> {
+export async function joinRoom(roomId: string, displayName: string, admissionToken: string): Promise<JoinRoomResponse> {
   const response = await fetch(`${API_ORIGIN}/rooms/${encodeURIComponent(roomId)}/join`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ displayName }),
+    body: JSON.stringify({ displayName, admissionToken }),
   });
   if (!response.ok) throw new Error(`join_failed:${response.status}`);
   return response.json();

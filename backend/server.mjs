@@ -622,7 +622,7 @@ async function handleRequest(request, response) {
 
       if (request.method === "POST" && rest === "join") {
         const body = await readJson(request);
-        sendJson(response, 200, await runtime.join(roomId, body.displayName));
+        sendJson(response, 200, await runtime.join(roomId, body.displayName, body.admissionToken));
         return;
       }
 

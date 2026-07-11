@@ -121,6 +121,14 @@ export function useRoomRuntime(roomId: string, displayName?: string | null) {
   const effectiveDisplayName = displayNameFromSession(roomId, displayName);
   const [participantId, setParticipantId] = useState<string | null>(() => window.sessionStorage.getItem(`vira:${roomId}:participantId`));
   const [sessionToken, setSessionToken] = useState<string | null>(() => window.sessionStorage.getItem(`vira:${roomId}:sessionToken`));
+  const [admissionToken] = useState(() => {
+    const key = `vira:${roomId}:admissionToken`;
+    const existing = window.sessionStorage.getItem(key);
+    if (existing) return existing;
+    const created = window.crypto.randomUUID();
+    window.sessionStorage.setItem(key, created);
+    return created;
+  });
   const [selectedOptionId, setSelectedOptionId] = useState<string | null>(null);
   const [state, setState] = useState<ReplayState>(() => createInitialReplayState(roomId));
   const latestStateRef = useRef(state);
@@ -176,7 +184,7 @@ export function useRoomRuntime(roomId: string, displayName?: string | null) {
           }
         }
         if (!activeParticipantId) {
-          const joined = await joinRoom(roomId, effectiveDisplayName);
+          const joined = await joinRoom(roomId, effectiveDisplayName, admissionToken);
           activeParticipantId = joined.participant.id;
           window.sessionStorage.setItem(`vira:${roomId}:participantId`, activeParticipantId);
           window.sessionStorage.setItem(`vira:${roomId}:sessionToken`, joined.sessionToken);
@@ -189,7 +197,7 @@ export function useRoomRuntime(roomId: string, displayName?: string | null) {
         if (activeParticipantId && !snapshot.participants.some((participant) => participant.id === activeParticipantId)) {
           window.sessionStorage.removeItem(`vira:${roomId}:participantId`);
           window.sessionStorage.removeItem(`vira:${roomId}:sessionToken`);
-          const joined = await joinRoom(roomId, effectiveDisplayName);
+          const joined = await joinRoom(roomId, effectiveDisplayName, admissionToken);
           activeParticipantId = joined.participant.id;
           window.sessionStorage.setItem(`vira:${roomId}:participantId`, activeParticipantId);
           window.sessionStorage.setItem(`vira:${roomId}:sessionToken`, joined.sessionToken);
@@ -218,7 +226,7 @@ export function useRoomRuntime(roomId: string, displayName?: string | null) {
     return () => {
       cancelled = true;
     };
-  }, [effectiveDisplayName, participantId, roomId, sessionToken]);
+  }, [admissionToken, effectiveDisplayName, participantId, roomId, sessionToken]);
 
   useEffect(() => {
     const events = new EventSource(roomEventsUrl(roomId, participantId));
