@@ -1066,6 +1066,19 @@ export function createRoomRuntime({ eventStore = null, commitmentPublisher = nul
     }
   }
 
+  function applyAuthoritativeScore(room, event) {
+    const home = Number(event.absoluteScore?.home);
+    const away = Number(event.absoluteScore?.away);
+    if (Number.isFinite(home) && Number.isFinite(away)) {
+      room.match.homeScore = Math.max(0, home);
+      room.match.awayScore = Math.max(0, away);
+      return;
+    }
+    if (event.type !== "goal") return;
+    if (event.participantSide === "home" || event.teamId === room.match.homeTeam.id) room.match.homeScore += 1;
+    if (event.participantSide === "away" || event.teamId === room.match.awayTeam.id) room.match.awayScore += 1;
+  }
+
   function pctValueForRound(round, event) {
     const predicate = round?.resolution?.predicate ?? {};
     const payload = event.payload ?? {};
@@ -1316,8 +1329,7 @@ export function createRoomRuntime({ eventStore = null, commitmentPublisher = nul
           reanchorOpenRoundFromLiveOdds(room, event);
           updateMarketDistribution(room, event);
         }
-        if (event.type === "goal" && event.teamId === room.match.homeTeam.id) room.match.homeScore += 1;
-        if (event.type === "goal" && event.teamId === room.match.awayTeam.id) room.match.awayScore += 1;
+        applyAuthoritativeScore(room, event);
         if (event.type !== "match_end") {
           pushTimeline(room, {
             id: `timeline-${event.id}`,
@@ -1840,8 +1852,7 @@ export function createRoomRuntime({ eventStore = null, commitmentPublisher = nul
       reanchorOpenRoundFromLiveOdds(room, event);
       updateMarketDistribution(room, event);
     }
-    if (event.type === "goal" && event.teamId === room.match.homeTeam.id) room.match.homeScore += 1;
-    if (event.type === "goal" && event.teamId === room.match.awayTeam.id) room.match.awayScore += 1;
+    applyAuthoritativeScore(room, event);
     const timelineEntryId = event.type === "match_end" ? `timeline-match-finished-${event.id}` : `timeline-${event.id}`;
     if (event.type !== "match_end") {
       pushTimeline(room, {

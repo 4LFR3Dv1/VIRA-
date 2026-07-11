@@ -331,6 +331,17 @@ export function normalizeTxlineScore(raw, { matchId, sequenceFallback = 0, sourc
       ?? raw?.clock?.seconds
       ?? 0,
   );
+  const participant1Goals = Number(raw?.Score?.Participant1?.Total?.Goals ?? raw?.Stats?.["1"]);
+  const participant2Goals = Number(raw?.Score?.Participant2?.Total?.Goals ?? raw?.Stats?.["2"]);
+  const participant1IsHome = raw?.Participant1IsHome ?? true;
+  const hasAbsoluteScore = Number.isFinite(participant1Goals) && Number.isFinite(participant2Goals);
+  const absoluteScore = hasAbsoluteScore
+    ? {
+        home: participant1IsHome ? participant1Goals : participant2Goals,
+        away: participant1IsHome ? participant2Goals : participant1Goals,
+      }
+    : null;
+  const participant = Number(raw?.Participant ?? raw?.participant);
 
   return {
     id: String(raw?.id ?? raw?.Id ?? `${fixtureId}-${sequence}`),
@@ -346,6 +357,12 @@ export function normalizeTxlineScore(raw, { matchId, sequenceFallback = 0, sourc
           ? "match_end"
           : "period",
     teamId: raw?.teamId ?? raw?.TeamId ?? raw?.participantId ?? raw?.ParticipantId,
+    participantSide: participant === 1
+      ? (participant1IsHome ? "home" : "away")
+      : participant === 2
+        ? (participant1IsHome ? "away" : "home")
+        : null,
+    absoluteScore,
     playerId: raw?.playerId ?? raw?.PlayerId,
     payload: raw,
     source,

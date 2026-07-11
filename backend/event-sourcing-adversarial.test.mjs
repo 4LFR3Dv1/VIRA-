@@ -6,6 +6,7 @@ import test from "node:test";
 
 import { createFileEventStore } from "./event-store.mjs";
 import { createRoomRuntime } from "./runtime.mjs";
+import { normalizeTxlineScore } from "./txline-client.mjs";
 
 function pending(type, idempotencyKey, payload = {}) {
   return {
@@ -53,6 +54,29 @@ function matchEndEvent(roomId) {
       FixtureId: roomId,
       Seq: 900,
       Action: "match_end",
+    },
+  };
+}
+
+function scoreSnapshotEvent(roomId, { id, seq, home, away, clock = 5206 }) {
+  return {
+    id,
+    matchId: roomId,
+    sequence: seq,
+    occurredAt: new Date(1_800_000_000_000 + seq).toISOString(),
+    matchClockSec: clock,
+    type: "period",
+    source: "txline-snapshot",
+    absoluteScore: { home, away },
+    payload: {
+      FixtureId: roomId,
+      Seq: seq,
+      Action: "score_adjustment",
+      Clock: { Running: true, Seconds: clock },
+      Score: {
+        Participant1: { Total: { Goals: home } },
+        Participant2: { Total: { Goals: away } },
+      },
     },
   };
 }
@@ -108,6 +132,44 @@ test("pre-match Fan Pulse is authenticated, aggregated and restored from the led
     await restored.rehydrateFromLedger();
     assert.deepEqual(restored.snapshot(roomId, null).fanPulse.byTeam, { home: 1, away: 1 });
     assert.equal((await restored.publicEvents(roomId)).filter((event) => event.type === "fan_pulse.cast").length, 2);
+  } finally {
+    await rm(dataDir, { recursive: true, force: true });
+  }
+});
+
+test("authoritative TxLINE score snapshot updates, corrects and restores the scoreboard", async () => {
+  const dataDir = await mkdtemp(path.join(os.tmpdir(), "vira-score-projection-"));
+  try {
+    const { runtime, roomId } = await setupRuntimeRoom(dataDir, "fixture-score-live");
+    const normalized = normalizeTxlineScore({
+      FixtureId: roomId,
+      Seq: 700,
+      Action: "score_adjustment",
+      Participant1IsHome: true,
+      Clock: { Running: true, Seconds: 5206 },
+      Score: {
+        Participant1: { Total: { Goals: 1 } },
+        Participant2: { Total: { Goals: 1 } },
+      },
+    }, { matchId: roomId, source: "txline-snapshot" });
+    assert.deepEqual(normalized.absoluteScore, { home: 1, away: 1 });
+
+    await runtime.applyNormalizedEvent(roomId, normalized, { acquisitionOrigin: "txline_snapshot" });
+    assert.equal(runtime.snapshot(roomId).match.homeScore, 1);
+    assert.equal(runtime.snapshot(roomId).match.awayScore, 1);
+
+    await runtime.applyNormalizedEvent(roomId, scoreSnapshotEvent(roomId, { id: "score-701", seq: 701, home: 2, away: 1 }));
+    await runtime.applyNormalizedEvent(roomId, scoreSnapshotEvent(roomId, { id: "score-702", seq: 702, home: 1, away: 1 }));
+    const corrected = runtime.snapshot(roomId);
+    assert.equal(corrected.match.homeScore, 1);
+    assert.equal(corrected.match.awayScore, 1);
+
+    const restoredStore = await createFileEventStore({ dataDir });
+    const restoredRuntime = createRoomRuntime({ eventStore: restoredStore });
+    await restoredRuntime.rehydrateFromLedger();
+    const restored = restoredRuntime.snapshot(roomId);
+    assert.equal(restored.match.homeScore, 1);
+    assert.equal(restored.match.awayScore, 1);
   } finally {
     await rm(dataDir, { recursive: true, force: true });
   }
