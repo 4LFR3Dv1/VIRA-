@@ -94,7 +94,7 @@ export function MatchRoomScreen() {
       setLatestPresentationEvent(event);
       if (event.kind === "answer_registered") {
         toast.success("Palpite registrado", {
-          description: "Aguardando a proxima atualizacao elegivel da TxLINE.",
+          description: "Aguardando o proximo sinal elegivel da TxLINE.",
         });
       }
       if (event.kind === "round_resolved") {

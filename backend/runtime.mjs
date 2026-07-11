@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
 
 import { hashStoredEvent, projectionHash, redactInternalEvent } from "./event-codec.mjs";
+import { deriveVerifiedRoundReplay } from "./verified-round-replay.mjs";
 
 const nowIso = () => new Date().toISOString();
 
@@ -83,8 +84,8 @@ function roundSeedsForMatch(match) {
     {
       ...roundSeeds[0],
       matchId: match.id,
-      title: `${match.homeTeam.name} ultrapassa 55% na proxima atualizacao?`,
-      contextLabel: "Mercado 1X2 · proxima atualizacao elegivel",
+      title: `${match.homeTeam.name} chega a 55% ou mais no proximo sinal?`,
+      contextLabel: "Mercado 1X2 · proximo sinal elegivel",
       resolution: {
         mode: "first_matching_event",
         eventType: "odds_shift",
@@ -98,7 +99,7 @@ function roundSeedsForMatch(match) {
     {
       ...roundSeeds[1],
       matchId: match.id,
-      title: `A probabilidade de ${match.homeTeam.name} sobe na proxima atualizacao?`,
+      title: `A probabilidade de ${match.homeTeam.name} sobe no proximo sinal?`,
       contextLabel: "Mercado 1X2 · direcao do proximo sinal",
       options: [{ id: "yes", label: "Sim" }, { id: "no", label: "Nao" }],
       resolution: {
@@ -889,7 +890,7 @@ export function createRoomRuntime({ eventStore = null } = {}) {
       sequence: nextSequence,
       contextLabel: "Mercado 1X2 · direcao do proximo sinal",
       options: [{ id: "yes", label: "Sim" }, { id: "no", label: "Nao" }],
-      title: `A probabilidade de ${sideLabel} sobe na proxima atualizacao?`,
+      title: `A probabilidade de ${sideLabel} sobe no proximo sinal?`,
       opensAtClockSec: event.matchClockSec,
       locksAtClockSec: event.matchClockSec + 90,
       state: "open",
@@ -1105,7 +1106,9 @@ export function createRoomRuntime({ eventStore = null } = {}) {
       : Math.ceil(openingValue);
     room.currentRound = {
       ...round,
-      title: round.title.replace(/ultrapassa \d+(?:\.\d+)?%/, `ultrapassa ${nextThreshold}%`),
+      title: round.title
+        .replace(/ultrapassa \d+(?:\.\d+)?%/, `chega a ${nextThreshold}% ou mais`)
+        .replace(/chega a \d+(?:\.\d+)?% ou mais/, `chega a ${nextThreshold}% ou mais`),
       opensAtClockSec: event.matchClockSec || room.match.matchClockSec,
       locksAtClockSec: (event.matchClockSec || room.match.matchClockSec) + 90,
       version: (Number(round.version) || 1) + 1,
@@ -1515,6 +1518,22 @@ export function createRoomRuntime({ eventStore = null } = {}) {
     };
   }
 
+  async function verifiedRoundReplay(roomId, roundId) {
+    if (!eventStore) {
+      const error = new Error("round_replay_event_store_required");
+      error.status = 503;
+      throw error;
+    }
+    const events = [];
+    for await (const event of eventStore.readStream(roomId)) events.push(event);
+    if (!events.length) {
+      const error = new Error("room_not_found");
+      error.status = 404;
+      throw error;
+    }
+    return deriveVerifiedRoundReplay(events, roundId, await verifyRoom(roomId));
+  }
+
   async function applyNormalizedEvent(roomId, normalizedEvent, acquisition = {}) {
     return withRoomLock(roomId, async () => {
     const room = getRoom(roomId);
@@ -1840,5 +1859,5 @@ export function createRoomRuntime({ eventStore = null } = {}) {
     });
   }
 
-  return { getRoom, snapshot, authenticatedSnapshot, join, validateSession, submitAnswer, castFanPulse, applyNormalizedEvent, attachClient, emit, configureMatch, evidence, evidenceById, rehydrateFromLedger, publicEvents, hasPublicRoom, projectRoomFromLedger, verifyRoom };
+  return { getRoom, snapshot, authenticatedSnapshot, join, validateSession, submitAnswer, castFanPulse, applyNormalizedEvent, attachClient, emit, configureMatch, evidence, evidenceById, rehydrateFromLedger, publicEvents, hasPublicRoom, projectRoomFromLedger, verifyRoom, verifiedRoundReplay };
 }

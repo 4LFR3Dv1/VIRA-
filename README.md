@@ -147,6 +147,17 @@ POST /rooms/:roomId/txline/disconnect  # internal, disabled by default
 GET  /rooms/:roomId/txline/status
 ```
 
+Public verification resources:
+
+```http
+GET /public/rooms/:roomId/events
+GET /public/rooms/:roomId/projection
+GET /public/rooms/:roomId/verification
+GET /public/rooms/:roomId/rounds/:roundId/replay
+```
+
+The round replay is a pure `VIRA:VERIFIED_ROUND_REPLAY:V1` projection derived from the internal ledger. It exposes aggregate participation only, records authority, timing, eligibility and rule evaluation, and includes a `replayHash` over canonical JSON. Six frozen vectors and the P1-B evidence artifact live in `tests/fixtures/replay` and `docs/p1-b-replay-evidence.json`.
+
 Internal mutation routes require both `VIRA_INTERNAL_INGEST_ENABLED=true` and a constant-time checked `X-Vira-Admin-Token`/Bearer credential matching `VIRA_ADMIN_TOKEN`. Keep them disabled in Consumer deployments.
 
 ## Integrity Contract
@@ -157,6 +168,8 @@ Internal mutation routes require both `VIRA_INTERNAL_INGEST_ENABLED=true` and a 
 - Only persisted answers submitted before lock are scored.
 - Provider observations record `txline_live_stream`, `txline_snapshot`, `verified_playback` or `internal_test` acquisition origin.
 - A review is verified only when hash chain, replayed projection, ranking and provider authority agree.
+- Public answer events never expose participant identity or individual option choice.
+- A round replay hash remains byte-identical after ledger rehydration and backend restart.
 - Rejected stale, late, unauthenticated and unauthorized mutations do not change the ledger head or ranking.
 
 ## Production Deployment

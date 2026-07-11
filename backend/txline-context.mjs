@@ -188,7 +188,7 @@ function bestPredictionFromMarkets(markets) {
     pct: selected.leadingOption.pct,
     operator: ">=",
     threshold,
-    prompt: `${selected.leadingOption.label} ultrapassa ${threshold}% na proxima atualizacao?`,
+    prompt: `${selected.leadingOption.label} chega a ${threshold}% ou mais no proximo sinal?`,
     winningOption: selected.leadingOption.pct >= threshold ? "yes" : "no",
   };
 }

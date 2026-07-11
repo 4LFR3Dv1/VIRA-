@@ -33,7 +33,8 @@ export interface ViraExperienceModel {
 
 function marketLabel(title?: string) {
   if (!title) return "Mercado";
-  const index = title.toLowerCase().indexOf(" ultrapassa");
+  const lower = title.toLowerCase();
+  const index = lower.includes(" chega a") ? lower.indexOf(" chega a") : lower.indexOf(" ultrapassa");
   return index > 0 ? title.slice(0, index) : "Mercado";
 }
 
@@ -83,8 +84,8 @@ export function createExperienceModel(state: ReplayState, event: PresentationEve
       options: round.options.map((option) => ({
         id: option.id,
         shortLabel: option.shortLabel ?? option.label,
-        label: option.id === "yes" ? "Sim, ultrapassa" : option.id === "no" ? "Nao, fica abaixo" : option.label,
-        explanation: option.id === "yes" ? "O valor cruza o alvo no proximo sinal." : "O valor permanece abaixo do alvo.",
+        label: option.id === "yes" ? "Sim, chega ao alvo" : option.id === "no" ? "Nao, fica abaixo" : option.label,
+        explanation: option.id === "yes" ? "O valor chega ao alvo ou o supera no proximo sinal." : "O valor permanece abaixo do alvo.",
       })),
     } : null,
     leaderboard: snapshot.leaderboard,

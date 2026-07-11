@@ -327,6 +327,48 @@ export interface RoomVerification {
   schemaVersion: number;
 }
 
+export interface VerifiedRoundReplayV1 {
+  domain: "VIRA:VERIFIED_ROUND_REPLAY:V1";
+  schemaVersion: 1;
+  replayHash: string;
+  roomId: string;
+  roundId: string;
+  roundVersion: number;
+  prompt: { text: string; operator: ">=" | ">"; targetValue: number; priceName: string; marketSignature: string };
+  opening: { eventId: string | null; providerSequence: number | null; value: number | null; observedAt: string; acquisitionOrigin: string };
+  participation: { confirmedAnswers: number; distributionVisible: boolean; distribution: Record<string, number> };
+  lock: { lockedAt: string; reason: "deadline" | "eligible_signal"; causedByEventId: string | null; temporalIntegrityValid: boolean };
+  resolution: { eventId: string; providerSequence: number | null; observedValue: number | null; winningOptionId: string; expression: string; predicateResult: boolean; resolvedAt: string; acquisitionOrigin: string };
+  scoring: { answersEvaluated: number; answersCorrect: number; totalPointsApplied: number; leaderboardBeforeHash: string; leaderboardAfterHash: string };
+  proof: {
+    firstStreamVersion: number;
+    lastStreamVersion: number;
+    roundEventRangeHash: string;
+    hashChainValid: boolean;
+    projectionMatches: boolean;
+    rankingMatches: boolean;
+    authorityValid: boolean;
+    temporalIntegrityValid: boolean;
+    eligibilityValid: boolean;
+    determinismValid: boolean;
+  };
+  technical: {
+    openingStreamVersion: number;
+    lockStreamVersion: number;
+    resolutionStreamVersion: number;
+    marketType: string | null;
+    line: unknown;
+    period: unknown;
+    minimumProviderSequence: number | null;
+    eligibilityChecks: Record<string, boolean>;
+    causationId: string | null;
+    correlationId: string | null;
+    openingEventHash: string;
+    lockEventHash: string;
+    resolutionEventHash: string;
+  };
+}
+
 export interface PublicDomainEvent {
   eventId: string;
   streamId: string;

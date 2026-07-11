@@ -50,10 +50,10 @@ function humanStatus(value: string) {
 
 function signalLabelFromRound(round: PredictionRound | null) {
   const title = round?.title ?? "";
-  const thresholdIndex = title.indexOf(" ultrapassa");
+  const thresholdIndex = title.includes(" chega a") ? title.indexOf(" chega a") : title.indexOf(" ultrapassa");
   if (thresholdIndex > 0) return title.slice(0, thresholdIndex);
   const directionPrefix = "A probabilidade de ";
-  if (title.startsWith(directionPrefix)) return title.slice(directionPrefix.length).replace(" sobe na proxima atualizacao?", "");
+  if (title.startsWith(directionPrefix)) return title.slice(directionPrefix.length).replace(" sobe na proxima atualizacao?", "").replace(" sobe no proximo sinal?", "");
   return "Mercado";
 }
 
@@ -139,7 +139,7 @@ export function RoundPulse({
               ) : null}
             </div>
             <div className="mt-2 flex items-center justify-between gap-3 font-['DM_Mono'] text-[10px] uppercase text-muted-foreground">
-              <span>{minimumProviderSequence ? `seq >= ${minimumProviderSequence}` : "proxima atualizacao elegivel"}</span>
+              <span>{minimumProviderSequence ? `seq >= ${minimumProviderSequence}` : "proximo sinal elegivel"}</span>
               <span>{isDirectionRound ? "SIM vence se subir" : threshold !== null ? `alvo ${threshold}%` : "sem alvo"}</span>
             </div>
 

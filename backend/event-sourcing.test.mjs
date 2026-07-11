@@ -61,11 +61,21 @@ test("domain ledger restores competitive room and keeps txline idempotency after
     assert.equal(liveVerification.hashChainValid, true);
     assert.equal(liveVerification.projectionMatches, true);
     assert.equal(liveVerification.rankingMatches, true);
+    const replayBeforeRestart = await runtime.verifiedRoundReplay(roomId, roundId);
+    assert.equal(replayBeforeRestart.proof.hashChainValid, true);
+    assert.equal(replayBeforeRestart.proof.projectionMatches, true);
+    assert.equal(replayBeforeRestart.proof.rankingMatches, true);
+    assert.equal(replayBeforeRestart.participation.confirmedAnswers, 2);
+    assert.deepEqual(replayBeforeRestart.participation.distribution, { yes: 1, no: 1 });
 
     const eventStoreAfterRestart = await createFileEventStore({ dataDir });
     const runtimeAfterRestart = createRoomRuntime({ eventStore: eventStoreAfterRestart });
     await runtimeAfterRestart.rehydrateFromLedger();
     const restored = runtimeAfterRestart.snapshot(roomId, renan.participant.id);
+    const replayAfterRestart = await runtimeAfterRestart.verifiedRoundReplay(roomId, roundId);
+
+    assert.equal(replayAfterRestart.replayHash, replayBeforeRestart.replayHash);
+    assert.deepEqual(replayAfterRestart, replayBeforeRestart);
 
     assert.equal(restored.leaderboard.find((entry) => entry.participantId === renan.participant.id).points, 100);
     assert.equal(restored.leaderboard.find((entry) => entry.participantId === ana.participant.id).points, 0);

@@ -6,6 +6,9 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
+import { createFileEventStore } from "./event-store.mjs";
+import { createRoomRuntime } from "./runtime.mjs";
+
 function freePort() {
   return new Promise((resolve, reject) => {
     const server = http.createServer();
@@ -94,6 +97,59 @@ test("readiness fails when production requires missing TxLINE credentials", asyn
   } finally {
     child.kill("SIGTERM");
     await new Promise((resolve) => child.once("exit", resolve));
+    await rm(dataDir, { recursive: true, force: true });
+  }
+});
+
+test("public round replay endpoint is canonical and public answers stay private", async () => {
+  const dataDir = await mkdtemp(path.join(os.tmpdir(), "vira-http-replay-"));
+  const roomId = "fixture-http-replay";
+  const port = await freePort();
+  const origin = `http://127.0.0.1:${port}`;
+  let child;
+  try {
+    const eventStore = await createFileEventStore({ dataDir });
+    const runtime = createRoomRuntime({ eventStore });
+    await runtime.rehydrateFromLedger();
+    runtime.configureMatch({ fixtureId: roomId, title: "Norway vs England", competitionLabel: "World Cup", status: "live", homeTeam: "Norway", awayTeam: "England" });
+    const participant = await runtime.join(roomId, "Private Player");
+    const round = runtime.snapshot(roomId, participant.participant.id).currentRound;
+    await runtime.submitAnswer(roomId, round.id, participant.participant.id, "yes", "answer-http-replay", round.version, participant.sessionToken);
+    await runtime.applyNormalizedEvent(roomId, {
+      id: "odds-http-replay",
+      matchId: roomId,
+      sequence: 101,
+      occurredAt: "2026-07-11T18:01:31.000Z",
+      matchClockSec: 90,
+      type: "odds_shift",
+      source: "txline-live",
+      payload: { FixtureId: roomId, MessageId: "odds-http-replay", Seq: 101, SuperOddsType: "1X2_PARTICIPANT_RESULT", MarketParameters: null, MarketPeriod: null, PriceNames: ["part1", "draw", "part2"], Pct: [60, 30, 10] },
+    });
+
+    child = spawn(process.execPath, ["backend/server.mjs"], {
+      cwd: process.cwd(),
+      env: { ...process.env, PORT: String(port), VIRA_DATA_DIR: dataDir, VIRA_INTERNAL_INGEST_ENABLED: "false", TXLINE_JWT: "", TXLINE_API_TOKEN: "" },
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    await waitForHealth(origin, child);
+    const replayResponse = await fetch(`${origin}/public/rooms/${roomId}/rounds/${round.id}/replay`);
+    assert.equal(replayResponse.status, 200);
+    const replay = await replayResponse.json();
+    assert.equal(replay.domain, "VIRA:VERIFIED_ROUND_REPLAY:V1");
+    assert.equal(replay.roundId, round.id);
+    assert.equal(replay.participation.confirmedAnswers, 1);
+    assert.equal(JSON.stringify(replay).includes(participant.participant.id), false);
+
+    const eventsResponse = await fetch(`${origin}/public/rooms/${roomId}/events`);
+    assert.equal(eventsResponse.status, 200);
+    const publicEvents = (await eventsResponse.json()).events;
+    const publicAnswer = publicEvents.find((event) => event.type === "answer.submitted");
+    assert.deepEqual(publicAnswer.payload, { roundId: round.id, state: "confirmed_private" });
+  } finally {
+    if (child) {
+      child.kill("SIGTERM");
+      await new Promise((resolve) => child.once("exit", resolve));
+    }
     await rm(dataDir, { recursive: true, force: true });
   }
 });

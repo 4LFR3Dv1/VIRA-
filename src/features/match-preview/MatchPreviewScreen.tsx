@@ -281,7 +281,7 @@ export function MatchPreviewScreen() {
             </div>
 
             <div className="mt-7 grid grid-cols-2 gap-3">
-              {([["yes", "Sim, ultrapassa"], ["no", "Nao, fica abaixo"]] as const).map(([value, label]) => <button key={value} type="button" onClick={() => openRoom(false, value)} className="min-h-16 border border-white/20 bg-white/[.045] px-4 font-['Chakra_Petch'] text-base font-black uppercase transition hover:-translate-y-0.5 hover:border-primary hover:bg-primary hover:text-[#070a13] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary active:translate-y-0">{label}</button>)}
+              {([["yes", "Sim, chega ao alvo"], ["no", "Nao, fica abaixo"]] as const).map(([value, label]) => <button key={value} type="button" onClick={() => openRoom(false, value)} className="min-h-16 border border-white/20 bg-white/[.045] px-4 font-['Chakra_Petch'] text-base font-black uppercase transition hover:-translate-y-0.5 hover:border-primary hover:bg-primary hover:text-[#070a13] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary active:translate-y-0">{label}</button>)}
             </div>
           </div>
 

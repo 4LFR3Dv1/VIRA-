@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "gate": "P1-B",
+  "contract": "VIRA:VERIFIED_ROUND_REPLAY:V1",
+  "implementation": {
+    "projection": "backend/verified-round-replay.mjs",
+    "endpoint": "GET /public/rooms/:roomId/rounds/:roundId/replay",
+    "consumerSurface": "Revisao Oficial VIRA",
+    "canonicalization": "recursively sorted JSON keys, UTF-8 JSON without whitespace",
+    "hash": "SHA-256 over the canonical replay without replayHash"
+  },
+  "frozenVectors": {
+    "count": 6,
+    "directory": "tests/fixtures/replay",
+    "scenarios": [
+      "success",
+      "no_answers",
+      "deadline_lock",
+      "authority_invalid",
+      "duplicate_signal",
+      "restart"
+    ]
+  },
+  "referenceVector": {
+    "file": "round-v1-success.json",
+    "replayHash": "sha256:34fddc808df78063b2f31840717a4fe9690db40c1a8d229a4b6eff3feabc6ab7",
+    "roundEventRangeHash": "sha256:event-10",
+    "leaderboardBeforeHash": "sha256:694428b8ec275930005ea170bfb2407c7e56c37823b1604d8e15818cd0769c8f",
+    "leaderboardAfterHash": "sha256:ca870a027145933b454fc95f56d1d49f749e38eefd8636983a8780ca8ea68ffb"
+  },
+  "privacy": {
+    "individualAnswersPublic": false,
+    "participantIdentityInReplay": false,
+    "aggregateDistributionAfterLock": true,
+    "publicLedgerAnswerPayload": "confirmed_private"
+  },
+  "invariants": [
+    "authority",
+    "temporality",
+    "eligibility",
+    "determinism",
+    "reproducibility"
+  ],
+  "verification": {
+    "replayTests": 8,
+    "fullSuiteTests": 29,
+    "typecheck": "passed",
+    "canonicalBytesPreservedAfterRestart": true,
+    "replayHashPreservedAfterRestart": true
+  }
+}

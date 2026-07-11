@@ -1,4 +1,4 @@
-import type { PublicDomainEvent, RoomSnapshot, RoomVerification } from "../domain/types";
+import type { PublicDomainEvent, RoomSnapshot, RoomVerification, VerifiedRoundReplayV1 } from "../domain/types";
 
 const API_ORIGIN = import.meta.env.VITE_VIRA_API_ORIGIN
   ?? (import.meta.env.PROD ? window.location.origin : "http://127.0.0.1:8787");
@@ -238,6 +238,12 @@ export async function castRoomFanPulse(input: { roomId: string; participantId: s
 export async function fetchRoomVerification(roomId: string): Promise<RoomVerification> {
   const response = await fetch(`${API_ORIGIN}/public/rooms/${encodeURIComponent(roomId)}/verification`);
   if (!response.ok) throw new Error(`verification_failed:${response.status}`);
+  return response.json();
+}
+
+export async function fetchVerifiedRoundReplay(roomId: string, roundId: string): Promise<VerifiedRoundReplayV1> {
+  const response = await fetch(`${API_ORIGIN}/public/rooms/${encodeURIComponent(roomId)}/rounds/${encodeURIComponent(roundId)}/replay`);
+  if (!response.ok) throw new Error(`round_replay_failed:${response.status}`);
   return response.json();
 }
 

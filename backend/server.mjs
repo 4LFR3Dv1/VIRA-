@@ -549,6 +549,19 @@ async function handleRequest(request, response) {
       return;
     }
 
+    const publicRoundReplayRoute = url.pathname.match(/^\/public\/rooms\/([^/]+)\/rounds\/([^/]+)\/replay$/);
+    if (request.method === "GET" && publicRoundReplayRoute) {
+      ensureReady();
+      const roomId = decodeURIComponent(publicRoundReplayRoute[1]);
+      const roundId = decodeURIComponent(publicRoundReplayRoute[2]);
+      if (!(await runtime.hasPublicRoom(roomId))) {
+        sendJson(response, 404, { error: "room_not_found", roomId });
+        return;
+      }
+      sendJson(response, 200, await runtime.verifiedRoundReplay(roomId, roundId));
+      return;
+    }
+
     const publicRoomRoute = url.pathname.match(/^\/public\/rooms\/([^/]+)(?:\/([^/]+))?$/);
     if (request.method === "GET" && publicRoomRoute) {
       ensureReady();

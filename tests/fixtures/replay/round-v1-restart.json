@@ -1,0 +1,421 @@
+{
+  "schemaVersion": 1,
+  "roundId": "round-vector-1",
+  "verification": {
+    "hashChainValid": true,
+    "projectionMatches": true,
+    "rankingMatches": true,
+    "authorityValid": true
+  },
+  "events": [
+    {
+      "eventId": "evt-1",
+      "streamId": "room-vector",
+      "roomId": "room-vector",
+      "type": "room.configured",
+      "globalPosition": 1,
+      "streamVersion": 1,
+      "idempotencyKey": "room.configured:1",
+      "causationId": null,
+      "correlationId": "corr-vector",
+      "createdAt": "2026-07-11T18:00:01.000Z",
+      "schemaVersion": 1,
+      "previousStreamEventHash": null,
+      "eventHash": "sha256:event-1",
+      "payload": {
+        "match": {
+          "id": "fixture-vector"
+        }
+      }
+    },
+    {
+      "eventId": "evt-2",
+      "streamId": "room-vector",
+      "roomId": "room-vector",
+      "type": "round.opened",
+      "globalPosition": 2,
+      "streamVersion": 2,
+      "idempotencyKey": "round.opened:2",
+      "causationId": null,
+      "correlationId": "corr-vector",
+      "createdAt": "2026-07-11T18:00:02.000Z",
+      "schemaVersion": 1,
+      "previousStreamEventHash": "sha256:event-1",
+      "eventHash": "sha256:event-2",
+      "payload": {
+        "round": {
+          "id": "round-vector-1",
+          "version": 1,
+          "sequence": 1,
+          "title": "Empate chega a 43% ou mais no proximo sinal?",
+          "openedAt": "2026-07-11T18:00:02.000Z",
+          "locksAt": "2026-07-11T18:01:30.000Z",
+          "options": [
+            {
+              "id": "yes",
+              "label": "Sim"
+            },
+            {
+              "id": "no",
+              "label": "Nao"
+            }
+          ],
+          "resolution": {
+            "mode": "first_matching_event",
+            "eventType": "odds_shift",
+            "predicate": {
+              "market": "1X2_PARTICIPANT_RESULT",
+              "marketSignature": "1X2_PARTICIPANT_RESULT|null|null|book-1",
+              "priceName": "draw",
+              "side": "draw",
+              "openingValue": 42.2,
+              "pctGte": 43,
+              "openedFromEventId": "odds-opening",
+              "minimumProviderSequence": 102
+            }
+          }
+        }
+      }
+    },
+    {
+      "eventId": "evt-3",
+      "streamId": "room-vector",
+      "roomId": "room-vector",
+      "type": "participant.joined",
+      "globalPosition": 3,
+      "streamVersion": 3,
+      "idempotencyKey": "participant.joined:3",
+      "causationId": null,
+      "correlationId": "corr-vector",
+      "createdAt": "2026-07-11T18:00:03.000Z",
+      "schemaVersion": 1,
+      "previousStreamEventHash": "sha256:event-2",
+      "eventHash": "sha256:event-3",
+      "payload": {
+        "participant": {
+          "id": "participant-a",
+          "displayName": "A"
+        }
+      }
+    },
+    {
+      "eventId": "evt-4",
+      "streamId": "room-vector",
+      "roomId": "room-vector",
+      "type": "participant.joined",
+      "globalPosition": 4,
+      "streamVersion": 4,
+      "idempotencyKey": "participant.joined:4",
+      "causationId": null,
+      "correlationId": "corr-vector",
+      "createdAt": "2026-07-11T18:00:04.000Z",
+      "schemaVersion": 1,
+      "previousStreamEventHash": "sha256:event-3",
+      "eventHash": "sha256:event-4",
+      "payload": {
+        "participant": {
+          "id": "participant-b",
+          "displayName": "B"
+        }
+      }
+    },
+    {
+      "eventId": "evt-5",
+      "streamId": "room-vector",
+      "roomId": "room-vector",
+      "type": "answer.submitted",
+      "globalPosition": 5,
+      "streamVersion": 5,
+      "idempotencyKey": "answer.submitted:5",
+      "causationId": null,
+      "correlationId": "corr-vector",
+      "createdAt": "2026-07-11T18:00:10.000Z",
+      "schemaVersion": 1,
+      "previousStreamEventHash": "sha256:event-4",
+      "eventHash": "sha256:event-5",
+      "payload": {
+        "answer": {
+          "roundId": "round-vector-1",
+          "participantId": "participant-a",
+          "optionId": "yes"
+        }
+      }
+    },
+    {
+      "eventId": "evt-6",
+      "streamId": "room-vector",
+      "roomId": "room-vector",
+      "type": "answer.submitted",
+      "globalPosition": 6,
+      "streamVersion": 6,
+      "idempotencyKey": "answer.submitted:6",
+      "causationId": null,
+      "correlationId": "corr-vector",
+      "createdAt": "2026-07-11T18:00:11.000Z",
+      "schemaVersion": 1,
+      "previousStreamEventHash": "sha256:event-5",
+      "eventHash": "sha256:event-6",
+      "payload": {
+        "answer": {
+          "roundId": "round-vector-1",
+          "participantId": "participant-b",
+          "optionId": "no"
+        }
+      }
+    },
+    {
+      "eventId": "evt-7",
+      "streamId": "room-vector",
+      "roomId": "room-vector",
+      "type": "txline.event.received",
+      "globalPosition": 7,
+      "streamVersion": 7,
+      "idempotencyKey": "txline.event.received:7",
+      "causationId": null,
+      "correlationId": "corr-vector",
+      "createdAt": "2026-07-11T18:00:07.000Z",
+      "schemaVersion": 1,
+      "previousStreamEventHash": "sha256:event-6",
+      "eventHash": "sha256:event-7",
+      "payload": {
+        "providerEventId": "odds-resolution",
+        "providerSequence": 102,
+        "normalizedObservation": {
+          "id": "odds-resolution",
+          "type": "odds_shift",
+          "source": "txline-live",
+          "acquisitionOrigin": "txline_live_stream",
+          "providerSequence": 102,
+          "receivedAt": "2026-07-11T18:01:31.000Z",
+          "payload": {
+            "SuperOddsType": "1X2_PARTICIPANT_RESULT",
+            "MarketParameters": null,
+            "MarketPeriod": null,
+            "PriceNames": [
+              "part1",
+              "draw",
+              "part2"
+            ],
+            "Pct": [
+              21.3,
+              43.4,
+              35.3
+            ],
+            "Seq": 102
+          }
+        },
+        "acquisitionOrigin": "txline_live_stream"
+      }
+    },
+    {
+      "eventId": "evt-8",
+      "streamId": "room-vector",
+      "roomId": "room-vector",
+      "type": "txline.event.accepted",
+      "globalPosition": 8,
+      "streamVersion": 8,
+      "idempotencyKey": "txline.event.accepted:8",
+      "causationId": null,
+      "correlationId": "corr-vector",
+      "createdAt": "2026-07-11T18:00:08.000Z",
+      "schemaVersion": 1,
+      "previousStreamEventHash": "sha256:event-7",
+      "eventHash": "sha256:event-8",
+      "payload": {
+        "providerEventId": "odds-resolution",
+        "providerSequence": 102,
+        "event": {
+          "id": "odds-resolution",
+          "type": "odds_shift",
+          "source": "txline-live",
+          "acquisitionOrigin": "txline_live_stream",
+          "providerSequence": 102,
+          "receivedAt": "2026-07-11T18:01:31.000Z",
+          "payload": {
+            "SuperOddsType": "1X2_PARTICIPANT_RESULT",
+            "MarketParameters": null,
+            "MarketPeriod": null,
+            "PriceNames": [
+              "part1",
+              "draw",
+              "part2"
+            ],
+            "Pct": [
+              21.3,
+              43.4,
+              35.3
+            ],
+            "Seq": 102
+          }
+        },
+        "acquisitionOrigin": "txline_live_stream"
+      }
+    },
+    {
+      "eventId": "evt-9",
+      "streamId": "room-vector",
+      "roomId": "room-vector",
+      "type": "round.locked",
+      "globalPosition": 9,
+      "streamVersion": 9,
+      "idempotencyKey": "round.locked:9",
+      "causationId": "odds-resolution",
+      "correlationId": "corr-vector",
+      "createdAt": "2026-07-11T18:01:30.000Z",
+      "schemaVersion": 1,
+      "previousStreamEventHash": "sha256:event-8",
+      "eventHash": "sha256:event-9",
+      "payload": {
+        "roundId": "round-vector-1",
+        "roundVersion": 2,
+        "lockedAt": "2026-07-11T18:01:30.000Z",
+        "reason": "resolution_signal_received"
+      }
+    },
+    {
+      "eventId": "evt-10",
+      "streamId": "room-vector",
+      "roomId": "room-vector",
+      "type": "round.resolved",
+      "globalPosition": 10,
+      "streamVersion": 10,
+      "idempotencyKey": "round.resolved:10",
+      "causationId": "odds-resolution",
+      "correlationId": "corr-vector",
+      "createdAt": "2026-07-11T18:01:31.000Z",
+      "schemaVersion": 1,
+      "previousStreamEventHash": "sha256:event-9",
+      "eventHash": "sha256:event-10",
+      "payload": {
+        "roundId": "round-vector-1",
+        "causedByTxlineEventId": "odds-resolution",
+        "winningOptionId": "yes",
+        "answersEvaluated": 2,
+        "answersCorrect": 1,
+        "totalPointsApplied": 100,
+        "awards": [
+          {
+            "participantId": "participant-a",
+            "displayName": "A",
+            "points": 100,
+            "previousScore": 0,
+            "currentScore": 100,
+            "correct": true
+          }
+        ],
+        "event": {
+          "id": "odds-resolution",
+          "type": "odds_shift",
+          "source": "txline-live",
+          "acquisitionOrigin": "txline_live_stream",
+          "providerSequence": 102,
+          "receivedAt": "2026-07-11T18:01:31.000Z",
+          "payload": {
+            "SuperOddsType": "1X2_PARTICIPANT_RESULT",
+            "MarketParameters": null,
+            "MarketPeriod": null,
+            "PriceNames": [
+              "part1",
+              "draw",
+              "part2"
+            ],
+            "Pct": [
+              21.3,
+              43.4,
+              35.3
+            ],
+            "Seq": 102
+          }
+        }
+      }
+    }
+  ],
+  "expectedReplay": {
+    "domain": "VIRA:VERIFIED_ROUND_REPLAY:V1",
+    "schemaVersion": 1,
+    "roomId": "room-vector",
+    "roundId": "round-vector-1",
+    "roundVersion": 1,
+    "prompt": {
+      "text": "Empate chega a 43% ou mais no proximo sinal?",
+      "operator": ">=",
+      "targetValue": 43,
+      "priceName": "draw",
+      "marketSignature": "1X2_PARTICIPANT_RESULT|null|null|book-1"
+    },
+    "opening": {
+      "eventId": "odds-opening",
+      "providerSequence": 101,
+      "value": 42.2,
+      "observedAt": "2026-07-11T18:00:02.000Z",
+      "acquisitionOrigin": "txline_snapshot"
+    },
+    "participation": {
+      "confirmedAnswers": 2,
+      "distributionVisible": true,
+      "distribution": {
+        "yes": 1,
+        "no": 1
+      }
+    },
+    "lock": {
+      "lockedAt": "2026-07-11T18:01:30.000Z",
+      "reason": "eligible_signal",
+      "causedByEventId": "odds-resolution",
+      "temporalIntegrityValid": true
+    },
+    "resolution": {
+      "eventId": "odds-resolution",
+      "providerSequence": 102,
+      "observedValue": 43.4,
+      "winningOptionId": "yes",
+      "expression": "43.4 >= 43",
+      "predicateResult": true,
+      "resolvedAt": "2026-07-11T18:01:31.000Z",
+      "acquisitionOrigin": "txline_live_stream"
+    },
+    "scoring": {
+      "answersEvaluated": 2,
+      "answersCorrect": 1,
+      "totalPointsApplied": 100,
+      "leaderboardBeforeHash": "sha256:694428b8ec275930005ea170bfb2407c7e56c37823b1604d8e15818cd0769c8f",
+      "leaderboardAfterHash": "sha256:ca870a027145933b454fc95f56d1d49f749e38eefd8636983a8780ca8ea68ffb"
+    },
+    "proof": {
+      "firstStreamVersion": 2,
+      "lastStreamVersion": 10,
+      "roundEventRangeHash": "sha256:event-10",
+      "hashChainValid": true,
+      "projectionMatches": true,
+      "rankingMatches": true,
+      "authorityValid": true,
+      "temporalIntegrityValid": true,
+      "eligibilityValid": true,
+      "determinismValid": true
+    },
+    "technical": {
+      "openingStreamVersion": 2,
+      "lockStreamVersion": 9,
+      "resolutionStreamVersion": 10,
+      "marketType": "1X2_PARTICIPANT_RESULT",
+      "line": null,
+      "period": null,
+      "minimumProviderSequence": 102,
+      "eligibilityChecks": {
+        "differentFromOpening": true,
+        "minimumProviderSequence": true,
+        "market": true,
+        "line": true,
+        "period": true,
+        "priceName": true
+      },
+      "causationId": "odds-resolution",
+      "correlationId": "corr-vector",
+      "openingEventHash": "sha256:event-2",
+      "lockEventHash": "sha256:event-9",
+      "resolutionEventHash": "sha256:event-10"
+    },
+    "replayHash": "sha256:34fddc808df78063b2f31840717a4fe9690db40c1a8d229a4b6eff3feabc6ab7"
+  },
+  "expectedReplayHash": "sha256:34fddc808df78063b2f31840717a4fe9690db40c1a8d229a4b6eff3feabc6ab7"
+}

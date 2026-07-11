@@ -64,6 +64,15 @@ function sanitizeValue(value) {
 }
 
 export function redactInternalEvent(event) {
+  if (event?.type === "answer.submitted") {
+    return {
+      ...event,
+      payload: {
+        roundId: String(event?.payload?.answer?.roundId ?? ""),
+        state: "confirmed_private",
+      },
+    };
+  }
   return {
     ...event,
     payload: sanitizeValue(event?.payload),

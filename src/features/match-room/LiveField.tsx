@@ -44,10 +44,10 @@ function numberValue(value: unknown) {
 
 function signalNameFromRoundTitle(title?: string) {
   if (!title) return "mercado";
-  const thresholdIndex = title.indexOf(" ultrapassa");
+  const thresholdIndex = title.includes(" chega a") ? title.indexOf(" chega a") : title.indexOf(" ultrapassa");
   if (thresholdIndex > 0) return title.slice(0, thresholdIndex);
   const directionPrefix = "A probabilidade de ";
-  if (title.startsWith(directionPrefix)) return title.slice(directionPrefix.length).replace(" sobe na proxima atualizacao?", "");
+  if (title.startsWith(directionPrefix)) return title.slice(directionPrefix.length).replace(" sobe na proxima atualizacao?", "").replace(" sobe no proximo sinal?", "");
   return "mercado";
 }
 
