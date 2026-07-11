@@ -91,10 +91,12 @@ test("domain ledger restores competitive room and keeps txline idempotency after
     assert.equal(restored.leaderboard.find((entry) => entry.participantId === renan.participant.id).points, 100);
     assert.equal(restored.leaderboard.find((entry) => entry.participantId === ana.participant.id).points, 0);
 
+    const metadataBeforeFilteredDuplicate = await eventStoreAfterRestart.getStreamMetadata(roomId);
     await runtimeAfterRestart.applyNormalizedEvent(roomId, oddsEvent({ roomId, id: "odds-101", seq: 101, homePct: 60 }));
+    const metadataAfterFilteredDuplicate = await eventStoreAfterRestart.getStreamMetadata(roomId);
     const afterDuplicate = runtimeAfterRestart.snapshot(roomId, renan.participant.id);
     assert.equal(afterDuplicate.leaderboard.find((entry) => entry.participantId === renan.participant.id).points, 100);
-    assert.equal(afterDuplicate.latestEvidence.ruleEvaluation.ignoredReason, "duplicate_event_id");
+    assert.deepEqual(metadataAfterFilteredDuplicate, metadataBeforeFilteredDuplicate);
 
     const nextRoundId = afterDuplicate.currentRound.id;
     await runtimeAfterRestart.submitAnswer(roomId, nextRoundId, renan.participant.id, "yes", "answer-renan-2", afterDuplicate.currentRound.version, renan.sessionToken);
@@ -110,7 +112,7 @@ test("domain ledger restores competitive room and keeps txline idempotency after
   }
 });
 
-test("txline can be the first mutation but room configuration still opens the ledger", async () => {
+test("pre-lock txline noise does not pollute the competitive ledger", async () => {
   const dataDir = await mkdtemp(path.join(os.tmpdir(), "vira-ledger-first-txline-"));
   try {
     const roomId = "fixture-first-txline";
@@ -125,14 +127,16 @@ test("txline can be the first mutation but room configuration still opens the le
       homeTeam: "Spain",
       awayTeam: "Belgium",
     });
+    await runtime.join(roomId, "Observer");
 
     await runtime.applyNormalizedEvent(roomId, oddsEvent({ roomId, id: "odds-first", seq: 11, homePct: 54 }));
 
     const publicEvents = await runtime.publicEvents(roomId);
     assert.equal(publicEvents[0].type, "room.configured");
     assert.equal(publicEvents[1].type, "round.opened");
-    assert.equal(publicEvents[2].type, "txline.event.received");
-    assert.equal(publicEvents[3].type, "txline.event.accepted");
+    assert.equal(publicEvents[2].type, "participant.joined");
+    assert.equal(publicEvents.length, 3);
+    assert.equal(publicEvents.some((event) => event.type.startsWith("txline.")), false);
 
     const verification = await runtime.verifyRoom(roomId);
     assert.equal(verification.hashChainValid, true);

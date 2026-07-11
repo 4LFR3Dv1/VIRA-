@@ -1054,28 +1054,6 @@ export function createRoomRuntime({ eventStore = null, commitmentPublisher = nul
     return room.lastResolution;
   }
 
-  function alignOpenRoundToLiveClock(room, event) {
-    if (!room.currentRound || room.currentRound.state !== "open" || !event.matchClockSec) return;
-    if (Object.keys(currentRoundAnswers(room)).length > 0) return;
-
-    const secondsRemaining = room.currentRound.locksAtClockSec - event.matchClockSec;
-    const shouldRealign = room.currentRound.opensAtClockSec > event.matchClockSec || secondsRemaining > 180 || secondsRemaining <= 0;
-    if (!shouldRealign) return;
-
-    room.currentRound = {
-      ...room.currentRound,
-      opensAtClockSec: event.matchClockSec,
-      locksAtClockSec: event.matchClockSec + DEFAULT_ROUND_ANSWER_WINDOW_SEC,
-      answerWindowSec: DEFAULT_ROUND_ANSWER_WINDOW_SEC,
-      version: (Number(room.currentRound.version) || 1) + 1,
-      openedAt: new Date(eventServerTimeMs(event)).toISOString(),
-      locksAt: new Date(eventServerTimeMs(event) + DEFAULT_ROUND_ANSWER_WINDOW_SEC * 1_000).toISOString(),
-    };
-    scheduleRoundLock(room);
-    const openEntry = room.timeline.find((item) => item.id === "timeline-round-1-open");
-    if (openEntry) openEntry.matchClockSec = event.matchClockSec;
-  }
-
   function updateMarketDistribution(room, event) {
     if (event.type !== "odds_shift" || !room.currentRound) return;
     const odds = oddsEvaluation(room.currentRound, event);
@@ -1335,7 +1313,6 @@ export function createRoomRuntime({ eventStore = null, commitmentPublisher = nul
         room.match.matchClockSec = event.matchClockSec || room.match.matchClockSec;
         if (room.match.status !== "finished" && (event.payload?.StatusId === 2 || event.payload?.Clock?.Running === true)) room.match.status = "live";
         if (room.match.status !== "finished") {
-          alignOpenRoundToLiveClock(room, event);
           reanchorOpenRoundFromLiveOdds(room, event);
           updateMarketDistribution(room, event);
         }
@@ -1645,6 +1622,19 @@ export function createRoomRuntime({ eventStore = null, commitmentPublisher = nul
   async function applyNormalizedEvent(roomId, normalizedEvent, acquisition = {}) {
     return withRoomLock(roomId, async () => {
     const room = getRoom(roomId);
+    const activeRound = room.currentRound;
+    if (normalizedEvent.type === "odds_shift" && activeRound?.state === "open" && activeRound.locksAt && Date.now() < Date.parse(activeRound.locksAt)) {
+      return snapshot(roomId);
+    }
+    if (normalizedEvent.type === "odds_shift" && activeRound?.state === "locked") {
+      const predicate = activeRound.resolution?.predicate ?? {};
+      const payload = normalizedEvent.payload ?? {};
+      const signatureMatches = !predicate.marketSignature || marketSignatureFromPayload(payload) === predicate.marketSignature;
+      const marketMatches = !predicate.market || payload.SuperOddsType === predicate.market;
+      const lineMatches = predicate.line === undefined || predicate.line === null || payload.MarketParameters === predicate.line;
+      const periodMatches = predicate.period === undefined || predicate.period === null || payload.MarketPeriod === predicate.period;
+      if (!signatureMatches || !marketMatches || !lineMatches || !periodMatches) return snapshot(roomId);
+    }
     const previousVersion = room.version;
     const evidenceId = shortId("evc");
     const correlationId = shortId("corr");
@@ -1847,7 +1837,6 @@ export function createRoomRuntime({ eventStore = null, commitmentPublisher = nul
     if (room.match.status !== "finished" && (event.payload?.StatusId === 2 || event.payload?.Clock?.Running === true)) room.match.status = "live";
     if (event.type === "match_end") finishMatch(room, event);
     if (room.match.status !== "finished") {
-      alignOpenRoundToLiveClock(room, event);
       reanchorOpenRoundFromLiveOdds(room, event);
       updateMarketDistribution(room, event);
     }

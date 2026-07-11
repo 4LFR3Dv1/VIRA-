@@ -381,6 +381,7 @@ test("signals received during the answer window cannot close or mutate the round
     };
     const frozen = { title: room.currentRound.title, openingValue: room.currentRound.resolution.predicate.openingValue, target: room.currentRound.resolution.predicate.pctGte };
     await runtime.submitAnswer(roomId, room.currentRound.id, renan.participant.id, "yes", "window-answer", room.currentRound.version, renan.sessionToken);
+    const streamBeforeSignal = (await runtime.publicEvents(roomId)).length;
     await runtime.applyNormalizedEvent(roomId, oddsEvent({ roomId, id: "window-signal-1", seq: 101, homePct: 54 }), { acquisitionOrigin: "txline_live_stream" });
 
     const duringWindow = runtime.snapshot(roomId, renan.participant.id);
@@ -388,6 +389,7 @@ test("signals received during the answer window cannot close or mutate the round
     assert.equal(duringWindow.leaderboard[0].points, 0);
     assert.deepEqual({ title: duringWindow.currentRound.title, openingValue: duringWindow.currentRound.resolution.predicate.openingValue, target: duringWindow.currentRound.resolution.predicate.pctGte }, frozen);
     const eventsBeforeLock = await runtime.publicEvents(roomId);
+    assert.equal(eventsBeforeLock.length, streamBeforeSignal);
     assert.equal(eventsBeforeLock.some((event) => event.type === "round.locked"), false);
     assert.equal(eventsBeforeLock.some((event) => event.type === "round.resolved"), false);
 
