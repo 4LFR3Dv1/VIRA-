@@ -169,6 +169,12 @@ docker compose up --build -d
 
 The restart proof used by CI is available as `npm run test:container`; it emits `artifacts/p1-a-container-smoke.json`. See `docs/P1_A_EVIDENCE.md` for its invariants and the public deployment record.
 
+### Railway
+
+Railway reads `railway.toml`, builds the root `Dockerfile` and gates activation on `/ready`. Attach a Railway Volume to the service in the dashboard with mount path `/var/lib/vira`; the Dockerfile deliberately does not use the unsupported Docker `VOLUME` instruction.
+
+Set `VIRA_DATA_DIR=/var/lib/vira`. Keep the service at its default singleton deployment; Railway services with an attached volume cannot use horizontal replicas.
+
 Required production invariants:
 
 ```text

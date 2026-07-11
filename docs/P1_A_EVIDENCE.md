@@ -44,3 +44,16 @@ Readiness URL: /ready
 ```
 
 Infrastructure seeding proves persistence only. It does not claim TxLINE authority and does not replace the external real-provider E2E gate.
+
+## Railway volume
+
+The production volume is configured in Railway, not in the Docker image:
+
+```text
+Service -> Volumes -> Add Volume
+Mount path: /var/lib/vira
+VIRA_DATA_DIR: /var/lib/vira
+Healthcheck: /ready
+```
+
+Do not add a Docker `VOLUME` instruction. Railway rejects it during image validation and provides persistence through the attached service volume.
