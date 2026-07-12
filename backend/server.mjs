@@ -30,6 +30,7 @@ import {
 } from "./txline-client.mjs";
 import { createTxlineStreamManager } from "./txline-stream.mjs";
 import { createTxlineCatalogCache } from "./txline-catalog-cache.mjs";
+import { ensureVerifiedPlayback } from "./verified-playback-seed.mjs";
 
 loadLocalEnv();
 
@@ -46,10 +47,14 @@ const runtimeBoot = {
 };
 try {
   const rehydration = await runtime.rehydrateFromLedger();
+  const playback = String(process.env.VIRA_VERIFIED_PLAYBACK_ENABLED ?? "true").toLowerCase() === "true"
+    ? await ensureVerifiedPlayback({ eventStore, runtime })
+    : { disabled: true };
   runtimeBoot.readiness = true;
   runtimeBoot.mode = "ready";
   runtimeBoot.rehydratedAt = new Date().toISOString();
   runtimeBoot.rehydration = rehydration;
+  runtimeBoot.playback = playback;
 } catch (error) {
   runtimeBoot.readiness = false;
   runtimeBoot.mode = "integrity_failure";
