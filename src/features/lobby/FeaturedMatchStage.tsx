@@ -94,7 +94,7 @@ function TeamField({ name, side }: { name: string; side: "home" | "away" }) {
 }
 
 function MobileMatchIdentity({ home, away }: { home: string; away: string }) {
-  return <div className="grid grid-cols-[1fr_auto_1fr] items-end gap-3 px-4 pb-8 pt-12 sm:px-7"><TeamCompact name={home} side="home" /><span className="pb-2 font-['DM_Mono'] text-[10px] font-black text-primary">VS</span><TeamCompact name={away} side="away" /></div>;
+  return <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-end gap-3 px-4 pb-8 pt-12 sm:px-7"><TeamCompact name={home} side="home" /><span className="pb-2 font-['DM_Mono'] text-[10px] font-black text-primary">VS</span><TeamCompact name={away} side="away" /></div>;
 }
 
 function TeamCompact({ name, side }: { name: string; side: "home" | "away" }) {
