@@ -102,9 +102,10 @@ export function LobbyScreen() {
     }
   };
 
-  const enterRoom = () => {
-    if (!selectedMatch) return;
-    const path = `/match/${selectedMatch.fixtureId}/preview`;
+  const openPreview = (fixtureId?: string) => {
+    const targetId = fixtureId ?? selectedMatch?.fixtureId;
+    if (!targetId) return;
+    const path = `/match/${targetId}/preview`;
     const transitionDocument = document as Document & {
       startViewTransition?: (callback: () => void) => void;
     };
@@ -147,7 +148,7 @@ export function LobbyScreen() {
 
           {loadState === "ready" && selectedMatch ? (
             <>
-              {featuredModel ? <FeaturedMatchStage model={featuredModel} onOpen={enterRoom} /> : null}
+              {featuredModel ? <FeaturedMatchStage model={featuredModel} onOpen={() => openPreview()} /> : null}
 
               <FixtureAgenda
                 matches={matches}
@@ -156,6 +157,7 @@ export function LobbyScreen() {
                 contexts={fixtureContexts}
                 contextStates={fixtureContextStates}
                 onSelect={setSelectedMatchId}
+                onOpen={openPreview}
               />
 
               <TxlineVerificationRail

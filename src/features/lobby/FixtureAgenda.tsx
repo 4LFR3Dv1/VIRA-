@@ -13,6 +13,7 @@ interface Props {
   contexts: Record<string, MatchTxlineContext | null>;
   contextStates: Record<string, "loading" | "ready" | "error">;
   onSelect: (fixtureId: string) => void;
+  onOpen: (fixtureId: string) => void;
 }
 
 type FixtureExperience = {
@@ -58,7 +59,7 @@ function time(value: string | null) {
   return { day: new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "short" }).format(date), hour: new Intl.DateTimeFormat("pt-BR", { hour: "2-digit", minute: "2-digit" }).format(date) };
 }
 
-export function FixtureAgenda({ matches, selectedId, selectedContext, contexts, contextStates, onSelect }: Props) {
+export function FixtureAgenda({ matches, selectedId, selectedContext, contexts, contextStates, onSelect, onOpen }: Props) {
   const reduceMotion = useReducedMotion();
   const experiences = matches
     .map((fixture) => enrichFixture(fixture, contexts[fixture.fixtureId] ?? null, contextStates[fixture.fixtureId] ?? "loading"))
@@ -72,26 +73,27 @@ export function FixtureAgenda({ matches, selectedId, selectedContext, contexts, 
         if (!items.length) return null;
         return <section key={group.id} aria-labelledby={`fixture-group-${group.id}`}>
           <div className="mb-3 flex items-end justify-between border-b border-white/12 pb-3"><div><p className="font-['DM_Mono'] text-[9px] uppercase tracking-[.16em] text-primary">{group.eyebrow}</p><h3 id={`fixture-group-${group.id}`} className="mt-1 font-['Chakra_Petch'] text-xl font-black uppercase">{group.title}</h3></div><span className="font-['DM_Mono'] text-[9px] uppercase text-white/35">{items.length} {items.length === 1 ? "partida" : "partidas"}</span></div>
-          <div className="border-t border-white/12">{items.map((experience) => <FixtureRow key={experience.fixture.fixtureId} experience={experience} selected={experience.fixture.fixtureId === selectedId} selectedContext={experience.fixture.fixtureId === selectedId ? selectedContext : experience.context} reduceMotion={Boolean(reduceMotion)} onSelect={onSelect} />)}</div>
+          <div className="border-t border-white/12">{items.map((experience) => <FixtureRow key={experience.fixture.fixtureId} experience={experience} selected={experience.fixture.fixtureId === selectedId} selectedContext={experience.fixture.fixtureId === selectedId ? selectedContext : experience.context} reduceMotion={Boolean(reduceMotion)} onSelect={onSelect} onOpen={onOpen} />)}</div>
         </section>;
       })}
     </div>
   </section>;
 }
 
-function FixtureRow({ experience, selected, selectedContext, reduceMotion, onSelect }: { experience: FixtureExperience; selected: boolean; selectedContext: MatchTxlineContext | null; reduceMotion: boolean; onSelect: (fixtureId: string) => void }) {
+function FixtureRow({ experience, selected, selectedContext, reduceMotion, onSelect, onOpen }: { experience: FixtureExperience; selected: boolean; selectedContext: MatchTxlineContext | null; reduceMotion: boolean; onSelect: (fixtureId: string) => void; onOpen: (fixtureId: string) => void }) {
   const fixture = experience.fixture;
   const fixtureTime = time(fixture.startTime);
   const market = selectedContext?.endpoints.odds.data?.winProbability;
-  return <motion.button layout type="button" onClick={() => onSelect(fixture.fixtureId)} aria-pressed={selected} className={`group relative block w-full overflow-hidden border-b border-white/12 text-left ${selected ? "text-[#050814]" : "text-white hover:bg-white/[.025]"}`}>
+  const canOpen = experience.active || experience.group === "finished";
+  return <motion.div layout className={`group relative block w-full overflow-hidden border-b border-white/12 text-left ${selected ? "text-[#050814]" : "text-white hover:bg-white/[.025]"}`}>
     {selected ? <motion.div layoutId="fixture-selection" className="absolute inset-0 bg-primary" transition={reduceMotion ? { duration: 0 } : { type: "spring", stiffness: 320, damping: 34 }} /> : null}
-    <div className="relative z-10 grid min-h-24 grid-cols-[6rem_minmax(0,1fr)_7.5rem] items-center gap-3 px-3 py-4 sm:grid-cols-[8rem_minmax(0,1fr)_11rem] sm:px-4 lg:grid-cols-[9rem_minmax(0,1fr)_14rem]">
+    <button type="button" onClick={() => onSelect(fixture.fixtureId)} aria-pressed={selected} className="relative z-10 grid min-h-24 w-full grid-cols-[6rem_minmax(0,1fr)_7.5rem] items-center gap-3 px-3 py-4 text-left sm:grid-cols-[8rem_minmax(0,1fr)_11rem] sm:px-4 lg:grid-cols-[9rem_minmax(0,1fr)_14rem]">
       <span><span className="block font-['DM_Mono'] text-[9px] uppercase opacity-50">{fixtureTime.day}</span><strong className="mt-1 inline-flex items-center gap-2 font-['Chakra_Petch'] text-lg sm:text-xl"><CalendarClock className="size-3.5" />{fixtureTime.hour}</strong></span>
       <span className="grid min-w-0 grid-cols-[1fr_auto_1fr] items-center gap-2 sm:gap-4"><Team name={fixture.homeTeam} side="home" /><span className="font-['DM_Mono'] text-[9px] font-black opacity-40">VS</span><Team name={fixture.awayTeam} side="away" right /></span>
       <span className={`flex h-full min-h-16 items-center justify-between gap-3 px-3 sm:px-4 ${selected ? "bg-[#050814] text-white" : "border-l border-white/10"}`}><span className="min-w-0"> <span className={`flex items-center gap-2 font-['DM_Mono'] text-[10px] font-black uppercase tracking-[.1em] ${experience.active ? "text-primary" : selected ? "text-white" : "text-white/60"}`}>{experience.group === "live" ? <Radio className="size-3 shrink-0" /> : experience.contextState === "loading" ? <Loader2 className="size-3 shrink-0 animate-spin" /> : <Signal className="size-3 shrink-0" />}<span className="truncate">{experience.label}</span></span><span className={`mt-1 hidden truncate text-[10px] sm:block ${selected ? "text-white/45" : "text-white/35"}`}>{experience.detail}</span></span><ArrowRight className={`size-4 shrink-0 transition-transform group-hover:translate-x-1 ${experience.active ? "text-primary" : ""}`} /></span>
-    </div>
-    <AnimatePresence initial={false}>{selected ? <motion.div initial={reduceMotion ? false : { height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="relative z-10 overflow-hidden bg-[#050814] text-white"><div className="grid grid-cols-2 gap-px bg-white/10 sm:grid-cols-4"><Metric label={fixture.homeTeam} value={market?.home} /><Metric label="Empate" value={market?.draw} /><Metric label={fixture.awayTeam} value={market?.away} /><Metric label="Mercados" value={experience.marketCount} count /></div></motion.div> : null}</AnimatePresence>
-  </motion.button>;
+    </button>
+    <AnimatePresence initial={false}>{selected ? <motion.div initial={reduceMotion ? false : { height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="relative z-10 overflow-hidden bg-[#050814] text-white"><div className="grid grid-cols-2 gap-px bg-white/10 sm:grid-cols-4"><Metric label={fixture.homeTeam} value={market?.home} /><Metric label="Empate" value={market?.draw} /><Metric label={fixture.awayTeam} value={market?.away} /><Metric label="Mercados" value={experience.marketCount} count /></div>{canOpen ? <button type="button" onClick={() => onOpen(fixture.fixtureId)} className="flex min-h-14 w-full items-center justify-between border-t border-white/12 px-4 font-['Chakra_Petch'] text-xs font-black uppercase text-primary hover:bg-primary hover:text-[#050814] sm:px-6"><span>{experience.group === "finished" ? "Ver resultado da partida" : "Abrir briefing"}</span><ArrowRight className="size-4" /></button> : <p className="border-t border-white/12 px-4 py-4 text-xs text-white/40 sm:px-6">O briefing abre quando a TxLINE disponibilizar um mercado jogável.</p>}</motion.div> : null}</AnimatePresence>
+  </motion.div>;
 }
 
 function Team({ name, side, right = false }: { name: string; side: "home" | "away"; right?: boolean }) {
