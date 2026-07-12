@@ -6,7 +6,7 @@ import test from "node:test";
 
 import { createFileEventStore } from "./event-store.mjs";
 import { createRoomRuntime } from "./runtime.mjs";
-import { normalizeTxlineScore } from "./txline-client.mjs";
+import { applyFixtureLifecycleTimeout, normalizeTxlineScore } from "./txline-client.mjs";
 
 function rawAction(fixtureId, { action, id, seq, clock, participant = 1, confirmed = true, outcome = null, score = { home: 0, away: 0 } }) {
   return { FixtureId: fixtureId, Action: action, Id: id, Seq: seq, Participant: participant, Participant1IsHome: true, Confirmed: confirmed, Data: outcome ? { Outcome: outcome } : {}, Clock: { Running: true, Seconds: clock }, Score: { Participant1: { Total: { Goals: score.home } }, Participant2: { Total: { Goals: score.away } } } };
@@ -27,6 +27,16 @@ test("normalizer preserves shot authority, amendments and discarded action ident
   assert.notEqual(amendment.id, shot.id);
   assert.equal(discarded.type, "action_discarded");
   assert.equal(discarded.discardedActionId, "shot-1");
+});
+
+test("stale live fixtures close only after the configured lifecycle window", () => {
+  const kickoff = "2026-07-12T01:00:00.000Z";
+  const fixture = { fixtureId: "stale-live", status: "live", startTime: kickoff };
+  assert.equal(applyFixtureLifecycleTimeout(fixture, { nowMs: Date.parse(kickoff) + 2 * 60 * 60 * 1_000 }).status, "live");
+  const finished = applyFixtureLifecycleTimeout(fixture, { nowMs: Date.parse(kickoff) + 3 * 60 * 60 * 1_000 });
+  assert.equal(finished.status, "finished");
+  assert.equal(finished.reportedStatus, "live");
+  assert.equal(finished.lifecycleResolution, "maximum_live_window_elapsed");
 });
 
 test("authoritative stats reconcile amendment and discard", async () => {
@@ -128,12 +138,13 @@ test("catalog final status uses the same terminal ledger transition", async () =
   const roomId = "catalog-terminal-round";
   runtime.configureMatch({ fixtureId: roomId, title: "Argentina vs England", status: "live", homeTeam: "Argentina", awayTeam: "England" }, { suggestedPrediction: { priceName: "part1" } });
   const player = await runtime.join(roomId, "Bob", "catalog-terminal-admission");
-  runtime.configureMatch({ fixtureId: roomId, title: "Argentina vs England", status: "finished", homeTeam: "Argentina", awayTeam: "England" });
+  runtime.configureMatch({ fixtureId: roomId, title: "Argentina vs England", status: "finished", reportedStatus: "live", lifecycleResolution: "maximum_live_window_elapsed", homeTeam: "Argentina", awayTeam: "England" });
   await new Promise((resolve) => setTimeout(resolve, 20));
   const final = runtime.authenticatedSnapshot(roomId, player.participant.id, player.sessionToken);
   assert.equal(final.match.status, "finished");
   assert.equal(final.currentRound.state, "resolved");
   assert.equal(final.lastResolution.resolutionReason, "match_finished");
+  assert.equal(final.lastResolution.event.acquisitionOrigin, "verified_playback");
 });
 
 test("startup reconciles legacy finished rooms with an unresolved football round", async () => {

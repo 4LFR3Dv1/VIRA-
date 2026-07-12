@@ -429,17 +429,18 @@ export function createRoomRuntime({ eventStore = null, commitmentPublisher = nul
       scheduleRoundLock(room);
       if (becameFinished) {
         const finalClock = Math.max(Number(room.match.matchClockSec) || 0, 90 * 60);
+        const lifecycleTimeout = matchSummary.lifecycleResolution === "maximum_live_window_elapsed";
         queueMicrotask(() => void applyNormalizedEvent(roomId, {
-          id: `catalog-match-end:${roomId}`,
+          id: `${lifecycleTimeout ? "lifecycle-timeout" : "catalog-match-end"}:${roomId}`,
           matchId: roomId,
           type: "match_end",
           sequence: 0,
           occurredAt: nowIso(),
           matchClockSec: finalClock,
           absoluteScore: { home: room.match.homeScore, away: room.match.awayScore },
-          payload: { Status: "finished", authority: "txline_catalog" },
-          source: "txline-snapshot",
-        }, { acquisitionOrigin: "txline_snapshot" }).catch(() => undefined));
+          payload: { Status: "finished", authority: lifecycleTimeout ? "vira_lifecycle" : "txline_catalog", lifecycleResolution: matchSummary.lifecycleResolution ?? null },
+          source: lifecycleTimeout ? "verified-playback" : "txline-snapshot",
+        }, { acquisitionOrigin: lifecycleTimeout ? "verified_playback" : "txline_snapshot" }).catch(() => undefined));
       }
     }
   }

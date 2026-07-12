@@ -13,6 +13,7 @@ import { txlineCapabilities } from "./txline-endpoints.mjs";
 import { buildTxlineContext } from "./txline-context.mjs";
 import { discoverTxlineFixtures } from "./txline-discovery.mjs";
 import {
+  applyFixtureLifecycleTimeout,
   fetchFixturesSnapshot,
   fetchHistoricalScores,
   fetchOddsSnapshot,
@@ -356,6 +357,9 @@ async function loadMatchSummaries(query = "") {
   const normalizedQuery = query.toLowerCase();
   const matches = (Array.isArray(fixtures) ? fixtures : [])
     .map(normalizeTxlineFixture)
+    .map((fixture) => applyFixtureLifecycleTimeout(fixture, {
+      maxLiveMs: Number(process.env.VIRA_FIXTURE_MAX_LIVE_MS || 3 * 60 * 60 * 1_000),
+    }))
     .filter((fixture) => !normalizedQuery || fixture.title.toLowerCase().includes(normalizedQuery));
 
   return {

@@ -308,6 +308,18 @@ export function normalizeTxlineFixture(raw) {
   };
 }
 
+export function applyFixtureLifecycleTimeout(fixture, { nowMs = Date.now(), maxLiveMs = 3 * 60 * 60 * 1_000 } = {}) {
+  if (fixture?.status !== "live") return fixture;
+  const kickoffMs = Date.parse(fixture.startTime ?? "");
+  if (!Number.isFinite(kickoffMs) || nowMs < kickoffMs + maxLiveMs) return fixture;
+  return {
+    ...fixture,
+    status: "finished",
+    reportedStatus: "live",
+    lifecycleResolution: "maximum_live_window_elapsed",
+  };
+}
+
 function normalizeFixtureStatus(rawStatus) {
   const value = String(rawStatus ?? "scheduled").trim().toLowerCase().replace(/\s+/g, "_");
   if (["1", "live", "in_play", "inplay", "running", "started", "active"].includes(value)) return "live";
