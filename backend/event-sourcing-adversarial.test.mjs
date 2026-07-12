@@ -249,7 +249,10 @@ test("football team_scores condition resolves yes on score increase and no on co
     await runtime.submitAnswer("football-no", noRoom.currentRound.id, noPlayer.participant.id, "no", "football-answer-no", noRoom.currentRound.version, noPlayer.sessionToken);
     noRoom.currentRound = { ...noRoom.currentRound, locksAt: new Date(Date.now() - 1).toISOString() };
     await runtime.applyNormalizedEvent("football-no", scoreSnapshotEvent("football-no", { id: "score-open-no", seq: 900, home: 0, away: 0, clock: 1200 }));
-    await runtime.applyNormalizedEvent("football-no", scoreSnapshotEvent("football-no", { id: "score-expire-no", seq: 901, home: 0, away: 0, clock: 1800 }));
+    const clockOnlyExpiry = scoreSnapshotEvent("football-no", { id: "score-expire-no", seq: 901, home: 0, away: 0, clock: 1800 });
+    delete clockOnlyExpiry.absoluteScore;
+    delete clockOnlyExpiry.payload.Score;
+    await runtime.applyNormalizedEvent("football-no", clockOnlyExpiry);
     const noSnapshot = runtime.snapshot("football-no", noPlayer.participant.id);
     assert.equal(noSnapshot.lastResolution.winningOptionId, "no");
     assert.equal(noSnapshot.lastResolution.resolutionReason, "window_expired");

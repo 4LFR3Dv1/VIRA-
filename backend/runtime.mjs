@@ -345,6 +345,7 @@ export function createRoomRuntime({ eventStore = null, commitmentPublisher = nul
       appliedEventIds: new Set(),
       source: undefined,
       lastNormalizedEvent: null,
+      lastAuthoritativeScoreObservation: null,
       lastResolution: null,
       latestEvidence: null,
       evidenceHistory: [],
@@ -1191,7 +1192,13 @@ export function createRoomRuntime({ eventStore = null, commitmentPublisher = nul
     const round = room.currentRound;
     if (!round || round.state !== "locked") return null;
     const answersForRound = room.answersByRound[round.id] ?? {};
-    const footballEvaluation = round.resolution?.domain === "football" ? footballConditionEvaluation(round, event) : null;
+    const fallbackScore = room.lastAuthoritativeScoreObservation;
+    const resolutionEvent = round.resolution?.domain === "football"
+      && (!Number.isFinite(Number(event.absoluteScore?.home)) || !Number.isFinite(Number(event.absoluteScore?.away)))
+      && Number(fallbackScore?.matchClockSec) >= Number(round.resolution.condition?.endsAtClockSec)
+      ? fallbackScore
+      : event;
+    const footballEvaluation = round.resolution?.domain === "football" ? footballConditionEvaluation(round, resolutionEvent) : null;
     const winningOptionId = footballEvaluation?.winningOptionId ?? winningOptionFor(round, event);
     if (!winningOptionId) return null;
 
@@ -1237,7 +1244,7 @@ export function createRoomRuntime({ eventStore = null, commitmentPublisher = nul
       resolutionDomain: round.resolution?.domain ?? "market",
       resolutionReason: footballEvaluation?.reason ?? null,
       condition: round.resolution?.condition ?? null,
-      event,
+      event: resolutionEvent,
       answersEvaluated,
       answersCorrect,
       totalPointsApplied,
@@ -1272,11 +1279,22 @@ export function createRoomRuntime({ eventStore = null, commitmentPublisher = nul
     if (Number.isFinite(home) && Number.isFinite(away)) {
       room.match.homeScore = Math.max(0, home);
       room.match.awayScore = Math.max(0, away);
+      room.lastAuthoritativeScoreObservation = cloneJson(event);
       return;
     }
     if (event.type !== "goal") return;
     if (event.participantSide === "home" || event.teamId === room.match.homeTeam.id) room.match.homeScore += 1;
     if (event.participantSide === "away" || event.teamId === room.match.awayTeam.id) room.match.awayScore += 1;
+  }
+
+  function withConsolidatedScore(room, event) {
+    if (Number.isFinite(Number(event.absoluteScore?.home)) && Number.isFinite(Number(event.absoluteScore?.away))) return event;
+    if (event.type === "odds_shift" || !Number.isFinite(Number(event.matchClockSec))) return event;
+    return {
+      ...event,
+      absoluteScore: { home: room.match.homeScore, away: room.match.awayScore },
+      scoreConsolidatedFromRoom: true,
+    };
   }
 
   function pctValueForRound(round, event) {
@@ -1433,6 +1451,7 @@ export function createRoomRuntime({ eventStore = null, commitmentPublisher = nul
     room.appliedEventIds = new Set();
     room.source = undefined;
     room.lastNormalizedEvent = null;
+    room.lastAuthoritativeScoreObservation = null;
     room.lastResolution = null;
     room.latestEvidence = null;
     room.evidenceHistory = [];
@@ -2075,7 +2094,8 @@ export function createRoomRuntime({ eventStore = null, commitmentPublisher = nul
       updateMarketDistribution(room, event);
     }
     applyAuthoritativeScore(room, event);
-    const footballConditionEvents = advanceFootballCondition(room, event, correlationId);
+    const evaluationEvent = withConsolidatedScore(room, event);
+    const footballConditionEvents = advanceFootballCondition(room, evaluationEvent, correlationId);
     if (footballConditionEvents.length) await appendDomainEvents(room, footballConditionEvents);
     const timelineEntryId = event.type === "match_end" ? `timeline-match-finished-${event.id}` : `timeline-${event.id}`;
     if (event.type !== "match_end") {
@@ -2087,15 +2107,15 @@ export function createRoomRuntime({ eventStore = null, commitmentPublisher = nul
         tone: event.type === "goal" ? "success" : "info",
       });
     }
-    const currentRuleEvaluation = ruleEvaluationFor(room.currentRound, event);
+    const currentRuleEvaluation = ruleEvaluationFor(room.currentRound, evaluationEvent);
     if (room.currentRound?.state === "open") {
       const deadlineElapsed = room.currentRound.locksAt && Date.now() >= Date.parse(room.currentRound.locksAt);
       if (deadlineElapsed) {
         await lockCurrentRound(room, "deadline_elapsed", { causationId: event.id, correlationId });
       }
     }
-    const resolution = resolveCurrentRound(room, event);
-    const directedRound = resolution ? null : maybeOpenDirectedFootballRound(room, event);
+    const resolution = resolveCurrentRound(room, evaluationEvent);
+    const directedRound = resolution ? null : maybeOpenDirectedFootballRound(room, evaluationEvent);
     if (resolution) {
       await appendDomainEvents(room, [
         ...(resolution.resolutionDomain === "football" && resolution.resolutionReason === "window_expired"

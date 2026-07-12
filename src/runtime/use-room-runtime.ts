@@ -124,10 +124,10 @@ export function useRoomRuntime(roomId: string, displayName?: string | null) {
   const [sessionToken, setSessionToken] = useState<string | null>(() => window.sessionStorage.getItem(`vira:${roomId}:sessionToken`));
   const [admissionToken] = useState(() => {
     const key = `vira:${roomId}:admissionToken`;
-    const existing = window.sessionStorage.getItem(key);
+    const existing = window.localStorage.getItem(key);
     if (existing) return existing;
     const created = window.crypto.randomUUID();
-    window.sessionStorage.setItem(key, created);
+    window.localStorage.setItem(key, created);
     return created;
   });
   const [inviteCode] = useState(() => new URLSearchParams(window.location.search).get("invite"));
