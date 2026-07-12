@@ -63,6 +63,14 @@ test("prediction invite creates an idempotent group cohort and ranking", () => w
   assert.equal(league.members[0].points, 100);
 }));
 
+test("prediction share and mini league preserve creation-time editorial context", () => withStore(async (store) => {
+  const identity = await store.ensureIdentity(tokenA, "Bob");
+  const editorialContext = { locale: "pt-BR", timeZone: "America/Sao_Paulo", kickoffAt: "2026-07-14T19:00:00Z", temporalRelationAtCreation: "later_this_week", evaluatedAt: "2026-07-12T12:00:00Z" };
+  const share = await store.createShare({ kind: "prediction", createdByPublicId: identity.publicId, metadata: { title: "Bob escolheu Franca", description: "Quem vence Franca x Espanha?" }, destination: { path: "/match/fx/preview", ctaLabel: "Palpitar" }, payload: { fixtureId: "fx" }, editorialContext });
+  assert.deepEqual(store.getShare(share.publicCode).editorialContext, editorialContext);
+  assert.deepEqual(store.league(share.miniLeagueId, { match: { status: "scheduled" }, leaderboard: [] }).editorialContext, editorialContext);
+}));
+
 test("social state survives store restart without exposing public tokens", () => withStore(async (store, dataDir) => {
   const identity = await store.ensureIdentity(tokenA, "Renan");
   const share = await store.createShare({ kind: "result", createdByPublicId: identity.publicId, metadata: { title: "Acertou", description: "+100" }, destination: { path: "/match/fixture-1", ctaLabel: "Jogar" }, payload: { fixtureId: "fixture-1" } });

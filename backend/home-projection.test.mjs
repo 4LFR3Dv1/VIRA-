@@ -14,11 +14,13 @@ test("publishes a fresh fixture market with explicit authority", () => {
   assert.equal(projection.tournament.outrightMarket, null);
 });
 
-test("keeps the last confirmed pre-match market authoritative until kickoff", () => {
+test("keeps an older confirmed pre-match market usable without making a current directional claim", () => {
   const stable = fixture({ context: { generatedAt: "2026-07-12T10:00:00.000Z", canonical1X2: market("2026-07-12T10:00:00.000Z") } });
   const projection = deriveHomeProjection({ catalog: { matches: [stable] }, now });
   assert.equal(projection.editorial.kind, "predict_fixture");
-  assert.equal(projection.editorial.fixture.market.freshness.fresh, true);
+  assert.equal(projection.editorial.fixture.market.freshness.usableForPrediction, true);
+  assert.equal(projection.editorial.fixture.market.freshness.currentForDisplay, true);
+  assert.equal(projection.editorial.fixture.market.freshness.currentForDirectionalClaim, false);
   assert.equal(projection.editorial.fixture.market.freshness.staleAfter, stable.startTime);
 });
 
@@ -26,7 +28,20 @@ test("stops market authority on explicit context loss", () => {
   const unavailable = fixture({ availability: { contextStatus: "unavailable" } });
   const projection = deriveHomeProjection({ catalog: { matches: [unavailable] }, now });
   assert.equal(projection.editorial.kind, "open_calendar");
-  assert.equal(projection.editorial.fixture.market.freshness.fresh, false);
+  assert.equal(projection.editorial.fixture.market.freshness.usableForPrediction, false);
+});
+
+test("a fixture outside the promotion window cannot win through competition weight", () => {
+  const projection = deriveHomeProjection({ catalog: { matches: [fixture({ startTime: "2026-07-20T14:00:00.000Z" })] }, now });
+  assert.equal(projection.editorial.kind, "open_calendar");
+});
+
+test("home projection freezes evaluation time and uses civil temporal copy", () => {
+  const projection = deriveHomeProjection({ catalog: { matches: [fixture({ startTime: "2026-07-14T10:00:00.000Z" })] }, now, localeContext: { locale: "pt-BR", timeZone: "America/Sao_Paulo", source: "viewer" } });
+  assert.equal(projection.version, 2);
+  assert.equal(projection.editorial.fixture.temporal.evaluatedAt, now.toISOString());
+  assert.equal(projection.editorial.fixture.temporal.relation, "later_this_week");
+  assert.equal(projection.editorial.copy.headline, "Quem vence England x Argentina?");
 });
 
 test("home refuses to reinterpret raw markets without canonical projection", () => {

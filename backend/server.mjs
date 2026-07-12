@@ -31,6 +31,7 @@ import {
 import { createTxlineStreamManager } from "./txline-stream.mjs";
 import { createTxlineCatalogCache } from "./txline-catalog-cache.mjs";
 import { ensureVerifiedPlayback, verifiedPlaybackIds } from "./verified-playback-seed.mjs";
+import { deriveFixtureTemporalContext, fixturePredictionCopy, resolveEditorialLocaleContext } from "../shared/editorial-domain.mjs";
 
 loadLocalEnv();
 
@@ -89,7 +90,7 @@ function sendJson(response, status, body) {
   response.writeHead(status, {
     "Content-Type": "application/json",
     "Access-Control-Allow-Origin": response.viraCorsOrigin || "http://localhost:5173",
-    "Access-Control-Allow-Headers": "Content-Type, Authorization, Last-Event-ID, X-Vira-Public-Token",
+    "Access-Control-Allow-Headers": "Content-Type, Authorization, Last-Event-ID, X-Vira-Public-Token, X-Vira-Locale, X-Vira-Time-Zone",
     "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
   });
   response.end(JSON.stringify(body));
@@ -121,6 +122,31 @@ function publicToken(request, body = {}) {
 function publicBaseUrl(request) {
   const protocol = String(request.headers["x-forwarded-proto"] || "https").split(",")[0];
   return `${protocol}://${request.headers.host}`;
+}
+
+function requestEditorialLocale(request, source = "viewer") {
+  return resolveEditorialLocaleContext({ locale: request.headers["x-vira-locale"], timeZone: request.headers["x-vira-time-zone"], source });
+}
+
+function predictionEditorialContext(fixture, request) {
+  const localeContext = requestEditorialLocale(request, "share_creator");
+  const temporal = deriveFixtureTemporalContext(fixture, { evaluatedAt: new Date().toISOString(), localeContext });
+  return {
+    locale: localeContext.locale,
+    timeZone: localeContext.timeZone,
+    source: localeContext.source,
+    kickoffAt: fixture.startTime ?? null,
+    temporalRelationAtCreation: temporal.relation,
+    localKickoffDate: temporal.localKickoffDate,
+    localKickoffTime: temporal.localKickoffTime,
+    evaluatedAt: temporal.evaluatedAt,
+  };
+}
+
+function predictionShareMetadata(fixture, displayName, choiceLabel, editorialContext) {
+  const copy = fixturePredictionCopy({ temporalRelation: editorialContext.temporalRelationAtCreation, homeTeam: fixture.homeTeam, awayTeam: fixture.awayTeam });
+  const schedule = editorialContext.localKickoffDate ? `${editorialContext.localKickoffDate} às ${editorialContext.localKickoffTime}` : "horário a confirmar";
+  return { title: `${displayName} escolheu ${choiceLabel}`, description: `${copy.headline} · ${schedule}. Faça o seu palpite.`, imagePath: "dynamic" };
 }
 
 function sharePageHtml(share, request) {
@@ -612,12 +638,13 @@ async function handleRequest(request, response) {
       }
       const identity = shareStore.identity(token, body.displayName);
       const choiceLabel = body.choice === "home" ? fixture.homeTeam : body.choice === "away" ? fixture.awayTeam : "Empate";
+      const editorialContext = predictionEditorialContext(fixture, request);
       const share = await shareStore.createShare({
         kind: "prediction", createdByPublicId: identity.publicId, expiresAt: fixture.startTime,
-        metadata: { title: `${prediction.displayName} escolheu ${choiceLabel}`, description: `${fixture.homeTeam} x ${fixture.awayTeam}. Faça o seu palpite antes do jogo.`, imagePath: "dynamic" },
+        metadata: predictionShareMetadata(fixture, prediction.displayName, choiceLabel, editorialContext),
         destination: { path: `/match/${encodeURIComponent(fixture.fixtureId)}/preview`, ctaLabel: "Fazer meu palpite" },
         attribution: { source: "prediction", campaign: "pre_match_1x2" },
-        payload: { fixtureId: fixture.fixtureId, predictionId: prediction.id, choice: body.choice, choiceLabel, homeTeam: fixture.homeTeam, awayTeam: fixture.awayTeam, kickoffAt: fixture.startTime },
+        payload: { fixtureId: fixture.fixtureId, predictionId: prediction.id, choice: body.choice, choiceLabel, homeTeam: fixture.homeTeam, awayTeam: fixture.awayTeam, kickoffAt: fixture.startTime }, editorialContext,
       });
       sendJson(response, 201, { prediction, share, url: `${publicBaseUrl(request)}/s/${share.publicCode}` });
       return;
@@ -665,6 +692,7 @@ async function handleRequest(request, response) {
           points: totalPoints,
           streak: bestStreak,
         } : null,
+        localeContext: requestEditorialLocale(request),
       }));
       return;
     }
@@ -707,16 +735,17 @@ async function handleRequest(request, response) {
       if (!fixture) throw Object.assign(new Error("fixture_not_found"), { status: 404 });
       const label = prediction.choice === "home" ? fixture.homeTeam : prediction.choice === "away" ? fixture.awayTeam : "Empate";
       const resolved = prediction.status === "resolved";
+      const editorialContext = predictionEditorialContext(fixture, request);
       const share = await shareStore.createShare({
         kind: resolved ? "result" : "prediction",
         createdByPublicId: identity.publicId,
         expiresAt: resolved ? null : fixture.startTime,
         metadata: resolved
           ? { title: `${prediction.displayName} ${prediction.correct ? "acertou" : "fez seu palpite"}`, description: `${fixture.homeTeam} ${prediction.finalScore?.home ?? ""} x ${prediction.finalScore?.away ?? ""} ${fixture.awayTeam} · escolha: ${label}.`, imagePath: "dynamic" }
-          : { title: `${prediction.displayName} escolheu ${label}`, description: `${fixture.homeTeam} x ${fixture.awayTeam}. Faça o seu palpite antes do jogo.`, imagePath: "dynamic" },
+          : predictionShareMetadata(fixture, prediction.displayName, label, editorialContext),
         destination: { path: `/match/${encodeURIComponent(fixtureId)}/preview`, ctaLabel: resolved ? "Ver resultado" : "Fazer meu palpite" },
         attribution: { source: resolved ? "result" : "prediction", campaign: resolved ? "fixture_prediction_result" : "pre_match_1x2" },
-        payload: { fixtureId, predictionId: prediction.id, choice: prediction.choice, choiceLabel: label, correct: prediction.correct ?? null, finalScore: prediction.finalScore ?? null, homeTeam: fixture.homeTeam, awayTeam: fixture.awayTeam, kickoffAt: fixture.startTime },
+        payload: { fixtureId, predictionId: prediction.id, choice: prediction.choice, choiceLabel: label, correct: prediction.correct ?? null, finalScore: prediction.finalScore ?? null, homeTeam: fixture.homeTeam, awayTeam: fixture.awayTeam, kickoffAt: fixture.startTime }, editorialContext,
       });
       sendJson(response, 201, { prediction, share, url: `${publicBaseUrl(request)}/s/${share.publicCode}` });
       return;

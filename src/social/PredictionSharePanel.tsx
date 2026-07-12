@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router";
 
 import type { MatchSummary } from "../runtime/api";
+import { deriveFixtureTemporalContext, fixturePredictionCopy, resolveEditorialLocaleContext } from "../../shared/editorial-domain.mjs";
 import { createPredictionShare, fetchMyPrediction, presentShare } from "./share";
 
 type Choice = "home" | "draw" | "away";
@@ -14,6 +15,9 @@ export function PredictionSharePanel({ fixture, displayName, onChangeDisplayName
   const [result, setResult] = useState<{ status: "open" | "resolved"; correct?: boolean; winningChoice?: string; finalScore?: { home: number; away: number } } | null>(null);
   const available = fixture.status === "scheduled" && (!fixture.startTime || Date.parse(fixture.startTime) > Date.now());
   const labels: Record<Choice, string> = { home: fixture.homeTeam, draw: "Empate", away: fixture.awayTeam };
+  const localeContext = resolveEditorialLocaleContext({ locale: navigator.language, timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone, source: "viewer" });
+  const temporal = deriveFixtureTemporalContext(fixture, { evaluatedAt: new Date().toISOString(), localeContext });
+  const predictionCopy = fixturePredictionCopy({ temporalRelation: temporal.relation, homeTeam: fixture.homeTeam, awayTeam: fixture.awayTeam });
 
   useEffect(() => {
     let cancelled = false;
@@ -43,7 +47,7 @@ export function PredictionSharePanel({ fixture, displayName, onChangeDisplayName
     <div className="mx-auto grid max-w-[1440px] gap-8 px-5 py-14 sm:px-8 lg:grid-cols-[minmax(0,1fr)_360px] lg:px-14">
       <div>
         <p className="font-['DM_Mono'] text-[10px] font-black uppercase text-primary">Palpite antes do jogo</p>
-        <h2 className="mt-3 font-['Chakra_Petch'] text-[clamp(2.2rem,5vw,4.8rem)] font-black uppercase leading-[.9]">Quem vence hoje?</h2>
+        <h2 className="mt-3 font-['Chakra_Petch'] text-[clamp(2.2rem,5vw,4.8rem)] font-black uppercase leading-[.9]">{predictionCopy.headline}</h2>
         <p className="mt-4 max-w-xl text-sm leading-6 text-white/50">Escolha um lado e convide seus amigos. Cada pessoa responde em privado pelo mesmo link.</p>
       </div>
       {result?.status === "resolved" ? <div className="border-l border-white/15 pl-6"><p className="font-['DM_Mono'] text-[10px] uppercase text-primary">Resultado oficial</p><strong className="mt-3 block font-['Chakra_Petch'] text-3xl font-black uppercase">{result.correct ? "Voce acertou" : "Palpite resolvido"}</strong><p className="mt-3 text-sm text-white/50">{result.finalScore ? `${fixture.homeTeam} ${result.finalScore.home} × ${result.finalScore.away} ${fixture.awayTeam}` : "Resultado confirmado pela partida."}</p></div> : available ? <div>

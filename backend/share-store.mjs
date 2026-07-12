@@ -226,7 +226,7 @@ export class ShareStore {
     const matchStatus = roomSnapshot?.match?.status;
     const predictionResolved = predictionLeague && rows.some((row) => row.predictionStatus === "resolved");
     const status = predictionResolved || matchStatus === "finished" ? "resolved" : matchStatus === "live" ? "locked" : league.status;
-    return { ...clone(league), status, members: rows };
+    return { ...clone(league), status, members: rows, editorialContext: clone(originShare?.editorialContext ?? null) };
   }
 }
 

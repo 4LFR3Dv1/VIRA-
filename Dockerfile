@@ -11,6 +11,7 @@ ENV NODE_ENV=production PORT=8787 VIRA_DATA_DIR=/var/lib/vira VIRA_INTERNAL_INGE
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev
 COPY backend ./backend
+COPY shared ./shared
 COPY scripts ./scripts
 COPY --from=build /app/dist ./dist
 EXPOSE 8787

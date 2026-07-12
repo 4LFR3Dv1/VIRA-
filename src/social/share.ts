@@ -21,7 +21,7 @@ export function createRoomShare(input: { roomId: string; participantId: string; 
 }
 
 export function createPredictionShare(input: { fixtureId: string; displayName: string; choice: "home" | "draw" | "away"; inviteCode?: string | null }) {
-  return fetch(`${API_ORIGIN}/predictions`, { method: "POST", headers: { "Content-Type": "application/json", "X-Vira-Public-Token": getPublicToken() }, body: JSON.stringify(input) }).then((response) => json<ShareResponse & { prediction: { id: string; choice: string } }>(response));
+  return fetch(`${API_ORIGIN}/predictions`, { method: "POST", headers: editorialHeaders(), body: JSON.stringify(input) }).then((response) => json<ShareResponse & { prediction: { id: string; choice: string } }>(response));
 }
 
 export function savePrediction(input: { fixtureId: string; displayName: string; choice: "home" | "draw" | "away"; inviteCode?: string | null }) {
@@ -29,21 +29,24 @@ export function savePrediction(input: { fixtureId: string; displayName: string; 
 }
 
 export function shareSavedPrediction(fixtureId: string) {
-  return fetch(`${API_ORIGIN}/predictions/${encodeURIComponent(fixtureId)}/share`, { method: "POST", headers: { "Content-Type": "application/json", "X-Vira-Public-Token": getPublicToken() }, body: "{}" }).then((response) => json<ShareResponse>(response));
+  return fetch(`${API_ORIGIN}/predictions/${encodeURIComponent(fixtureId)}/share`, { method: "POST", headers: editorialHeaders(), body: "{}" }).then((response) => json<ShareResponse>(response));
 }
 
+function editorialHeaders() { return { "Content-Type": "application/json", "X-Vira-Public-Token": getPublicToken(), "X-Vira-Locale": navigator.language || "pt-BR", "X-Vira-Time-Zone": Intl.DateTimeFormat().resolvedOptions().timeZone || "America/Sao_Paulo" }; }
+
 export type HomeProjection = {
-  version: 1;
+  version: 2;
+  localeContext: { locale: string; timeZone: string; source: string };
   tournament: { id: string; name: string; status: string; generatedAt: string; outrightMarket: null; primaryFixture: HomeFixture | null };
   player: null | { publicId: string; displayName: string; points: number; streak: number; fixturePrediction: PredictionProjection | null; miniLeagues: Array<{ id: string; status: string; members: Array<{ publicId: string; displayName: string; points: number; rank: number }> }> };
-  editorial: { kind: "join_live_room" | "predict_fixture" | "result_available" | "open_calendar"; authority: "txline_fixture_market" | "official_match_state"; fixture: HomeFixture | null; prediction: PredictionProjection | null; sourceSnapshotIds: string[]; generatedAt: string; expiresAt: string | null };
+  editorial: { kind: "join_live_room" | "predict_fixture" | "result_available" | "open_calendar"; authority: "txline_fixture_market" | "official_match_state"; fixture: HomeFixture | null; prediction: PredictionProjection | null; sourceSnapshotIds: string[]; generatedAt: string; expiresAt: string | null; copy?: { headline: string; scheduleLabel: string; marketStatement: string }; evidence?: { eligibility: unknown; rankScore: number; rankReasons: string[] } };
 };
 
 export type PredictionProjection = { choice: "home" | "draw" | "away"; status: "open" | "resolved"; correct?: boolean; winningChoice?: string; finalScore?: { home: number; away: number } };
-export type HomeFixture = { fixtureId: string; competitionLabel: string; homeTeam: string; awayTeam: string; startTime: string | null; status: "scheduled" | "live" | "finished"; roomAvailable: boolean; market: null | { authority: "txline_fixture_market"; type: "MATCH_RESULT_1X2"; selections: { home: number; draw: number; away: number }; leadingChoice: "home" | "draw" | "away"; freshness: { observedAt: string | null; staleAfter: string | null; fresh: boolean } } };
+export type HomeFixture = { fixtureId: string; competitionLabel: string; homeTeam: string; awayTeam: string; startTime: string | null; status: "scheduled" | "live" | "finished"; roomAvailable: boolean; temporal: { relation: "live" | "today" | "tomorrow" | "later_this_week" | "future" | "finished" | "unknown"; localKickoffDate: string | null; localKickoffTime: string | null; evaluatedAt: string; timeZone: string }; market: null | { authority: "txline_fixture_market"; type: "MATCH_RESULT_1X2"; selections: { home: number; draw: number; away: number }; leadingChoice: "home" | "draw" | "away"; freshness: { observedAt: string | null; staleAfter: string | null; usableForPrediction: boolean; currentForDisplay: boolean; currentForDirectionalClaim: boolean; reason: string } } };
 
 export function fetchHome() {
-  return fetch(`${API_ORIGIN}/home`, { headers: { "X-Vira-Public-Token": getPublicToken() } }).then((response) => json<HomeProjection>(response));
+  return fetch(`${API_ORIGIN}/home`, { headers: { "X-Vira-Public-Token": getPublicToken(), "X-Vira-Locale": navigator.language || "pt-BR", "X-Vira-Time-Zone": Intl.DateTimeFormat().resolvedOptions().timeZone || "America/Sao_Paulo" } }).then((response) => json<HomeProjection>(response));
 }
 
 export function trackHome(type: "home.editorial_viewed" | "home.primary_action_clicked", editorialKind: string, fixtureId?: string) {

@@ -1,128 +1,43 @@
-const MATCH_RESULT_MARKET = "MATCH_RESULT_1X2";
+import { deriveFixtureEditorialEligibility, deriveFixtureTemporalContext, deriveMarketFreshness, fixturePredictionCopy, rankEligibleFixture, resolveEditorialLocaleContext } from "../shared/editorial-domain.mjs";
 
-function asTime(value) {
-  const time = Date.parse(String(value ?? ""));
-  return Number.isFinite(time) ? time : null;
-}
+function normalizedStatus(value) { const status = String(value ?? "").toLowerCase(); return ["live", "in_play", "inplay", "playing"].includes(status) ? "live" : ["finished", "final", "ended", "completed"].includes(status) ? "finished" : "scheduled"; }
 
-function normalizedStatus(value) {
-  const status = String(value ?? "").toLowerCase();
-  if (["live", "in_play", "inplay", "playing"].includes(status)) return "live";
-  if (["finished", "final", "ended", "completed"].includes(status)) return "finished";
-  return "scheduled";
-}
-
-function fixtureMarket(fixture, nowMs) {
-  const canonical = fixture?.context?.canonical1X2 ?? null;
+function fixtureMarket(fixture, evaluatedAt) {
+  const canonical = fixture?.context?.canonical1X2;
   if (!canonical) return null;
-  const probability = {
-    home: canonical.selections.home,
-    draw: canonical.selections.draw,
-    away: canonical.selections.away,
-    capturedAt: canonical.observedAt,
-    messageId: canonical.snapshotId,
-    providerSequence: canonical.providerSequence,
-    marketSignature: canonical.marketSignature,
-  };
-  const home = Number(probability.home);
-  const draw = Number(probability.draw);
-  const away = Number(probability.away);
-  if (![home, draw, away].every((value) => Number.isFinite(value) && value >= 0)) return null;
-  const observedAt = probability.capturedAt ?? fixture.context?.generatedAt ?? null;
-  const observedMs = asTime(observedAt);
-  const kickoffMs = asTime(fixture.startTime);
-  const contextUnavailable = fixture?.availability?.contextStatus === "unavailable";
-  const fresh = observedMs !== null
-    && observedMs <= nowMs
-    && normalizedStatus(fixture.status) !== "finished"
-    && !contextUnavailable
-    && (kickoffMs === null || kickoffMs > nowMs);
-  const values = [home, draw, away];
-  const leadingIndex = values.indexOf(Math.max(...values));
-  return {
-    scope: "fixture",
-    type: MATCH_RESULT_MARKET,
-    authority: "txline_fixture_market",
-    fixtureId: String(fixture.fixtureId),
-    selections: { home, draw, away },
-    leadingChoice: ["home", "draw", "away"][leadingIndex],
-    snapshotId: probability.messageId ?? `${fixture.fixtureId}:${observedAt ?? "unknown"}`,
-    marketSignature: probability.marketSignature ?? null,
-    freshness: {
-      providerSequence: probability.providerSequence ?? null,
-      observedAt,
-      staleAfter: kickoffMs === null ? null : new Date(kickoffMs).toISOString(),
-      fresh,
-    },
-  };
+  const selections = { home: Number(canonical.selections.home), draw: Number(canonical.selections.draw), away: Number(canonical.selections.away) };
+  const distributionValid = Object.values(selections).every((value) => Number.isFinite(value) && value >= 0);
+  const values = Object.values(selections); const leadingChoice = ["home", "draw", "away"][values.indexOf(Math.max(...values))];
+  return { scope: "fixture", type: "MATCH_RESULT_1X2", authority: "txline_fixture_market", fixtureId: String(fixture.fixtureId), selections, leadingChoice, snapshotId: canonical.snapshotId, marketSignature: canonical.marketSignature ?? null, providerSequence: canonical.providerSequence ?? null, freshness: deriveMarketFreshness({ observedAt: canonical.observedAt ?? fixture.context?.generatedAt, receivedAt: fixture.context?.generatedAt, evaluatedAt, kickoffAt: fixture.startTime, contextAvailable: fixture?.availability?.contextStatus !== "unavailable", distributionValid }) };
 }
 
-function fixtureSummary(fixture, market) {
-  return {
-    fixtureId: String(fixture.fixtureId),
-    competitionLabel: fixture.competitionLabel,
-    competition: fixture.competition,
-    homeTeam: fixture.homeTeam,
-    awayTeam: fixture.awayTeam,
-    startTime: fixture.startTime ?? null,
-    status: normalizedStatus(fixture.status),
-    roomAvailable: true,
-    market,
-  };
-}
+function fixtureSummary(fixture, market, temporal) { return { fixtureId: String(fixture.fixtureId), competitionLabel: fixture.competitionLabel, competition: fixture.competition, homeTeam: fixture.homeTeam, awayTeam: fixture.awayTeam, startTime: fixture.startTime ?? null, status: normalizedStatus(fixture.status), roomAvailable: true, temporal, market }; }
 
-function relevanceScore(fixture, market, prediction, nowMs) {
-  const status = normalizedStatus(fixture.status);
-  let score = status === "live" ? 1_000 : status === "scheduled" ? 100 : 0;
-  if (fixture?.competition?.kind === "world_cup") score += 500;
-  if (status === "scheduled" && (!fixture.startTime || asTime(fixture.startTime) > nowMs)) score += 300;
-  if (market?.freshness.fresh) score += 180;
-  if (prediction?.status === "open") score += 140;
-  if (prediction?.status === "resolved") score += 900;
-  const kickoff = asTime(fixture.startTime);
-  if (kickoff !== null && kickoff > nowMs) score -= Math.min((kickoff - nowMs) / 600_000, 200);
-  return score;
-}
-
-export function deriveHomeProjection({ catalog, player = null, predictions = {}, miniLeagues = [], now = new Date() }) {
-  const nowMs = now instanceof Date ? now.getTime() : Date.parse(String(now));
+export function deriveHomeProjection({ catalog, player = null, predictions = {}, miniLeagues = [], now = new Date(), localeContext: requestedLocaleContext = null }) {
+  const evaluatedAt = (now instanceof Date ? now : new Date(now)).toISOString();
+  const localeContext = resolveEditorialLocaleContext(requestedLocaleContext ?? {});
   const candidates = (catalog?.matches ?? []).map((fixture) => {
-    const market = fixtureMarket(fixture, nowMs);
     const prediction = predictions[String(fixture.fixtureId)] ?? null;
-    return { fixture, market, prediction, score: relevanceScore(fixture, market, prediction, nowMs) };
-  }).sort((left, right) => right.score - left.score || String(left.fixture.startTime ?? "").localeCompare(String(right.fixture.startTime ?? "")));
-
-  const resolved = candidates.find((candidate) => candidate.prediction?.status === "resolved");
-  const live = candidates.find((candidate) => normalizedStatus(candidate.fixture.status) === "live");
-  const predictable = candidates.find((candidate) => normalizedStatus(candidate.fixture.status) === "scheduled"
-    && (!candidate.fixture.startTime || asTime(candidate.fixture.startTime) > nowMs)
-    && candidate.market?.freshness.fresh);
-  const selected = resolved ?? live ?? predictable ?? candidates.find((candidate) => normalizedStatus(candidate.fixture.status) !== "finished") ?? candidates[0] ?? null;
-
+    const normalizedFixture = { ...fixture, status: normalizedStatus(fixture.status) };
+    const temporal = deriveFixtureTemporalContext(normalizedFixture, { evaluatedAt, localeContext });
+    const market = fixtureMarket(normalizedFixture, evaluatedAt);
+    const eligibility = deriveFixtureEditorialEligibility({ fixture: normalizedFixture, market, temporal });
+    const rank = eligibility.eligible ? rankEligibleFixture({ fixture: normalizedFixture, market, temporal, prediction }) : { score: -Infinity, reasons: [] };
+    return { fixture: normalizedFixture, prediction, temporal, market, eligibility, rank };
+  });
+  const resolved = candidates.find((item) => item.prediction?.status === "resolved");
+  const live = candidates.find((item) => item.fixture.status === "live");
+  const predictable = candidates.filter((item) => item.eligibility.eligible).sort((a, b) => b.rank.score - a.rank.score || a.temporal.minutesUntilKickoff - b.temporal.minutesUntilKickoff)[0] ?? null;
+  const selected = resolved ?? live ?? predictable ?? candidates.find((item) => item.fixture.status !== "finished") ?? candidates[0] ?? null;
   let editorial;
-  if (resolved) {
-    editorial = { kind: "result_available", authority: "official_match_state", fixture: fixtureSummary(resolved.fixture, resolved.market), prediction: resolved.prediction, sourceSnapshotIds: [], generatedAt: now.toISOString(), expiresAt: null };
-  } else if (live) {
-    editorial = { kind: "join_live_room", authority: "official_match_state", fixture: fixtureSummary(live.fixture, live.market), prediction: live.prediction, sourceSnapshotIds: [], generatedAt: now.toISOString(), expiresAt: null };
-  } else if (predictable) {
-    editorial = { kind: "predict_fixture", authority: "txline_fixture_market", fixture: fixtureSummary(predictable.fixture, predictable.market), prediction: predictable.prediction, sourceSnapshotIds: [predictable.market.snapshotId], generatedAt: now.toISOString(), expiresAt: predictable.fixture.startTime ?? predictable.market.freshness.staleAfter };
-  } else {
-    editorial = { kind: "open_calendar", authority: "official_match_state", fixture: selected ? fixtureSummary(selected.fixture, selected.market) : null, prediction: selected?.prediction ?? null, sourceSnapshotIds: [], generatedAt: now.toISOString(), expiresAt: null };
-  }
-
-  return {
-    version: 1,
-    tournament: {
-      id: selected?.fixture?.competition?.canonicalCompetitionId || "unidentified-competition",
-      name: selected?.fixture?.competitionLabel || "World Cup",
-      status: live ? "active" : candidates.every((item) => normalizedStatus(item.fixture.status) === "finished") ? "finished" : "active",
-      generatedAt: catalog?.generatedAt ?? now.toISOString(),
-      primaryFixture: selected ? fixtureSummary(selected.fixture, selected.market) : null,
-      outrightMarket: null,
-    },
-    player: player ? { ...player, fixturePrediction: selected?.prediction ?? null, miniLeagues } : null,
-    editorial,
-  };
+  if (resolved) editorial = { kind: "result_available", authority: "official_match_state", fixture: fixtureSummary(resolved.fixture, resolved.market, resolved.temporal), prediction: resolved.prediction, sourceSnapshotIds: [], generatedAt: evaluatedAt, expiresAt: null };
+  else if (live) editorial = { kind: "join_live_room", authority: "official_match_state", fixture: fixtureSummary(live.fixture, live.market, live.temporal), prediction: live.prediction, sourceSnapshotIds: [], generatedAt: evaluatedAt, expiresAt: null };
+  else if (predictable) {
+    const labels = { home: predictable.fixture.homeTeam, draw: "Empate", away: predictable.fixture.awayTeam };
+    const copy = fixturePredictionCopy({ temporalRelation: predictable.temporal.relation, homeTeam: predictable.fixture.homeTeam, awayTeam: predictable.fixture.awayTeam, market: predictable.market ? { ...predictable.market, leadingLabel: labels[predictable.market.leadingChoice] } : null });
+    editorial = { kind: "predict_fixture", authority: "txline_fixture_market", fixture: fixtureSummary(predictable.fixture, predictable.market, predictable.temporal), prediction: predictable.prediction, sourceSnapshotIds: [predictable.market.snapshotId], generatedAt: evaluatedAt, expiresAt: predictable.fixture.startTime, copy, evidence: { eligibility: predictable.eligibility, rankScore: predictable.rank.score, rankReasons: predictable.rank.reasons } };
+  } else editorial = { kind: "open_calendar", authority: "official_match_state", fixture: selected ? fixtureSummary(selected.fixture, selected.market, selected.temporal) : null, prediction: selected?.prediction ?? null, sourceSnapshotIds: [], generatedAt: evaluatedAt, expiresAt: null };
+  return { version: 2, localeContext, tournament: { id: selected?.fixture?.competition?.canonicalCompetitionId || "unidentified-competition", name: selected?.fixture?.competitionLabel || "Competicao", status: live ? "active" : candidates.every((item) => item.fixture.status === "finished") ? "finished" : "active", generatedAt: catalog?.generatedAt ?? evaluatedAt, primaryFixture: selected ? fixtureSummary(selected.fixture, selected.market, selected.temporal) : null, outrightMarket: null }, player: player ? { ...player, fixturePrediction: selected?.prediction ?? null, miniLeagues } : null, editorial };
 }
 
-export const homeProjectionInternals = { fixtureMarket, normalizedStatus, relevanceScore };
+export const homeProjectionInternals = { fixtureMarket, normalizedStatus };
