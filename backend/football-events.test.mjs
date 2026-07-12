@@ -88,3 +88,91 @@ test("RoundDirector opens team_shot_on_target and replay V2 survives restart", a
     await rm(dataDir, { recursive: true, force: true });
   }
 });
+
+test("match_end locks and resolves an open football round before finalizing the room", async () => {
+  const dataDir = await mkdtemp(path.join(os.tmpdir(), "vira-match-end-"));
+  try {
+    const eventStore = await createFileEventStore({ dataDir });
+    const runtime = createRoomRuntime({ eventStore });
+    const roomId = "terminal-football-round";
+    runtime.configureMatch({ fixtureId: roomId, title: "Argentina vs England", status: "live", homeTeam: "Argentina", awayTeam: "England" }, { suggestedPrediction: { priceName: "part1" } });
+    const player = await runtime.join(roomId, "Ana", "terminal-admission");
+    const round = runtime.getRoom(roomId).currentRound;
+    await runtime.submitAnswer(roomId, round.id, player.participant.id, "no", "terminal-answer", round.version, player.sessionToken);
+    const finalEvent = normalizeTxlineScore(rawAction(roomId, { action: "end", id: "full-time", seq: 99, clock: 0, score: { home: 3, away: 1 } }), { matchId: roomId, source: "txline-live" });
+    await runtime.applyNormalizedEvent(roomId, finalEvent);
+    const final = runtime.authenticatedSnapshot(roomId, player.participant.id, player.sessionToken);
+    assert.equal(final.match.status, "finished");
+    assert.equal(final.match.matchClockSec, 90 * 60);
+    assert.equal(final.currentRound.state, "resolved");
+    assert.equal(final.lastResolution.winningOptionId, "no");
+    assert.equal(final.lastResolution.resolutionReason, "match_finished");
+    assert.equal(final.lastResolution.wasCurrentUserCorrect, true);
+    assert.equal(final.lastResolution.pointsAwarded, 100);
+
+    const restartedStore = await createFileEventStore({ dataDir });
+    const restarted = createRoomRuntime({ eventStore: restartedStore });
+    await restarted.rehydrateFromLedger();
+    const restored = restarted.authenticatedSnapshot(roomId, player.participant.id, player.sessionToken);
+    assert.equal(restored.match.status, "finished");
+    assert.equal(restored.currentRound.state, "resolved");
+    assert.equal(restored.lastResolution.resolutionReason, "match_finished");
+    assert.equal((await restarted.verifyRoom(roomId)).projectionMatches, true);
+  } finally {
+    await rm(dataDir, { recursive: true, force: true });
+  }
+});
+
+test("catalog final status uses the same terminal ledger transition", async () => {
+  const runtime = createRoomRuntime();
+  const roomId = "catalog-terminal-round";
+  runtime.configureMatch({ fixtureId: roomId, title: "Argentina vs England", status: "live", homeTeam: "Argentina", awayTeam: "England" }, { suggestedPrediction: { priceName: "part1" } });
+  const player = await runtime.join(roomId, "Bob", "catalog-terminal-admission");
+  runtime.configureMatch({ fixtureId: roomId, title: "Argentina vs England", status: "finished", homeTeam: "Argentina", awayTeam: "England" });
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  const final = runtime.authenticatedSnapshot(roomId, player.participant.id, player.sessionToken);
+  assert.equal(final.match.status, "finished");
+  assert.equal(final.currentRound.state, "resolved");
+  assert.equal(final.lastResolution.resolutionReason, "match_finished");
+});
+
+test("startup reconciles legacy finished rooms with an unresolved football round", async () => {
+  const dataDir = await mkdtemp(path.join(os.tmpdir(), "vira-terminal-repair-"));
+  try {
+    const eventStore = await createFileEventStore({ dataDir });
+    const runtime = createRoomRuntime({ eventStore });
+    const roomId = "legacy-terminal-round";
+    runtime.configureMatch({ fixtureId: roomId, title: "Argentina vs England", status: "live", homeTeam: "Argentina", awayTeam: "England" }, { suggestedPrediction: { priceName: "part1" } });
+    const player = await runtime.join(roomId, "Ana", "legacy-terminal-admission");
+    const round = runtime.getRoom(roomId).currentRound;
+    await runtime.submitAnswer(roomId, round.id, player.participant.id, "no", "legacy-terminal-answer", round.version, player.sessionToken);
+    const metadata = await eventStore.getStreamMetadata(roomId);
+    await eventStore.append({
+      streamId: roomId,
+      expectedStreamVersion: metadata.version,
+      events: [{
+        type: "match.finished",
+        roomId,
+        idempotencyKey: `legacy-match-finished:${roomId}`,
+        payload: {
+          fixtureId: roomId,
+          reason: "legacy_txline_game_finalised",
+          event: { id: "legacy-full-time", matchId: roomId, type: "match_end", matchClockSec: 0, absoluteScore: { home: 3, away: 1 }, occurredAt: new Date().toISOString(), source: "txline-live", payload: {} },
+        },
+      }],
+    });
+
+    const restartedStore = await createFileEventStore({ dataDir });
+    const restarted = createRoomRuntime({ eventStore: restartedStore });
+    await restarted.rehydrateFromLedger();
+    const repaired = restarted.authenticatedSnapshot(roomId, player.participant.id, player.sessionToken);
+    assert.equal(repaired.match.status, "finished");
+    assert.equal(repaired.currentRound.state, "resolved");
+    assert.equal(repaired.lastResolution.winningOptionId, "no");
+    assert.equal(repaired.lastResolution.resolutionReason, "match_finished");
+    assert.equal(repaired.lastResolution.wasCurrentUserCorrect, true);
+    assert.equal((await restarted.verifyRoom(roomId)).projectionMatches, true);
+  } finally {
+    await rm(dataDir, { recursive: true, force: true });
+  }
+});

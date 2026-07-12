@@ -397,20 +397,18 @@ export function createRoomRuntime({ eventStore = null, commitmentPublisher = nul
       const room = rooms.get(roomId);
       const updatedMatch = matchForRoom(roomId);
       const updatedRounds = roundSeedsForMatch(updatedMatch);
+      const becameFinished = updatedMatch.status === "finished" && room.match.status !== "finished";
       room.match = {
         ...room.match,
         title: updatedMatch.title,
         competitionLabel: updatedMatch.competitionLabel,
-        status: updatedMatch.status,
+        status: becameFinished ? room.match.status : updatedMatch.status,
         startTime: updatedMatch.startTime,
         homeTeam: updatedMatch.homeTeam,
         awayTeam: updatedMatch.awayTeam,
       };
-      if (updatedMatch.status === "finished" && room.currentRound) {
-        room.currentRound = { ...room.currentRound, state: "expired" };
-      }
       room.roomLabel = `Sala VIRA · ${updatedMatch.title}`;
-      if (room.currentRound && updatedRounds[0] && room.currentRound.id === updatedRounds[0].id && room.currentRound.state !== "resolved") {
+      if (!becameFinished && room.currentRound && updatedRounds[0] && room.currentRound.id === updatedRounds[0].id && room.currentRound.state !== "resolved") {
         room.currentRound = {
           ...updatedRounds[0],
           resolution: room.currentRound.state === "open" ? updatedRounds[0].resolution : room.currentRound.resolution,
@@ -429,6 +427,20 @@ export function createRoomRuntime({ eventStore = null, commitmentPublisher = nul
       applySuggestedPrediction(room, context?.suggestedPrediction);
       emitRoomSnapshot(roomId);
       scheduleRoundLock(room);
+      if (becameFinished) {
+        const finalClock = Math.max(Number(room.match.matchClockSec) || 0, 90 * 60);
+        queueMicrotask(() => void applyNormalizedEvent(roomId, {
+          id: `catalog-match-end:${roomId}`,
+          matchId: roomId,
+          type: "match_end",
+          sequence: 0,
+          occurredAt: nowIso(),
+          matchClockSec: finalClock,
+          absoluteScore: { home: room.match.homeScore, away: room.match.awayScore },
+          payload: { Status: "finished", authority: "txline_catalog" },
+          source: "txline-snapshot",
+        }, { acquisitionOrigin: "txline_snapshot" }).catch(() => undefined));
+      }
     }
   }
 
@@ -853,6 +865,7 @@ export function createRoomRuntime({ eventStore = null, commitmentPublisher = nul
       const confirmed = condition.confirmedObservation;
       if (confirmed && Number(confirmed.matchClockSec) <= end) return { winningOptionId: "yes", reason: "condition_confirmed", expression: `${targetSide} shotsOnTarget ${confirmed.value} > ${openingValue} before ${end}`, actualValue: confirmed.value, expectedValue: openingValue };
       if (Number.isFinite(clock) && clock >= start && clock <= end && (confirmedShot || (Number.isFinite(currentValue) && currentValue > openingValue))) return { winningOptionId: "yes", reason: "condition_confirmed", expression: `${targetSide} shotsOnTarget ${currentValue} > ${openingValue} before ${end}`, actualValue: currentValue, expectedValue: openingValue };
+      if (event.type === "match_end") return { winningOptionId: Number.isFinite(currentValue) && currentValue > openingValue ? "yes" : "no", reason: "match_finished", expression: `${targetSide} shotsOnTarget ${currentValue} ${currentValue > openingValue ? ">" : "=="} ${openingValue} at full time`, actualValue: currentValue, expectedValue: openingValue };
       if (Number.isFinite(clock) && clock >= end && !condition.candidateObservation) return { winningOptionId: "no", reason: "window_expired", expression: `${targetSide} shotsOnTarget ${currentValue} == ${openingValue} at ${clock}`, actualValue: currentValue, expectedValue: openingValue };
       return { winningOptionId: null, reason: "condition_pending", expression: `${targetSide} shotsOnTarget ${currentValue} == ${openingValue}; tracking until ${end}`, actualValue: currentValue, expectedValue: openingValue };
     }
@@ -878,6 +891,15 @@ export function createRoomRuntime({ eventStore = null, commitmentPublisher = nul
         reason: "condition_confirmed",
         expression: `${targetSide}Score ${confirmed.targetScore} > openingScore ${openingScore} before ${end}`,
         actualValue: Number(confirmed.targetScore),
+        expectedValue: openingScore,
+      };
+    }
+    if (event.type === "match_end") {
+      return {
+        winningOptionId: currentScore > openingScore ? "yes" : "no",
+        reason: "match_finished",
+        expression: `${targetSide}Score ${currentScore} ${currentScore > openingScore ? ">" : "=="} openingScore ${openingScore} at full time`,
+        actualValue: currentScore,
         expectedValue: openingScore,
       };
     }
@@ -1330,7 +1352,7 @@ export function createRoomRuntime({ eventStore = null, commitmentPublisher = nul
       pointsAwarded: currentUserDelta,
       streakAfterResolve: 0,
       movementLabel: "ranking atualizado",
-      resolvedBy: footballEvaluation?.reason === "window_expired" || round.resolution.mode === "window_elapsed" ? "window" : "event",
+      resolvedBy: footballEvaluation?.reason === "match_finished" ? "match_state" : footballEvaluation?.reason === "window_expired" || round.resolution.mode === "window_elapsed" ? "window" : "event",
       resolutionDomain: round.resolution?.domain ?? "market",
       resolutionReason: footballEvaluation?.reason ?? null,
       condition: round.resolution?.condition ?? null,
@@ -1505,7 +1527,7 @@ export function createRoomRuntime({ eventStore = null, commitmentPublisher = nul
 
   function finishMatch(room, event) {
     room.match.status = "finished";
-    if (room.currentRound) {
+    if (room.currentRound && room.currentRound.state !== "resolved") {
       room.currentRound = {
         ...room.currentRound,
         state: "expired",
@@ -1810,6 +1832,7 @@ export function createRoomRuntime({ eventStore = null, commitmentPublisher = nul
   async function rehydrateFromLedger() {
     if (!eventStore) return { rooms: 0, events: 0 };
     const streamIds = new Set();
+    const terminalRepairs = [];
     let eventCount = 0;
     for await (const event of eventStore.readAll()) {
       streamIds.add(event.streamId);
@@ -1820,11 +1843,36 @@ export function createRoomRuntime({ eventStore = null, commitmentPublisher = nul
     for (const streamId of streamIds) {
       const room = await projectRoomFromLedger(streamId);
       scheduleRoundLock(room);
+      if (
+        room.match.status === "finished"
+        && room.currentRound?.resolution?.domain === "football"
+        && ["open", "locked", "expired"].includes(room.currentRound.state)
+        && room.lastResolution?.roundId !== room.currentRound.id
+      ) {
+        terminalRepairs.push({ roomId: String(streamId), roundId: room.currentRound.id });
+      }
       if (commitmentPublisher?.enabled) {
         for await (const event of eventStore.readStream(streamId)) {
           if (event.type === "round.resolved" && event.payload?.roundId) scheduleRoundCommitment(streamId, String(event.payload.roundId));
         }
       }
+    }
+    for (const repair of terminalRepairs) {
+      const room = getRoom(repair.roomId);
+      if (room.currentRound?.id !== repair.roundId) continue;
+      if (room.currentRound.state === "expired") room.currentRound = { ...room.currentRound, state: "open" };
+      const matchClockSec = Math.max(Number(room.match.matchClockSec) || 0, 90 * 60);
+      await applyNormalizedEvent(repair.roomId, {
+        id: `terminal-repair:${repair.roomId}:${repair.roundId}`,
+        matchId: repair.roomId,
+        type: "match_end",
+        sequence: 0,
+        occurredAt: nowIso(),
+        matchClockSec,
+        absoluteScore: { home: room.match.homeScore, away: room.match.awayScore },
+        payload: { Status: "finished", authority: "verified_ledger_repair" },
+        source: "verified-playback",
+      }, { acquisitionOrigin: "verified_playback" });
     }
     return { rooms: streamIds.size, events: eventCount };
   }
@@ -2054,7 +2102,9 @@ export function createRoomRuntime({ eventStore = null, commitmentPublisher = nul
       providerSequence,
       localSequence,
       sequence: localSequence,
-      matchClockSec: normalizedEvent.matchClockSec || getRoom(roomId).match.matchClockSec || 0,
+      matchClockSec: normalizedEvent.type === "match_end"
+        ? Math.max(Number(normalizedEvent.matchClockSec) || 0, Number(getRoom(roomId).match.matchClockSec) || 0, 90 * 60)
+        : normalizedEvent.matchClockSec || getRoom(roomId).match.matchClockSec || 0,
       source: normalizedEvent.source === "txline-live" && normalizedEvent.payload?.txlineEndpoint?.includes("/snapshot/")
         ? "txline-snapshot"
         : normalizedEvent.source,
@@ -2217,18 +2267,6 @@ export function createRoomRuntime({ eventStore = null, commitmentPublisher = nul
         causationId: receivedDomainEvent.eventId,
         correlationId,
       }),
-      ...(event.type === "match_end"
-        ? [domainEvent(room, "match.finished", {
-            fixtureId: room.roomId,
-            reason: "txline_game_finalised",
-            causedByEventId: event.id,
-            event,
-          }, {
-            idempotencyKey: `match-finished:${room.roomId}:${room.roomId}`,
-            causationId: receivedDomainEvent.eventId,
-            correlationId,
-          })]
-        : []),
     ]);
 
     room.appliedEventIds.add(event.id);
@@ -2240,7 +2278,6 @@ export function createRoomRuntime({ eventStore = null, commitmentPublisher = nul
     room.source = event.source;
     room.match.matchClockSec = event.matchClockSec || room.match.matchClockSec;
     if (room.match.status !== "finished" && (event.payload?.StatusId === 2 || event.payload?.Clock?.Running === true)) room.match.status = "live";
-    if (event.type === "match_end") finishMatch(room, event);
     if (room.match.status !== "finished") {
       reanchorOpenRoundFromLiveOdds(room, event);
       updateMarketDistribution(room, event);
@@ -2264,12 +2301,12 @@ export function createRoomRuntime({ eventStore = null, commitmentPublisher = nul
     const currentRuleEvaluation = ruleEvaluationFor(room.currentRound, evaluationEvent);
     if (room.currentRound?.state === "open") {
       const deadlineElapsed = room.currentRound.locksAt && Date.now() >= Date.parse(room.currentRound.locksAt);
-      if (deadlineElapsed) {
-        await lockCurrentRound(room, "deadline_elapsed", { causationId: event.id, correlationId });
+      if (deadlineElapsed || event.type === "match_end") {
+        await lockCurrentRound(room, event.type === "match_end" ? "match_finished" : "deadline_elapsed", { causationId: event.id, correlationId });
       }
     }
     const resolution = resolveCurrentRound(room, evaluationEvent);
-    const directedRound = resolution ? null : maybeOpenDirectedFootballRound(room, evaluationEvent);
+    const directedRound = resolution || event.type === "match_end" ? null : maybeOpenDirectedFootballRound(room, evaluationEvent);
     if (resolution) {
       await appendDomainEvents(room, [
         ...(resolution.resolutionDomain === "football" && resolution.resolutionReason === "window_expired"
@@ -2324,6 +2361,19 @@ export function createRoomRuntime({ eventStore = null, commitmentPublisher = nul
           : []),
       ]);
       scheduleRoundCommitment(room.roomId, resolution.roundId);
+    }
+    if (event.type === "match_end") {
+      finishMatch(room, evaluationEvent);
+      await appendDomainEvents(room, [domainEvent(room, "match.finished", {
+        fixtureId: room.roomId,
+        reason: "txline_game_finalised",
+        causedByEventId: event.id,
+        event: evaluationEvent,
+      }, {
+        idempotencyKey: `match-finished:${room.roomId}:${room.roomId}`,
+        causationId: event.id,
+        correlationId,
+      })]);
     }
     if (directedRound) {
       await appendDomainEvents(room, [domainEvent(room, "round.opened", {

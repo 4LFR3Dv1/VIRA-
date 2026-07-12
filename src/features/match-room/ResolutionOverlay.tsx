@@ -37,7 +37,7 @@ export function ResolutionOverlay({ result, presentationEvent, open, onClose, sh
   const scoreOpening = result.condition?.kind === "team_scores" ? result.condition.openingObservation : null;
   const footballActs = [
     <Act key="observation" eyebrow="Observacao oficial TxLINE"><Big>{shotOnTarget ? <>{openingStat}<span className="text-primary"> → </span>{finalStat}</> : <>{scoreOpening?.homeScore ?? 0}-{scoreOpening?.awayScore ?? 0}<span className="text-primary"> → </span>{finalScore?.home ?? 0}-{finalScore?.away ?? 0}</>}</Big><p className="mt-7 text-white/45">{shotOnTarget ? "Finalizacoes no alvo confirmadas para a equipe." : `Placar consolidado no minuto ${Math.floor((result.event?.matchClockSec ?? 0) / 60)}.`}</p></Act>,
-    <Act key="rule" eyebrow="Condicao avaliada"><Big>{result.resolutionReason === "window_expired" ? "Janela encerrada" : shotOnTarget ? "Chute confirmado" : "Gol confirmado"}</Big><p className="mt-7 text-white/45">Opcao vencedora: <strong className="uppercase text-white">{result.winningOptionId === "yes" ? "Sim" : "Nao"}</strong></p></Act>,
+    <Act key="rule" eyebrow="Condicao avaliada"><Big>{result.resolutionReason === "window_expired" ? "Janela encerrada" : result.resolutionReason === "match_finished" ? "Partida encerrada" : shotOnTarget ? "Chute confirmado" : "Gol confirmado"}</Big><p className="mt-7 text-white/45">Opcao vencedora: <strong className="uppercase text-white">{result.winningOptionId === "yes" ? "Sim" : "Nao"}</strong></p></Act>,
   ];
   const marketActs = [
     <Act key="signal" eyebrow="Novo sinal TxLINE"><Big><Pct value={opening} /><span className="text-primary"> → </span><Pct value={current} /></Big><p className="mt-7 text-white/45">A probabilidade recebeu uma nova observacao.</p></Act>,
