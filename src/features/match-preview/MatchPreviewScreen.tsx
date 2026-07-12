@@ -10,7 +10,7 @@ import {
   Zap,
 } from "lucide-react";
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
-import { Link, useNavigate, useParams } from "react-router";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router";
 
 import type { MatchSummary, MatchTxlineContext, TxlineAvailableMarket } from "../../runtime/api";
 import { fetchMatches, fetchMatchTxlineContext } from "../../runtime/api";
@@ -20,6 +20,7 @@ import { AppShell } from "../../shared/shell/AppShell";
 import { TeamIcon } from "../../shared/team/team-icons";
 import { JoinRoomDialog } from "../lobby/JoinRoomDialog";
 import { deriveCanonicalExperienceState, experienceCopy, formatMarketCount, formatObservedUpdateCount } from "../match-experience/state-model";
+import { PredictionSharePanel } from "../../social/PredictionSharePanel";
 
 type ContextState = "idle" | "loading" | "ready" | "empty" | "error";
 const CONTEXT_CACHE_TTL_MS = 60_000;
@@ -120,6 +121,7 @@ function Principle({ number, icon, title, children }: { number: string; icon: Re
 export function MatchPreviewScreen() {
   const { matchId = "" } = useParams();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [matches, setMatches] = useState<MatchSummary[]>([]);
   const [loadState, setLoadState] = useState<"loading" | "ready" | "error">("loading");
   const [contextState, setContextState] = useState<ContextState>("idle");
@@ -200,6 +202,8 @@ export function MatchPreviewScreen() {
     window.localStorage.setItem("vira:displayName", safeName);
     window.localStorage.setItem(`vira:${match.fixtureId}:displayName`, safeName);
     const params = new URLSearchParams();
+    const inviteCode = searchParams.get("invite");
+    if (inviteCode) params.set("invite", inviteCode);
     if (inspectOnJoin) params.set("inspect", "true");
     if (choiceOnJoin) params.set("choice", choiceOnJoin);
     navigate(`/match/${match.fixtureId}${params.size ? `?${params.toString()}` : ""}`);
@@ -295,6 +299,8 @@ export function MatchPreviewScreen() {
             <button type="button" onClick={() => openRoom(true)} className="mt-3 flex w-full items-center justify-center gap-2 py-3 text-xs font-bold uppercase text-white/45 hover:text-white"><Eye className="size-4" /> Ver revisao oficial</button>
           </aside>
         </section>
+
+        <PredictionSharePanel fixture={match} displayName={playerName} onChangeDisplayName={setPlayerName} />
 
         <section className="border-y border-white/15 bg-[#0a0e1a]">
           <div className="mx-auto max-w-[1440px] px-5 py-12 sm:px-8 lg:px-14">

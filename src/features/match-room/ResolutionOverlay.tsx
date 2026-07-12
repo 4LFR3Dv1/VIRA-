@@ -5,13 +5,13 @@ import { useEffect, useState } from "react";
 import type { PresentationEvent, RoundResolutionResult } from "../../domain/types";
 import { AnimatedNumber } from "../../shared/number/AnimatedNumber";
 
-interface Props { result: RoundResolutionResult | null; presentationEvent?: PresentationEvent | null; open: boolean; onClose: () => void }
+interface Props { result: RoundResolutionResult | null; presentationEvent?: PresentationEvent | null; open: boolean; onClose: () => void; shareAction?: React.ReactNode }
 
 function Pct({ value }: { value: number | null | undefined }) {
   return typeof value === "number" ? <AnimatedNumber value={value} suffix="%" format={{ minimumFractionDigits: 1, maximumFractionDigits: 1 }} /> : <>--</>;
 }
 
-export function ResolutionOverlay({ result, presentationEvent, open, onClose }: Props) {
+export function ResolutionOverlay({ result, presentationEvent, open, onClose, shareAction }: Props) {
   const [act, setAct] = useState(0);
   const reduceMotion = useReducedMotion();
   const event = presentationEvent?.kind === "round_resolved" ? presentationEvent : null;
@@ -46,7 +46,7 @@ export function ResolutionOverlay({ result, presentationEvent, open, onClose }: 
   return <motion.div role="dialog" aria-modal="true" className="fixed inset-0 z-50 grid place-items-center overflow-hidden bg-[#050814] px-5" initial={{ clipPath: "inset(100% 0 0 0)" }} animate={{ clipPath: "inset(0% 0 0 0)" }} transition={{ duration: reduceMotion ? 0 : .5, ease: [.76, 0, .24, 1] }}>
     <div aria-hidden className="absolute inset-0 opacity-25 [background-image:linear-gradient(rgba(255,255,255,.05)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,.04)_1px,transparent_1px)] [background-size:100%_90px,140px_100%]" />
     <AnimatePresence mode="wait">{acts[act]}</AnimatePresence>
-    {act === 3 ? <button onClick={onClose} className="absolute bottom-8 right-8 inline-flex min-h-12 items-center gap-2 border border-white/20 px-5 font-['Chakra_Petch'] text-xs font-black uppercase hover:border-primary hover:text-primary"><X className="size-4" /> Voltar a sala</button> : null}
+    {act === 3 ? <div className="absolute bottom-8 right-8 flex flex-wrap justify-end gap-3">{shareAction}<button onClick={onClose} className="inline-flex min-h-12 items-center gap-2 border border-white/20 px-5 font-['Chakra_Petch'] text-xs font-black uppercase hover:border-primary hover:text-primary"><X className="size-4" /> Voltar a sala</button></div> : null}
     <div className="absolute bottom-8 left-8 flex gap-2">{acts.map((_, index) => <span key={index} className={`h-1 w-8 ${index <= act ? "bg-primary" : "bg-white/15"}`} />)}</div>
   </motion.div>;
 }

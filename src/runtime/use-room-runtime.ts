@@ -14,6 +14,7 @@ import {
   submitRoomAnswer,
   validateRoomSession,
 } from "./api";
+import { getPublicToken } from "../social/share";
 import type { TxlineStreamStatus } from "./api";
 
 interface RoomRuntimeControls {
@@ -129,6 +130,7 @@ export function useRoomRuntime(roomId: string, displayName?: string | null) {
     window.sessionStorage.setItem(key, created);
     return created;
   });
+  const [inviteCode] = useState(() => new URLSearchParams(window.location.search).get("invite"));
   const [selectedOptionId, setSelectedOptionId] = useState<string | null>(null);
   const [state, setState] = useState<ReplayState>(() => createInitialReplayState(roomId));
   const latestStateRef = useRef(state);
@@ -184,7 +186,7 @@ export function useRoomRuntime(roomId: string, displayName?: string | null) {
           }
         }
         if (!activeParticipantId) {
-          const joined = await joinRoom(roomId, effectiveDisplayName, admissionToken);
+          const joined = await joinRoom(roomId, effectiveDisplayName, admissionToken, getPublicToken(), inviteCode);
           activeParticipantId = joined.participant.id;
           window.sessionStorage.setItem(`vira:${roomId}:participantId`, activeParticipantId);
           window.sessionStorage.setItem(`vira:${roomId}:sessionToken`, joined.sessionToken);
@@ -197,7 +199,7 @@ export function useRoomRuntime(roomId: string, displayName?: string | null) {
         if (activeParticipantId && !snapshot.participants.some((participant) => participant.id === activeParticipantId)) {
           window.sessionStorage.removeItem(`vira:${roomId}:participantId`);
           window.sessionStorage.removeItem(`vira:${roomId}:sessionToken`);
-          const joined = await joinRoom(roomId, effectiveDisplayName, admissionToken);
+          const joined = await joinRoom(roomId, effectiveDisplayName, admissionToken, getPublicToken(), inviteCode);
           activeParticipantId = joined.participant.id;
           window.sessionStorage.setItem(`vira:${roomId}:participantId`, activeParticipantId);
           window.sessionStorage.setItem(`vira:${roomId}:sessionToken`, joined.sessionToken);
@@ -226,7 +228,7 @@ export function useRoomRuntime(roomId: string, displayName?: string | null) {
     return () => {
       cancelled = true;
     };
-  }, [admissionToken, effectiveDisplayName, participantId, roomId, sessionToken]);
+  }, [admissionToken, effectiveDisplayName, inviteCode, participantId, roomId, sessionToken]);
 
   useEffect(() => {
     const events = new EventSource(roomEventsUrl(roomId, participantId));
@@ -368,5 +370,5 @@ export function useRoomRuntime(roomId: string, displayName?: string | null) {
     setState((current) => stateFromSnapshot(current, snapshot, participantId));
   }, [participantId, roomId, sessionToken]);
 
-  return { state, controls, refresh, participantId, presentationEvents, acknowledgePresentationEvent, txlineFetchState, txlineStreamStatus };
+  return { state, controls, refresh, participantId, sessionToken, presentationEvents, acknowledgePresentationEvent, txlineFetchState, txlineStreamStatus };
 }

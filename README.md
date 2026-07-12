@@ -28,6 +28,10 @@ TxLINE is not decorative data in this loop. It supplies the fixture, market base
 
 ## Architecture
 
+### Social acquisition loop
+
+Room invitations, resolved-result memories, pre-match 1X2 predictions and implicit Mini Leagues share one server-derived `ShareCard` pipeline. Public links use `/s/:code`, preserve attribution through admission, and never expose room session tokens or individual pre-lock answers. See [Social Share Layer](docs/SOCIAL_SHARE_LAYER.md).
+
 ```text
 TxLINE snapshots and live streams
              |

@@ -23,6 +23,9 @@ import { deriveRoomExperience } from "./derive-room-experience";
 import { createExperienceModel } from "./experience-model";
 import { TournamentLifecycleRail } from "./TournamentLifecycleRail";
 import { createConfirmedRoomPresence, publishConfirmedRoomPresence } from "../../app/shell/room-presence";
+import { createRoomShare } from "../../social/share";
+import { ViraShareButton } from "../../social/ViraShareButton";
+import { MiniLeaguePanel } from "../../social/MiniLeaguePanel";
 
 export function MatchRoomScreen() {
   const { matchId = DEFAULT_MATCH_ID } = useParams();
@@ -34,7 +37,7 @@ export function MatchRoomScreen() {
     || "";
   const [playerName, setPlayerName] = useState(initialName);
   const [joinDialogOpen, setJoinDialogOpen] = useState(!initialName);
-  const { state, controls, participantId, presentationEvents, acknowledgePresentationEvent, txlineFetchState, txlineStreamStatus } = useRoomRuntime(matchId, playerName);
+  const { state, controls, participantId, sessionToken, presentationEvents, acknowledgePresentationEvent, txlineFetchState, txlineStreamStatus } = useRoomRuntime(matchId, playerName);
   const [resolutionOpen, setResolutionOpen] = useState(false);
   const [latestPresentationEvent, setLatestPresentationEvent] = useState<PresentationEvent | null>(null);
   const [verification, setVerification] = useState<RoomVerification | null>(null);
@@ -57,6 +60,7 @@ export function MatchRoomScreen() {
   const experience = deriveRoomExperience(state);
   const competitiveStage = experience === "round_open" || experience === "answer_locked" || experience === "resolving" || experience === "finished";
   const previewChoice = searchParams.get("choice");
+  const inviteCode = searchParams.get("invite");
   const answerSummary = useMemo(() => {
     if (!currentRound) {
       return {};
@@ -137,6 +141,7 @@ export function MatchRoomScreen() {
       <MatchHeader state={state} onBack={() => navigate("/")} />
       <TournamentLifecycleRail model={experienceModel} />
       <main className="mx-auto w-full max-w-[1440px] px-4 pb-24 pt-5 md:px-7 lg:px-10 lg:pb-12">
+        {participantId && sessionToken ? <div className="flex justify-end"><ViraShareButton label="Convidar para a sala" create={() => createRoomShare({ kind: "room", roomId: matchId, participantId, sessionToken, displayName: state.snapshot.currentParticipant?.displayName ?? playerName })} /></div> : null}
         {competitiveStage ? <LiveDecisionCapsule state={state} latestPresentationEvent={latestPresentationEvent} /> : null}
 
         <section className={`mt-5 grid gap-5 lg:items-start ${competitiveStage ? "lg:grid-cols-[minmax(0,1fr)_19rem] xl:grid-cols-[minmax(0,1fr)_22rem]" : "grid-cols-1"}`}>
@@ -153,6 +158,7 @@ export function MatchRoomScreen() {
 
           {competitiveStage ? <aside id="match-ranking" className="scroll-mt-24 lg:sticky lg:top-[7.5rem]"><Leaderboard entries={state.snapshot.leaderboard} /></aside> : null}
         </section>
+        <MiniLeaguePanel inviteCode={inviteCode} />
 
         {competitiveStage ? <CausalityRail state={state} latestPresentationEvent={latestPresentationEvent} verification={verification} /> : null}
         <MatchJourney journey={experienceModel.journey} />
@@ -172,6 +178,7 @@ export function MatchRoomScreen() {
         result={state.lastResolution}
         presentationEvent={latestPresentationEvent}
         onClose={() => setResolutionOpen(false)}
+        shareAction={participantId && sessionToken ? <ViraShareButton label="Compartilhar resultado" create={() => createRoomShare({ kind: "result", roomId: matchId, participantId, sessionToken, displayName: state.snapshot.currentParticipant?.displayName ?? playerName })} /> : null}
       />
 
       <InspectorPanel

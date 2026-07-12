@@ -8,6 +8,7 @@ import { loadLocalEnv } from "./env.mjs";
 import { createFileEventStore } from "./event-store.mjs";
 import { createRoomRuntime } from "./runtime.mjs";
 import { createSolanaCommitmentPublisherFromEnv } from "./solana-commitment-publisher.mjs";
+import { createShareStore } from "./share-store.mjs";
 import { txlineCapabilities } from "./txline-endpoints.mjs";
 import { buildTxlineContext } from "./txline-context.mjs";
 import { discoverTxlineFixtures } from "./txline-discovery.mjs";
@@ -30,6 +31,7 @@ import { createTxlineCatalogCache } from "./txline-catalog-cache.mjs";
 loadLocalEnv();
 
 const eventStore = await createFileEventStore();
+const shareStore = await createShareStore();
 const commitmentPublisher = createSolanaCommitmentPublisherFromEnv();
 const runtime = createRoomRuntime({ eventStore, commitmentPublisher });
 const runtimeBoot = {
@@ -75,10 +77,49 @@ function sendJson(response, status, body) {
   response.writeHead(status, {
     "Content-Type": "application/json",
     "Access-Control-Allow-Origin": response.viraCorsOrigin || "http://localhost:5173",
-    "Access-Control-Allow-Headers": "Content-Type, Authorization, Last-Event-ID",
+    "Access-Control-Allow-Headers": "Content-Type, Authorization, Last-Event-ID, X-Vira-Public-Token",
     "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
   });
   response.end(JSON.stringify(body));
+}
+
+function sendHtml(response, status, body, cacheControl = "no-cache") {
+  response.writeHead(status, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": cacheControl });
+  response.end(body);
+}
+
+function sendSvg(response, body) {
+  response.writeHead(200, { "Content-Type": "image/svg+xml; charset=utf-8", "Cache-Control": "public, max-age=300, stale-while-revalidate=86400" });
+  response.end(body);
+}
+
+function escapeHtml(value) {
+  return String(value ?? "").replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character]);
+}
+
+function publicToken(request, body = {}) {
+  return String(request.headers["x-vira-public-token"] ?? body.publicToken ?? "");
+}
+
+function publicBaseUrl(request) {
+  const protocol = String(request.headers["x-forwarded-proto"] || "https").split(",")[0];
+  return `${protocol}://${request.headers.host}`;
+}
+
+function sharePageHtml(share, request) {
+  const base = publicBaseUrl(request);
+  const title = escapeHtml(share.metadata.title);
+  const description = escapeHtml(share.metadata.description);
+  const image = `${base}/vira-icon.png`;
+  const url = `${base}/s/${encodeURIComponent(share.publicCode)}`;
+  const destination = `${share.destination.path}${share.destination.path.includes("?") ? "&" : "?"}invite=${encodeURIComponent(share.publicCode)}`;
+  return `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${title}</title><meta name="description" content="${description}"><meta property="og:type" content="website"><meta property="og:site_name" content="VIRA"><meta property="og:title" content="${title}"><meta property="og:description" content="${description}"><meta property="og:image" content="${image}"><meta property="og:image:type" content="image/png"><meta property="og:url" content="${url}"><meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="${title}"><meta name="twitter:description" content="${description}"><meta name="twitter:image" content="${image}"><meta name="theme-color" content="#050814"><link rel="icon" href="/favicon.png"></head><body style="margin:0;background:#050814;color:#f7f8f4;font-family:Arial,sans-serif"><main style="min-height:100vh;display:grid;place-items:center;padding:24px;box-sizing:border-box"><section style="width:min(760px,100%);border-block:1px solid #ffffff26;padding:48px 0"><p style="color:#c7ff18;font:700 11px monospace;letter-spacing:.16em;text-transform:uppercase">VIRA · ${escapeHtml(share.kind)}</p><h1 style="font-size:clamp(42px,9vw,92px);line-height:.88;text-transform:uppercase;margin:24px 0">${title}</h1><p style="max-width:600px;color:#ffffff99;font-size:18px;line-height:1.6">${description}</p><a href="${escapeHtml(destination)}" data-share-cta style="display:inline-block;margin-top:32px;background:#c7ff18;color:#050814;padding:18px 26px;font-weight:900;text-transform:uppercase;text-decoration:none">${escapeHtml(share.destination.ctaLabel)} →</a></section></main><script>document.querySelector('[data-share-cta]').addEventListener('click',()=>{navigator.sendBeacon('/shares/${encodeURIComponent(share.publicCode)}/click')})</script></body></html>`;
+}
+
+function shareImageSvg(share) {
+  const title = escapeHtml(share.metadata.title).slice(0, 72);
+  const description = escapeHtml(share.metadata.description).slice(0, 110);
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630"><rect width="1200" height="630" fill="#050814"/><rect x="0" y="0" width="18" height="630" fill="#c7ff18"/><path d="M760 0H1200V630H620Z" fill="#101a24"/><text x="72" y="86" fill="#c7ff18" font-family="Arial" font-size="24" font-weight="700" letter-spacing="4">VIRA · ${escapeHtml(share.kind).toUpperCase()}</text><text x="72" y="190" fill="#f7f8f4" font-family="Arial" font-size="62" font-weight="900">${title}</text><foreignObject x="72" y="235" width="900" height="190"><div xmlns="http://www.w3.org/1999/xhtml" style="color:#f7f8f4;font:900 62px/1 Arial;text-transform:uppercase">${title}</div></foreignObject><foreignObject x="72" y="455" width="780" height="90"><div xmlns="http://www.w3.org/1999/xhtml" style="color:#ffffff99;font:24px/1.35 Arial">${description}</div></foreignObject><text x="72" y="585" fill="#c7ff18" font-family="Arial" font-size="22" font-weight="700">JOGUE O PRÓXIMO MOMENTO</text></svg>`;
 }
 
 function safeTokenEqual(received, expected) {
@@ -458,6 +499,129 @@ async function handleRequest(request, response) {
       return;
     }
 
+    if (request.method === "POST" && url.pathname === "/public/identity") {
+      const body = await readJson(request);
+      sendJson(response, 200, await shareStore.ensureIdentity(publicToken(request, body), body.displayName));
+      return;
+    }
+
+    if (request.method === "POST" && url.pathname === "/shares") {
+      ensureReady();
+      const body = await readJson(request);
+      const token = publicToken(request, body);
+      const identity = await shareStore.ensureIdentity(token, body.displayName);
+      if (body.kind === "room" || body.kind === "result") {
+        const validation = runtime.validateSession(String(body.roomId), body.participantId, body.sessionToken ?? request.headers.authorization?.replace(/^Bearer\s+/i, ""));
+        if (!validation.valid) throw Object.assign(new Error("share_session_required"), { status: 401 });
+        const snapshot = runtime.authenticatedSnapshot(String(body.roomId), body.participantId, body.sessionToken ?? request.headers.authorization?.replace(/^Bearer\s+/i, ""));
+        const participant = validation.participant;
+        await shareStore.linkParticipant({ publicToken: token, displayName: participant.displayName, roomId: String(body.roomId), participantId: body.participantId, inviteCode: null });
+        if (body.kind === "room") {
+          const share = await shareStore.createShare({
+            kind: "room", createdByPublicId: identity.publicId, expiresAt: snapshot.match.status === "finished" ? null : new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+            metadata: { title: `${participant.displayName} está em ${snapshot.match.homeTeam.name} x ${snapshot.match.awayTeam.name}`, description: `${snapshot.match.status === "live" ? "Partida ao vivo" : "Sala aberta"} · ${snapshot.roomPopulation} na sala. Entre para jogar junto.`, imagePath: "dynamic" },
+            destination: { path: `/match/${encodeURIComponent(snapshot.match.id)}`, ctaLabel: snapshot.match.status === "finished" ? "Ver resultado do grupo" : "Entrar na sala" },
+            attribution: { source: "room", campaign: "room_invite" },
+            payload: { fixtureId: snapshot.match.id, roomId: snapshot.roomId, homeTeam: snapshot.match.homeTeam.name, awayTeam: snapshot.match.awayTeam.name, fixtureStatus: snapshot.match.status, participantCount: snapshot.roomPopulation },
+          });
+          sendJson(response, 201, { share, url: `${publicBaseUrl(request)}/s/${share.publicCode}` });
+          return;
+        }
+        const result = snapshot.lastResolution;
+        if (!result) throw Object.assign(new Error("resolved_result_required"), { status: 409 });
+        const correct = result.wasCurrentUserCorrect;
+        const share = await shareStore.createShare({
+          kind: "result", createdByPublicId: identity.publicId,
+          metadata: { title: `${participant.displayName} ${correct ? "acertou" : "jogou"} no VIRA`, description: `${result.winningOptionId === "yes" ? "SIM" : "NÃO"} venceu · ${result.pointsAwarded > 0 ? `+${result.pointsAwarded} pontos` : "resultado registrado"}.`, imagePath: "dynamic" },
+          destination: { path: `/match/${encodeURIComponent(snapshot.match.id)}`, ctaLabel: snapshot.match.status === "finished" ? "Ver partida" : "Jogar a próxima" },
+          attribution: { source: "result", campaign: "round_result" },
+          payload: { fixtureId: snapshot.match.id, roomId: snapshot.roomId, roundId: result.roundId, correct, points: result.pointsAwarded, rank: snapshot.leaderboard.find((entry) => entry.participantId === body.participantId)?.rank ?? null, winningOptionId: result.winningOptionId, verified: Boolean(snapshot.ledger?.headHash) },
+        });
+        sendJson(response, 201, { share, url: `${publicBaseUrl(request)}/s/${share.publicCode}` });
+        return;
+      }
+      throw Object.assign(new Error("unsupported_share_kind"), { status: 400 });
+    }
+
+    if (request.method === "POST" && url.pathname === "/predictions") {
+      ensureReady();
+      const body = await readJson(request);
+      const catalog = await txlineCatalogCache.get();
+      const fixture = catalog.matches.find((item) => String(item.fixtureId) === String(body.fixtureId));
+      if (!fixture) throw Object.assign(new Error("fixture_not_found"), { status: 404 });
+      const token = publicToken(request, body);
+      const prediction = await shareStore.createPrediction({ publicToken: token, displayName: body.displayName, fixture, choice: body.choice });
+      const identity = shareStore.identity(token, body.displayName);
+      const choiceLabel = body.choice === "home" ? fixture.homeTeam : body.choice === "away" ? fixture.awayTeam : "Empate";
+      const share = await shareStore.createShare({
+        kind: "prediction", createdByPublicId: identity.publicId, expiresAt: fixture.startTime,
+        metadata: { title: `${prediction.displayName} escolheu ${choiceLabel}`, description: `${fixture.homeTeam} x ${fixture.awayTeam}. Faça o seu palpite antes do jogo.`, imagePath: "dynamic" },
+        destination: { path: `/match/${encodeURIComponent(fixture.fixtureId)}/preview`, ctaLabel: "Fazer meu palpite" },
+        attribution: { source: "prediction", campaign: "pre_match_1x2" },
+        payload: { fixtureId: fixture.fixtureId, predictionId: prediction.id, choice: body.choice, choiceLabel, homeTeam: fixture.homeTeam, awayTeam: fixture.awayTeam, kickoffAt: fixture.startTime },
+      });
+      sendJson(response, 201, { prediction, share, url: `${publicBaseUrl(request)}/s/${share.publicCode}` });
+      return;
+    }
+
+    const myPredictionRoute = url.pathname.match(/^\/predictions\/([^/]+)\/me$/);
+    if (request.method === "GET" && myPredictionRoute) {
+      const fixtureId = decodeURIComponent(myPredictionRoute[1]);
+      const token = publicToken(request);
+      const identity = shareStore.identity(token);
+      const catalog = await txlineCatalogCache.get();
+      const fixture = catalog.matches.find((item) => String(item.fixtureId) === String(fixtureId));
+      if (!fixture) throw Object.assign(new Error("fixture_not_found"), { status: 404 });
+      const snapshot = runtime.snapshot(fixtureId, null);
+      if (fixture.status === "finished" || snapshot.match.status === "finished") {
+        await shareStore.resolvePredictionsForFixture(fixtureId, { homeScore: snapshot.match.homeScore, awayScore: snapshot.match.awayScore });
+      }
+      sendJson(response, 200, { prediction: shareStore.prediction(fixtureId, identity.publicId), fixture: { status: fixture.status, homeTeam: fixture.homeTeam, awayTeam: fixture.awayTeam } });
+      return;
+    }
+
+    const shareJsonRoute = url.pathname.match(/^\/shares\/([^/]+)$/);
+    if (request.method === "GET" && shareJsonRoute) {
+      const share = shareStore.getShare(decodeURIComponent(shareJsonRoute[1]));
+      if (!share) throw Object.assign(new Error("share_not_found"), { status: 404 });
+      sendJson(response, 200, share);
+      return;
+    }
+
+    const shareClickRoute = url.pathname.match(/^\/shares\/([^/]+)\/click$/);
+    if (request.method === "POST" && shareClickRoute) {
+      sendJson(response, 202, await shareStore.track("share_cta_clicked", decodeURIComponent(shareClickRoute[1])));
+      return;
+    }
+
+    const sharePageRoute = url.pathname.match(/^\/s\/([^/]+)$/);
+    if (request.method === "GET" && sharePageRoute) {
+      const publicCode = decodeURIComponent(sharePageRoute[1]);
+      const share = shareStore.getShare(publicCode);
+      if (!share) { sendHtml(response, 404, "<!doctype html><title>Convite indisponível | VIRA</title><body style='background:#050814;color:white;font-family:Arial;padding:40px'><h1>Convite indisponível</h1><a href='/' style='color:#c7ff18'>Abrir VIRA</a></body>"); return; }
+      await shareStore.track("share_opened", publicCode, { userAgent: String(request.headers["user-agent"] ?? "").slice(0, 160) });
+      sendHtml(response, 200, sharePageHtml(share, request), "public, max-age=30, stale-while-revalidate=300");
+      return;
+    }
+
+    const shareImageRoute = url.pathname.match(/^\/share-images\/([^/.]+)\.svg$/);
+    if (request.method === "GET" && shareImageRoute) {
+      const share = shareStore.getShare(decodeURIComponent(shareImageRoute[1]));
+      if (!share) throw Object.assign(new Error("share_not_found"), { status: 404 });
+      sendSvg(response, shareImageSvg(share));
+      return;
+    }
+
+    const leagueRoute = url.pathname.match(/^\/mini-leagues\/([^/]+)$/);
+    if (request.method === "GET" && leagueRoute) {
+      const leagueId = decodeURIComponent(leagueRoute[1]);
+      const leagueSeed = shareStore.state.leagues[leagueId];
+      if (!leagueSeed) throw Object.assign(new Error("mini_league_not_found"), { status: 404 });
+      const snapshot = runtime.snapshot(leagueSeed.roomId, null);
+      sendJson(response, 200, shareStore.league(leagueId, snapshot));
+      return;
+    }
+
     if (request.method === "GET" && url.pathname === "/txline/fixtures") {
       sendJson(response, 200, await fetchFixturesSnapshot(txlineConfig));
       return;
@@ -622,7 +786,9 @@ async function handleRequest(request, response) {
 
       if (request.method === "POST" && rest === "join") {
         const body = await readJson(request);
-        sendJson(response, 200, await runtime.join(roomId, body.displayName, body.admissionToken));
+        const joined = await runtime.join(roomId, body.displayName, body.admissionToken);
+        if (body.publicToken) await shareStore.linkParticipant({ publicToken: body.publicToken, displayName: joined.participant.displayName, roomId, participantId: joined.participant.id, inviteCode: body.inviteCode });
+        sendJson(response, 200, joined);
         return;
       }
 
