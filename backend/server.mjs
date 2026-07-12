@@ -30,7 +30,7 @@ import {
 } from "./txline-client.mjs";
 import { createTxlineStreamManager } from "./txline-stream.mjs";
 import { createTxlineCatalogCache } from "./txline-catalog-cache.mjs";
-import { ensureVerifiedPlayback } from "./verified-playback-seed.mjs";
+import { ensureVerifiedPlayback, verifiedPlaybackIds } from "./verified-playback-seed.mjs";
 
 loadLocalEnv();
 
@@ -539,11 +539,17 @@ async function handleRequest(request, response) {
       const requestedRoomId = url.searchParams.get("roomId");
       const candidates = runtime.publicRoomSummaries().filter((room) => room.lastResolution?.roundId && (!requestedRoomId || room.roomId === requestedRoomId));
       const selected = candidates.sort((left, right) => Number(right.match.status === "finished") - Number(left.match.status === "finished"))[0] ?? null;
-      if (!selected) {
+      const fallbackAllowed = !requestedRoomId || requestedRoomId === verifiedPlaybackIds.roomId;
+      const fallbackRoom = fallbackAllowed
+        ? runtime.publicRoomSummaries().find((room) => room.roomId === verifiedPlaybackIds.roomId) ?? null
+        : null;
+      const playbackRoom = selected ?? fallbackRoom;
+      const roundId = selected?.lastResolution?.roundId ?? (fallbackRoom ? verifiedPlaybackIds.roundId : null);
+      if (!playbackRoom || !roundId) {
         sendJson(response, 200, { available: false, reason: "verified_round_not_available", destination: "/matches" });
         return;
       }
-      sendJson(response, 200, { available: true, room: selected, verification: await runtime.verifyRoom(selected.roomId), replay: await runtime.verifiedRoundReplay(selected.roomId, selected.lastResolution.roundId) });
+      sendJson(response, 200, { available: true, room: playbackRoom, verification: await runtime.verifyRoom(playbackRoom.roomId), replay: await runtime.verifiedRoundReplay(playbackRoom.roomId, roundId) });
       return;
     }
 
