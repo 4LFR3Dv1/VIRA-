@@ -138,6 +138,7 @@ export function useRoomRuntime(roomId: string, displayName?: string | null) {
   const [state, setState] = useState<ReplayState>(() => createInitialReplayState(roomId));
   const latestStateRef = useRef(state);
   const [presentationEvents, setPresentationEvents] = useState<PresentationEvent[]>([]);
+  const [matchMomentEvents, setMatchMomentEvents] = useState<NormalizedMatchEvent[]>([]);
   const [txlineFetchState, setTxlineFetchState] = useState<"idle" | "loading" | "accepted" | "error">("idle");
   const [txlineStreamStatus, setTxlineStreamStatus] = useState<TxlineStreamStatus | null>(null);
 
@@ -268,6 +269,12 @@ export function useRoomRuntime(roomId: string, displayName?: string | null) {
         });
       });
     });
+    events.addEventListener("match.event_received", (event) => {
+      const normalized = JSON.parse((event as MessageEvent).data) as NormalizedMatchEvent;
+      setMatchMomentEvents((current) => current.some((item) => item.id === normalized.id)
+        ? current
+        : [...current, normalized].slice(-32));
+    });
     const refreshStreamStatus = () => {
       void fetchTxlineStreamStatus(roomId).then(setTxlineStreamStatus).catch(() => undefined);
     };
@@ -373,5 +380,5 @@ export function useRoomRuntime(roomId: string, displayName?: string | null) {
     setState((current) => stateFromSnapshot(current, snapshot, participantId));
   }, [participantId, roomId, sessionToken]);
 
-  return { state, controls, refresh, participantId, sessionToken, presentationEvents, acknowledgePresentationEvent, txlineFetchState, txlineStreamStatus };
+  return { state, controls, refresh, participantId, sessionToken, presentationEvents, matchMomentEvents, acknowledgePresentationEvent, txlineFetchState, txlineStreamStatus };
 }

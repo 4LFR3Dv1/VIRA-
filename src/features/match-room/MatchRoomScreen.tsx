@@ -26,6 +26,8 @@ import { createConfirmedRoomPresence, publishConfirmedRoomPresence } from "../..
 import { createRoomShare } from "../../social/share";
 import { ViraShareButton } from "../../social/ViraShareButton";
 import { MiniLeaguePanel } from "../../social/MiniLeaguePanel";
+import { MatchMomentDirector } from "../match-moments/MatchMomentDirector";
+import { useMatchMomentDirector } from "../match-moments/use-match-moment-director";
 
 export function MatchRoomScreen() {
   const { matchId = DEFAULT_MATCH_ID } = useParams();
@@ -37,11 +39,13 @@ export function MatchRoomScreen() {
     || "";
   const [playerName, setPlayerName] = useState(initialName);
   const [joinDialogOpen, setJoinDialogOpen] = useState(!initialName);
-  const { state, controls, participantId, sessionToken, presentationEvents, acknowledgePresentationEvent, txlineFetchState, txlineStreamStatus } = useRoomRuntime(matchId, playerName);
+  const { state, controls, participantId, sessionToken, presentationEvents, matchMomentEvents, acknowledgePresentationEvent, txlineFetchState, txlineStreamStatus } = useRoomRuntime(matchId, playerName);
   const [resolutionOpen, setResolutionOpen] = useState(false);
+  const [resolutionRequested, setResolutionRequested] = useState(false);
   const [latestPresentationEvent, setLatestPresentationEvent] = useState<PresentationEvent | null>(null);
   const [verification, setVerification] = useState<RoomVerification | null>(null);
   const [preMatchContext, setPreMatchContext] = useState<MatchTxlineContext | null>(null);
+  const matchDirection = useMatchMomentDirector(matchId, state.snapshot.match, matchMomentEvents);
 
   const confirmPlayerName = () => {
     const safeName = playerName.trim();
@@ -103,11 +107,20 @@ export function MatchRoomScreen() {
         });
       }
       if (event.kind === "round_resolved") {
-        setResolutionOpen(true);
+        setResolutionRequested(true);
       }
       acknowledgePresentationEvent(event.id);
     });
   }, [acknowledgePresentationEvent, currentRound?.resolution.domain, presentationEvents]);
+
+  useEffect(() => {
+    if (!resolutionRequested || matchDirection.takeoverActive) return;
+    const handoff = window.setTimeout(() => {
+      setResolutionOpen(true);
+      setResolutionRequested(false);
+    }, 120);
+    return () => window.clearTimeout(handoff);
+  }, [matchDirection.takeoverActive, resolutionRequested]);
 
   useEffect(() => {
     if (!resolutionOpen) {
@@ -169,10 +182,22 @@ export function MatchRoomScreen() {
           leaderboard={state.snapshot.leaderboard}
           onRestart={() => {
             setResolutionOpen(false);
+            setResolutionRequested(false);
             controls.restart();
           }}
         />
       </main>
+
+      <MatchMomentDirector
+        moment={resolutionOpen ? null : matchDirection.state.active}
+        ambient={matchDirection.state.ambient}
+        motionPreference={matchDirection.preferences.motion}
+        sound={matchDirection.preferences.sound}
+        onDismiss={matchDirection.dismiss}
+        onMotionChange={(motion) => matchDirection.updatePreferences({ motion })}
+        onSoundChange={(sound) => matchDirection.updatePreferences({ sound })}
+        visible={!resolutionOpen && !inspect && !joinDialogOpen}
+      />
 
       <ResolutionOverlay
         open={resolutionOpen}
