@@ -16,6 +16,8 @@ test("verified playback is authoritative, persistent and idempotent", async () =
     await runtime.rehydrateFromLedger();
     const first = await ensureVerifiedPlayback({ eventStore: store, runtime });
     assert.equal(first.seeded, true);
+    const replay = await runtime.verifiedRoundReplay(first.roomId, first.roundId);
+    assert.equal(replay.proof.temporalIntegrityValid, true);
     const restartedStore = await createFileEventStore({ dataDir });
     const restartedRuntime = createRoomRuntime({ eventStore: restartedStore });
     await restartedRuntime.rehydrateFromLedger();

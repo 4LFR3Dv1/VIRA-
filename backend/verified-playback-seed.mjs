@@ -1,9 +1,10 @@
-const ROOM_ID = "judge-playback-france-spain";
+const ROOM_ID = "judge-playback-france-spain-v2";
 const ROUND_ID = "judge-playback-round-1";
 const CORRELATION_ID = "judge-playback-capture-v1";
 
 function capturedEvent(type, sequence, payload, causationId = null) {
-  return { eventId: `judge-playback-event-${sequence}`, roomId: ROOM_ID, type, idempotencyKey: `judge-playback-v1:${sequence}`, causationId, correlationId: CORRELATION_ID, createdAt: `2026-07-11T18:0${Math.min(sequence, 9)}:00.000Z`, payload };
+  const createdAt = [null, "18:00:00", "18:00:02", "18:00:10", "18:00:12", "18:00:20", "18:00:25", "18:01:31", "18:01:31", "18:01:30", "18:01:31"][sequence];
+  return { eventId: `judge-playback-event-${sequence}`, roomId: ROOM_ID, type, idempotencyKey: `judge-playback-v2:${sequence}`, causationId, correlationId: CORRELATION_ID, createdAt: `2026-07-11T${createdAt}.000Z`, payload };
 }
 
 function playbackEvents() {
@@ -33,7 +34,7 @@ export async function ensureVerifiedPlayback({ eventStore, runtime }) {
   await runtime.projectRoomFromLedger(ROOM_ID);
   const verification = await runtime.verifyRoom(ROOM_ID);
   const replay = await runtime.verifiedRoundReplay(ROOM_ID, ROUND_ID);
-  if (verification.status !== "verified" || replay?.proof?.authorityValid !== true) throw new Error("verified_playback_integrity_failure");
+  if (verification.status !== "verified" || replay?.proof?.authorityValid !== true || replay?.proof?.temporalIntegrityValid !== true) throw new Error("verified_playback_integrity_failure");
   return { seeded, roomId: ROOM_ID, roundId: ROUND_ID, replayHash: replay.replayHash, ledgerHeadHash: verification.ledgerHeadHash };
 }
 
