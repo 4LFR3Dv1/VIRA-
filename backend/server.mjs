@@ -6,6 +6,7 @@ import { URL, fileURLToPath } from "node:url";
 
 import { loadLocalEnv } from "./env.mjs";
 import { createFileEventStore } from "./event-store.mjs";
+import { deriveHomeProjection } from "./home-projection.mjs";
 import { createRoomRuntime } from "./runtime.mjs";
 import { createSolanaCommitmentPublisherFromEnv } from "./solana-commitment-publisher.mjs";
 import { createShareStore } from "./share-store.mjs";
@@ -555,6 +556,11 @@ async function handleRequest(request, response) {
       if (!fixture) throw Object.assign(new Error("fixture_not_found"), { status: 404 });
       const token = publicToken(request, body);
       const prediction = await shareStore.createPrediction({ publicToken: token, displayName: body.displayName, fixture, choice: body.choice });
+      await shareStore.attributePredictionInvite({ publicToken: token, displayName: body.displayName, inviteCode: body.inviteCode });
+      if (body.createShare === false) {
+        sendJson(response, 201, { prediction, share: null, url: null });
+        return;
+      }
       const identity = shareStore.identity(token, body.displayName);
       const choiceLabel = body.choice === "home" ? fixture.homeTeam : body.choice === "away" ? fixture.awayTeam : "Empate";
       const share = await shareStore.createShare({
@@ -565,6 +571,61 @@ async function handleRequest(request, response) {
         payload: { fixtureId: fixture.fixtureId, predictionId: prediction.id, choice: body.choice, choiceLabel, homeTeam: fixture.homeTeam, awayTeam: fixture.awayTeam, kickoffAt: fixture.startTime },
       });
       sendJson(response, 201, { prediction, share, url: `${publicBaseUrl(request)}/s/${share.publicCode}` });
+      return;
+    }
+
+    if (request.method === "GET" && url.pathname === "/home") {
+      ensureReady();
+      const catalog = await txlineCatalogCache.get();
+      const token = publicToken(request);
+      const playerState = token ? shareStore.homePlayer(token) : null;
+      for (const fixture of catalog.matches) {
+        if (String(fixture.status).toLowerCase() !== "finished") continue;
+        try {
+          const snapshot = runtime.snapshot(String(fixture.fixtureId), null);
+          if (snapshot.match.status === "finished") {
+            await shareStore.resolvePredictionsForFixture(String(fixture.fixtureId), { homeScore: snapshot.match.homeScore, awayScore: snapshot.match.awayScore });
+          }
+        } catch {
+          // A Home remains available even if a legacy finished fixture has no room projection.
+        }
+      }
+      const refreshedPlayer = token ? shareStore.homePlayer(token) : null;
+      const playerScores = (refreshedPlayer?.roomLinks ?? []).map((link) => {
+        try {
+          const snapshot = runtime.snapshot(String(link.roomId), null);
+          return snapshot.leaderboard?.find((entry) => entry.participantId === link.participantId) ?? null;
+        } catch { return null; }
+      }).filter(Boolean);
+      const totalPoints = playerScores.reduce((total, entry) => total + Number(entry.points ?? 0), 0);
+      const bestStreak = playerScores.reduce((best, entry) => Math.max(best, Number(entry.streak ?? 0)), 0);
+      const miniLeagues = (refreshedPlayer?.miniLeagueIds ?? []).map((leagueId) => {
+        const league = shareStore.state.leagues[leagueId];
+        if (!league) return null;
+        let snapshot = null;
+        try { snapshot = runtime.snapshot(String(league.roomId), null); } catch { snapshot = null; }
+        return shareStore.league(leagueId, snapshot);
+      }).filter(Boolean);
+      sendJson(response, 200, deriveHomeProjection({
+        catalog,
+        predictions: refreshedPlayer?.predictions ?? playerState?.predictions ?? {},
+        miniLeagues,
+        player: refreshedPlayer ? {
+          publicId: refreshedPlayer.publicId,
+          displayName: refreshedPlayer.displayName,
+          points: totalPoints,
+          streak: bestStreak,
+        } : null,
+      }));
+      return;
+    }
+
+    if (request.method === "POST" && url.pathname === "/home/analytics") {
+      const body = await readJson(request);
+      sendJson(response, 202, await shareStore.trackHome(body.type, publicToken(request, body), {
+        editorialKind: String(body.editorialKind ?? "").slice(0, 40),
+        fixtureId: body.fixtureId ? String(body.fixtureId).slice(0, 120) : null,
+      }));
       return;
     }
 
@@ -581,6 +642,34 @@ async function handleRequest(request, response) {
         await shareStore.resolvePredictionsForFixture(fixtureId, { homeScore: snapshot.match.homeScore, awayScore: snapshot.match.awayScore });
       }
       sendJson(response, 200, { prediction: shareStore.prediction(fixtureId, identity.publicId), fixture: { status: fixture.status, homeTeam: fixture.homeTeam, awayTeam: fixture.awayTeam } });
+      return;
+    }
+
+    const predictionShareRoute = url.pathname.match(/^\/predictions\/([^/]+)\/share$/);
+    if (request.method === "POST" && predictionShareRoute) {
+      const fixtureId = decodeURIComponent(predictionShareRoute[1]);
+      const body = await readJson(request);
+      const token = publicToken(request, body);
+      const identity = shareStore.identity(token);
+      const prediction = shareStore.prediction(fixtureId, identity.publicId);
+      if (!prediction) throw Object.assign(new Error("prediction_not_found"), { status: 404 });
+      const catalog = await txlineCatalogCache.get();
+      const fixture = catalog.matches.find((item) => String(item.fixtureId) === String(fixtureId));
+      if (!fixture) throw Object.assign(new Error("fixture_not_found"), { status: 404 });
+      const label = prediction.choice === "home" ? fixture.homeTeam : prediction.choice === "away" ? fixture.awayTeam : "Empate";
+      const resolved = prediction.status === "resolved";
+      const share = await shareStore.createShare({
+        kind: resolved ? "result" : "prediction",
+        createdByPublicId: identity.publicId,
+        expiresAt: resolved ? null : fixture.startTime,
+        metadata: resolved
+          ? { title: `${prediction.displayName} ${prediction.correct ? "acertou" : "fez seu palpite"}`, description: `${fixture.homeTeam} ${prediction.finalScore?.home ?? ""} x ${prediction.finalScore?.away ?? ""} ${fixture.awayTeam} · escolha: ${label}.`, imagePath: "dynamic" }
+          : { title: `${prediction.displayName} escolheu ${label}`, description: `${fixture.homeTeam} x ${fixture.awayTeam}. Faça o seu palpite antes do jogo.`, imagePath: "dynamic" },
+        destination: { path: `/match/${encodeURIComponent(fixtureId)}/preview`, ctaLabel: resolved ? "Ver resultado" : "Fazer meu palpite" },
+        attribution: { source: resolved ? "result" : "prediction", campaign: resolved ? "fixture_prediction_result" : "pre_match_1x2" },
+        payload: { fixtureId, predictionId: prediction.id, choice: prediction.choice, choiceLabel: label, correct: prediction.correct ?? null, finalScore: prediction.finalScore ?? null, homeTeam: fixture.homeTeam, awayTeam: fixture.awayTeam, kickoffAt: fixture.startTime },
+      });
+      sendJson(response, 201, { prediction, share, url: `${publicBaseUrl(request)}/s/${share.publicCode}` });
       return;
     }
 

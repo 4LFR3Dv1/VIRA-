@@ -131,7 +131,57 @@ export class ShareStore {
     });
   }
 
+  async attributePredictionInvite({ publicToken, displayName, inviteCode }) {
+    if (!inviteCode) return { attributed: false };
+    const identity = await this.ensureIdentity(publicToken, displayName);
+    return this.mutate((state) => {
+      const share = state.shares[String(inviteCode)];
+      if (!share?.miniLeagueId || share.kind !== "prediction") return { attributed: false };
+      const key = `${share.miniLeagueId}:${identity.publicId}`;
+      const created = !state.memberships[key];
+      state.memberships[key] ??= { leagueId: share.miniLeagueId, publicId: identity.publicId, sourceShareId: share.id, joinedAt: nowIso() };
+      if (created) state.analytics.push({ type: "prediction_joined_from_share", shareCode: inviteCode, publicId: identity.publicId, fixtureId: share.payload.fixtureId, at: nowIso() });
+      return { attributed: true, miniLeagueId: share.miniLeagueId };
+    });
+  }
+
   prediction(fixtureId, publicId) { return clone(this.state.predictions[`${fixtureId}:${publicId}`] ?? null); }
+
+  homePlayer(publicToken) {
+    const identity = this.identity(publicToken);
+    const stored = this.state.identities[identity.publicId];
+    if (!stored) return null;
+    const predictions = Object.fromEntries(Object.values(this.state.predictions)
+      .filter((prediction) => prediction.publicId === identity.publicId)
+      .map((prediction) => [String(prediction.fixtureId), clone(prediction)]));
+    const miniLeagueIds = Object.values(this.state.memberships)
+      .filter((membership) => membership.publicId === identity.publicId)
+      .map((membership) => membership.leagueId);
+    const roomLinks = Object.values(this.state.participantLinks)
+      .filter((link) => link.publicId === identity.publicId)
+      .map(({ roomId, participantId }) => ({ roomId, participantId }));
+    return {
+      publicId: identity.publicId,
+      displayName: stored.displayName,
+      points: 0,
+      streak: 0,
+      predictions,
+      miniLeagueIds: [...new Set(miniLeagueIds)],
+      roomLinks,
+    };
+  }
+
+  async trackHome(type, publicToken, extra = {}) {
+    if (!["home.editorial_viewed", "home.primary_action_clicked"].includes(type)) {
+      throw Object.assign(new Error("invalid_home_analytics_event"), { status: 400 });
+    }
+    const identity = this.identity(publicToken);
+    return this.mutate((state) => {
+      state.analytics.push({ type, publicId: identity.publicId, at: nowIso(), ...clone(extra) });
+      state.analytics = state.analytics.slice(-10_000);
+      return { accepted: true };
+    });
+  }
 
   async resolvePredictionsForFixture(fixtureId, { homeScore, awayScore, officialAt = nowIso() }) {
     const home = Number(homeScore);
@@ -161,14 +211,21 @@ export class ShareStore {
     const league = this.state.leagues[leagueId];
     if (!league) return null;
     const members = Object.values(this.state.memberships).filter((item) => item.leagueId === leagueId);
+    const originShare = Object.values(this.state.shares).find((share) => share.id === league.originShareId);
+    const predictionLeague = originShare?.kind === "prediction";
     const rows = members.map((member) => {
+      if (predictionLeague) {
+        const prediction = this.state.predictions[`${league.fixtureId}:${member.publicId}`];
+        return { publicId: member.publicId, displayName: this.state.identities[member.publicId]?.displayName ?? "Fan", points: prediction?.correct ? 100 : 0, roomRank: null, predictionStatus: prediction?.status ?? "pending", joinedAt: member.joinedAt };
+      }
       const links = Object.values(this.state.participantLinks).filter((item) => item.roomId === league.roomId && item.publicId === member.publicId);
       const entries = links.map((link) => roomSnapshot?.leaderboard?.find((entry) => entry.participantId === link.participantId)).filter(Boolean);
       const best = entries.sort((a, b) => b.points - a.points)[0];
       return { publicId: member.publicId, displayName: this.state.identities[member.publicId]?.displayName ?? "Fan", points: best?.points ?? 0, roomRank: best?.rank ?? null, joinedAt: member.joinedAt };
     }).sort((a, b) => b.points - a.points || a.joinedAt.localeCompare(b.joinedAt)).map((row, index) => ({ ...row, rank: index + 1 }));
     const matchStatus = roomSnapshot?.match?.status;
-    const status = matchStatus === "finished" ? "resolved" : matchStatus === "live" ? "locked" : league.status;
+    const predictionResolved = predictionLeague && rows.some((row) => row.predictionStatus === "resolved");
+    const status = predictionResolved || matchStatus === "finished" ? "resolved" : matchStatus === "live" ? "locked" : league.status;
     return { ...clone(league), status, members: rows };
   }
 }

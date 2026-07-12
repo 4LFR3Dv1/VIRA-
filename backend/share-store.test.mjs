@@ -48,6 +48,21 @@ test("1X2 prediction locks by fixture and resolves from official score", () => w
   await assert.rejects(store.createPrediction({ publicToken: tokenB, displayName: "Ana", fixture: { ...fixture, status: "live" }, choice: "home" }), /prediction_locked/);
 }));
 
+test("prediction invite creates an idempotent group cohort and ranking", () => withStore(async (store) => {
+  const creator = await store.ensureIdentity(tokenA, "Renan");
+  await store.createPrediction({ publicToken: tokenA, displayName: "Renan", fixture, choice: "away" });
+  const share = await store.createShare({ kind: "prediction", createdByPublicId: creator.publicId, metadata: { title: "Palpite", description: "Entre" }, destination: { path: "/match/fixture-1/preview", ctaLabel: "Palpitar" }, payload: { fixtureId: "fixture-1" } });
+  await store.createPrediction({ publicToken: tokenB, displayName: "Ana", fixture, choice: "home" });
+  await store.attributePredictionInvite({ publicToken: tokenB, displayName: "Ana", inviteCode: share.publicCode });
+  await store.attributePredictionInvite({ publicToken: tokenB, displayName: "Ana", inviteCode: share.publicCode });
+  await store.resolvePredictionsForFixture("fixture-1", { homeScore: 1, awayScore: 2 });
+  const league = store.league(share.miniLeagueId, { match: { status: "finished" }, leaderboard: [] });
+  assert.equal(league.status, "resolved");
+  assert.equal(league.members.length, 2);
+  assert.equal(league.members[0].displayName, "Renan");
+  assert.equal(league.members[0].points, 100);
+}));
+
 test("social state survives store restart without exposing public tokens", () => withStore(async (store, dataDir) => {
   const identity = await store.ensureIdentity(tokenA, "Renan");
   const share = await store.createShare({ kind: "result", createdByPublicId: identity.publicId, metadata: { title: "Acertou", description: "+100" }, destination: { path: "/match/fixture-1", ctaLabel: "Jogar" }, payload: { fixtureId: "fixture-1" } });

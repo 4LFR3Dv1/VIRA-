@@ -223,7 +223,7 @@ export function MatchPreviewScreen() {
     return (
       <AppShell>
         <main className="mx-auto max-w-2xl px-6 py-20">
-          <Link to="/" className="inline-flex items-center gap-2 text-sm text-white/50 hover:text-primary"><ArrowLeft className="size-4" /> Partidas</Link>
+          <Link to="/matches" className="inline-flex items-center gap-2 text-sm text-white/50 hover:text-primary"><ArrowLeft className="size-4" /> Partidas</Link>
           <h1 className="mt-8 font-['Chakra_Petch'] text-5xl font-black uppercase">Partida indisponivel</h1>
           <p className="mt-4 text-white/50">Nao foi possivel carregar as partidas da TxLINE.</p>
         </main>
@@ -248,7 +248,7 @@ export function MatchPreviewScreen() {
           <div className="absolute inset-y-0 left-1/2 -z-10 w-px rotate-[14deg] bg-white/10" />
           <div className="mx-auto max-w-[1440px] px-5 py-8 sm:px-8 lg:px-14 lg:py-12">
             <div className="flex flex-wrap items-center justify-between gap-4 border-b border-white/15 pb-6">
-              <Link to="/" className="inline-flex items-center gap-2 text-xs font-bold uppercase text-white/55 hover:text-primary"><ArrowLeft className="size-4" /> Voltar ao lobby</Link>
+              <Link to="/matches" className="inline-flex items-center gap-2 text-xs font-bold uppercase text-white/55 hover:text-primary"><ArrowLeft className="size-4" /> Voltar ao lobby</Link>
               <div className="flex flex-wrap items-center gap-3 font-['DM_Mono'] text-[10px] uppercase text-white/50">
                 <span>{match.competitionLabel.replace(/world cup/gi, "Copa do Mundo")} · {formatStartTime(match.startTime)}</span>
                 <span className="inline-flex items-center gap-2 text-primary"><Radio className="size-3.5" /> {loadingContext ? "Sincronizando TxLINE" : "Mercados TxLINE online"}</span>

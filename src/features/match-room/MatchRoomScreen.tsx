@@ -168,7 +168,7 @@ export function MatchRoomScreen() {
 
   return (
     <div className="min-h-screen bg-background/55 text-foreground">
-      <MatchHeader state={state} onBack={() => navigate("/")} />
+      <MatchHeader state={state} onBack={() => navigate("/matches")} />
       <TournamentLifecycleRail model={experienceModel} />
       <main className="mx-auto w-full max-w-[1440px] px-4 pb-24 pt-5 md:px-7 lg:px-10 lg:pb-12">
         {participantId && sessionToken ? <div className="flex justify-end"><ViraShareButton label="Convidar para a sala" create={() => createRoomShare({ kind: "room", roomId: matchId, participantId, sessionToken, displayName: state.snapshot.currentParticipant?.displayName ?? playerName })} /></div> : null}
@@ -239,7 +239,7 @@ export function MatchRoomScreen() {
         name={playerName}
         subtitle={state.snapshot.match.title}
         open={joinDialogOpen}
-        onClose={() => navigate("/")}
+        onClose={() => navigate("/matches")}
         onChangeName={setPlayerName}
         onConfirm={confirmPlayerName}
       />

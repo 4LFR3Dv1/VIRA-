@@ -20,8 +20,34 @@ export function createRoomShare(input: { roomId: string; participantId: string; 
   return fetch(`${API_ORIGIN}/shares`, { method: "POST", headers: { "Content-Type": "application/json", "X-Vira-Public-Token": getPublicToken() }, body: JSON.stringify(input) }).then((response) => json<ShareResponse>(response));
 }
 
-export function createPredictionShare(input: { fixtureId: string; displayName: string; choice: "home" | "draw" | "away" }) {
+export function createPredictionShare(input: { fixtureId: string; displayName: string; choice: "home" | "draw" | "away"; inviteCode?: string | null }) {
   return fetch(`${API_ORIGIN}/predictions`, { method: "POST", headers: { "Content-Type": "application/json", "X-Vira-Public-Token": getPublicToken() }, body: JSON.stringify(input) }).then((response) => json<ShareResponse & { prediction: { id: string; choice: string } }>(response));
+}
+
+export function savePrediction(input: { fixtureId: string; displayName: string; choice: "home" | "draw" | "away"; inviteCode?: string | null }) {
+  return fetch(`${API_ORIGIN}/predictions`, { method: "POST", headers: { "Content-Type": "application/json", "X-Vira-Public-Token": getPublicToken() }, body: JSON.stringify({ ...input, createShare: false }) }).then((response) => json<{ prediction: { id: string; choice: "home" | "draw" | "away"; status: "open" } }>(response));
+}
+
+export function shareSavedPrediction(fixtureId: string) {
+  return fetch(`${API_ORIGIN}/predictions/${encodeURIComponent(fixtureId)}/share`, { method: "POST", headers: { "Content-Type": "application/json", "X-Vira-Public-Token": getPublicToken() }, body: "{}" }).then((response) => json<ShareResponse>(response));
+}
+
+export type HomeProjection = {
+  version: 1;
+  tournament: { id: string; name: string; status: string; generatedAt: string; outrightMarket: null; primaryFixture: HomeFixture | null };
+  player: null | { publicId: string; displayName: string; points: number; streak: number; fixturePrediction: PredictionProjection | null; miniLeagues: Array<{ id: string; status: string; members: Array<{ publicId: string; displayName: string; points: number; rank: number }> }> };
+  editorial: { kind: "join_live_room" | "predict_fixture" | "result_available" | "open_calendar"; authority: "txline_fixture_market" | "official_match_state"; fixture: HomeFixture | null; prediction: PredictionProjection | null; sourceSnapshotIds: string[]; generatedAt: string; expiresAt: string | null };
+};
+
+export type PredictionProjection = { choice: "home" | "draw" | "away"; status: "open" | "resolved"; correct?: boolean; winningChoice?: string; finalScore?: { home: number; away: number } };
+export type HomeFixture = { fixtureId: string; competitionLabel: string; homeTeam: string; awayTeam: string; startTime: string | null; status: "scheduled" | "live" | "finished"; roomAvailable: boolean; market: null | { authority: "txline_fixture_market"; type: "MATCH_RESULT_1X2"; selections: { home: number; draw: number; away: number }; leadingChoice: "home" | "draw" | "away"; freshness: { observedAt: string | null; staleAfter: string | null; fresh: boolean } } };
+
+export function fetchHome() {
+  return fetch(`${API_ORIGIN}/home`, { headers: { "X-Vira-Public-Token": getPublicToken() } }).then((response) => json<HomeProjection>(response));
+}
+
+export function trackHome(type: "home.editorial_viewed" | "home.primary_action_clicked", editorialKind: string, fixtureId?: string) {
+  return fetch(`${API_ORIGIN}/home/analytics`, { method: "POST", headers: { "Content-Type": "application/json", "X-Vira-Public-Token": getPublicToken() }, body: JSON.stringify({ type, editorialKind, fixtureId }) }).then((response) => json<{ accepted: true }>(response));
 }
 
 export function fetchMyPrediction(fixtureId: string) {

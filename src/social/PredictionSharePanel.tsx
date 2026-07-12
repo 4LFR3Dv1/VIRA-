@@ -1,5 +1,6 @@
 import { Check, Share2 } from "lucide-react";
 import { useEffect, useState } from "react";
+import { useSearchParams } from "react-router";
 
 import type { MatchSummary } from "../runtime/api";
 import { createPredictionShare, fetchMyPrediction, presentShare } from "./share";
@@ -7,6 +8,7 @@ import { createPredictionShare, fetchMyPrediction, presentShare } from "./share"
 type Choice = "home" | "draw" | "away";
 
 export function PredictionSharePanel({ fixture, displayName, onChangeDisplayName }: { fixture: MatchSummary; displayName: string; onChangeDisplayName: (value: string) => void }) {
+  const [searchParams] = useSearchParams();
   const [choice, setChoice] = useState<Choice | null>(null);
   const [state, setState] = useState<"idle" | "creating" | "shared" | "error">("idle");
   const [result, setResult] = useState<{ status: "open" | "resolved"; correct?: boolean; winningChoice?: string; finalScore?: { home: number; away: number } } | null>(null);
@@ -28,7 +30,7 @@ export function PredictionSharePanel({ fixture, displayName, onChangeDisplayName
     if (!choice || !displayName.trim()) return;
     setState("creating");
     try {
-      const result = await createPredictionShare({ fixtureId: fixture.fixtureId, displayName: displayName.trim(), choice });
+      const result = await createPredictionShare({ fixtureId: fixture.fixtureId, displayName: displayName.trim(), choice, inviteCode: searchParams.get("invite") });
       window.localStorage.setItem("vira:displayName", displayName.trim());
       await presentShare(result);
       setState("shared");
