@@ -107,9 +107,10 @@ Operational certification:
 npm run test:e2e:two-device
 npm run test:judge-playback
 npm run certify:match -- --cycles 3 --target https://vira.snelabs.space
+npm run soak:match -- --target https://vira.snelabs.space --duration-sec 14400 --interval-sec 30
 ```
 
-`certify:match` freezes `artifacts/certify-match.json`. The committed gate is accelerated and does not claim four hours of elapsed production time; long wall-clock soak evidence must be executed separately before making that claim.
+`certify:match` freezes `artifacts/certify-match.json`. `soak:match` continuously samples readiness, memory, event-loop lag, queues, feed state and the public replay; its production default is four hours and it writes `artifacts/soak-match.json`. An accelerated run must not be described as a four-hour soak.
 
 To test multiplayer, open two independent browser profiles, join the same fixture with different names, submit opposite answers before the server deadline, and compare the resulting ranking and Official VIRA Review.
 

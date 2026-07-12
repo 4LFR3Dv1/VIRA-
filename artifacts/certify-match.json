@@ -1,0 +1,133 @@
+{
+  "schemaVersion": 1,
+  "kind": "VIRA_MATCH_CERTIFICATION",
+  "mode": "accelerated_restart_and_replay",
+  "target": "https://vira.snelabs.space",
+  "startedAt": "2026-07-12T21:02:14.980Z",
+  "finishedAt": "2026-07-12T21:02:20.221Z",
+  "cyclesRequested": 3,
+  "cyclesCompleted": 3,
+  "passed": true,
+  "invariants": {
+    "twoDeviceLoop": true,
+    "restartRehydration": true,
+    "judgePlayback": true,
+    "publicReadiness": true,
+    "replayPreserved": true,
+    "rankingPreserved": true
+  },
+  "metrics": {
+    "before": {
+      "measuredAt": "2026-07-12T21:02:07.622Z",
+      "process": {
+        "uptimeSec": 268,
+        "rssBytes": 111624192,
+        "heapUsedBytes": 30758712,
+        "eventLoopLagMs": 0
+      },
+      "runtime": {
+        "roomsActive": 1,
+        "roomsTotal": 2,
+        "participants": 2,
+        "roundsOpen": 0,
+        "sseClients": 1,
+        "queueDepth": 0,
+        "roundTimers": 0,
+        "pendingCommitments": 0
+      },
+      "ledger": {
+        "globalPosition": 119,
+        "streamCount": 2
+      },
+      "txline": {
+        "catalog": {
+          "hydrated": true,
+          "refreshing": false,
+          "generatedAt": "2026-07-12T21:01:55.547Z",
+          "matchCount": 6,
+          "lastError": null,
+          "freshMs": 30000,
+          "refreshMs": 25000
+        },
+        "feeds": {
+          "total": 1,
+          "degraded": 0,
+          "lastEventAt": "2026-07-12T21:01:58.594Z"
+        }
+      },
+      "disk": {
+        "freeBytes": 2013744607232,
+        "totalBytes": 3147638644736
+      }
+    },
+    "after": {
+      "measuredAt": "2026-07-12T21:02:11.792Z",
+      "process": {
+        "uptimeSec": 272,
+        "rssBytes": 112017408,
+        "heapUsedBytes": 31901688,
+        "eventLoopLagMs": 0
+      },
+      "runtime": {
+        "roomsActive": 1,
+        "roomsTotal": 2,
+        "participants": 2,
+        "roundsOpen": 0,
+        "sseClients": 1,
+        "queueDepth": 0,
+        "roundTimers": 0,
+        "pendingCommitments": 0
+      },
+      "ledger": {
+        "globalPosition": 121,
+        "streamCount": 2
+      },
+      "txline": {
+        "catalog": {
+          "hydrated": true,
+          "refreshing": false,
+          "generatedAt": "2026-07-12T21:01:55.547Z",
+          "matchCount": 6,
+          "lastError": null,
+          "freshMs": 30000,
+          "refreshMs": 25000
+        },
+        "feeds": {
+          "total": 1,
+          "degraded": 0,
+          "lastEventAt": "2026-07-12T21:02:08.594Z"
+        }
+      },
+      "disk": {
+        "freeBytes": 2013744308224,
+        "totalBytes": 3147638644736
+      }
+    }
+  },
+  "runs": [
+    {
+      "cycle": 1,
+      "durationMs": 1386,
+      "e2eExitCode": 0,
+      "judgeExitCode": 0,
+      "e2ePassed": true,
+      "judgePassed": true
+    },
+    {
+      "cycle": 2,
+      "durationMs": 1246,
+      "e2eExitCode": 0,
+      "judgeExitCode": 0,
+      "e2ePassed": true,
+      "judgePassed": true
+    },
+    {
+      "cycle": 3,
+      "durationMs": 1198,
+      "e2eExitCode": 0,
+      "judgeExitCode": 0,
+      "e2ePassed": true,
+      "judgePassed": true
+    }
+  ]
+}

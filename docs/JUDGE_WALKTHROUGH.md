@@ -46,6 +46,8 @@ During: watch `eventLoopLagMs`, `queueDepth`, `sseClients`, disk space, catalog 
 
 After: confirm full time, open `/help`, compare projection/ranking, run `certify:match` and archive `artifacts/certify-match.json`.
 
+For a wall-clock stability run, execute `npm run soak:match -- --target https://vira.snelabs.space --duration-sec 14400 --interval-sec 30` and archive `artifacts/soak-match.json`. The report fails on readiness loss, queued work, replay drift, projection divergence or ranking divergence.
+
 ## Operational Boundary
 
 The event store is single-writer. Production must remain one backend replica with one persistent volume. Accelerated certification repeats the restart/replay contract, but a four-hour wall-clock soak must still be executed and archived before claiming long-duration production certification.
