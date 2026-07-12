@@ -365,6 +365,7 @@ export interface EvidenceChain {
 }
 
 export interface RoomSnapshot {
+  serverTime?: string;
   roomId: string;
   roomLabel: string;
   roomPopulation: number;

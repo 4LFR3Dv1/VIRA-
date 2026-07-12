@@ -61,7 +61,7 @@ export function HomeScreen() {
   return <section className="mx-auto grid min-h-[calc(100dvh-72px)] max-w-[1500px] content-between px-5 py-8 sm:px-8 lg:px-14 lg:py-12">
     <header className="flex items-center justify-between border-b border-white/12 pb-4">
       <div><p className="font-['DM_Mono'] text-[10px] font-black uppercase text-primary">Seu mundo da Copa</p><p className="mt-1 text-xs text-white/40">{home.player?.displayName ?? "Escolha seu primeiro palpite"}</p></div>
-      <Link to="/matches" className="inline-flex min-h-10 items-center gap-2 border border-white/15 px-4 text-[10px] font-black uppercase hover:border-primary"><CalendarDays className="size-4" /> Partidas</Link>
+      <div className="flex gap-2"><Link to="/help" className="inline-flex min-h-10 items-center border border-white/15 px-3 text-[9px] font-black uppercase hover:border-primary sm:px-4 sm:text-[10px]">Playback</Link><Link to="/matches" className="inline-flex min-h-10 items-center gap-2 border border-white/15 px-3 text-[9px] font-black uppercase hover:border-primary sm:px-4 sm:text-[10px]"><CalendarDays className="size-4" /> Partidas</Link></div>
     </header>
 
     {editorial.kind === "predict_fixture" && fixture ? <div className="grid gap-10 py-10 lg:grid-cols-[1.2fr_.8fr] lg:items-center">

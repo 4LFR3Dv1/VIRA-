@@ -570,6 +570,7 @@ export function createRoomRuntime({ eventStore = null, commitmentPublisher = nul
     const fanPulseHome = [...room.fanPulseChoices.values()].filter((side) => side === "home").length;
     const fanPulseAway = [...room.fanPulseChoices.values()].filter((side) => side === "away").length;
     return {
+      serverTime: new Date().toISOString(),
       roomId: room.roomId,
       roomLabel: room.roomLabel,
       roomPopulation: room.participants.length,
@@ -1900,6 +1901,7 @@ export function createRoomRuntime({ eventStore = null, commitmentPublisher = nul
     const snapshotValue = publicSnapshot(room, null);
     return {
       ...snapshotValue,
+      serverTime: undefined,
       version: undefined,
       latestEvidence: undefined,
       evidenceHistory: [],
@@ -2445,5 +2447,27 @@ export function createRoomRuntime({ eventStore = null, commitmentPublisher = nul
     });
   }
 
-  return { getRoom, snapshot, authenticatedSnapshot, join, validateSession, submitAnswer, castFanPulse, applyNormalizedEvent, attachClient, emit, configureMatch, evidence, evidenceById, rehydrateFromLedger, publicEvents, hasPublicRoom, projectRoomFromLedger, verifyRoom, verifiedRoundReplay, roundCommitment, publishRoundCommitment };
+  function operationalMetrics() {
+    let sseClients = 0;
+    for (const roomClients of clients.values()) sseClients += roomClients.size;
+    return {
+      roomsActive: [...rooms.values()].filter((room) => room.match.status !== "finished").length,
+      roomsTotal: rooms.size,
+      participants: [...rooms.values()].reduce((total, room) => total + room.participants.length, 0),
+      roundsOpen: [...rooms.values()].filter((room) => room.currentRound?.state === "open").length,
+      sseClients,
+      queueDepth: roomLocks.size,
+      roundTimers: roundTimers.size,
+      pendingCommitments: pendingCommitments.size,
+    };
+  }
+
+  function publicRoomSummaries() {
+    return [...rooms.values()].map((room) => {
+      const value = publicSnapshot(room, null);
+      return { roomId: room.roomId, match: value.match, roomPopulation: value.roomPopulation, lastResolution: value.lastResolution, ledger: value.ledger };
+    });
+  }
+
+  return { getRoom, snapshot, authenticatedSnapshot, join, validateSession, submitAnswer, castFanPulse, applyNormalizedEvent, attachClient, emit, configureMatch, evidence, evidenceById, rehydrateFromLedger, publicEvents, hasPublicRoom, projectRoomFromLedger, verifyRoom, verifiedRoundReplay, roundCommitment, publishRoundCommitment, operationalMetrics, publicRoomSummaries };
 }

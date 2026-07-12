@@ -84,12 +84,14 @@ function PreparingRoundStage({ state, kind, context }: { state: ReplayState; kin
 function OperationalStage({ state, kind, context = null, onFanPulse }: { state: ReplayState; kind: "provider" | "no-fixture" | "scheduled-empty" | "scheduled-ready"; context?: MatchTxlineContext | null; onFanPulse?: (side: "home" | "away") => Promise<void> }) {
   const match = state.snapshot.match;
   const scheduled = kind === "scheduled-empty" || kind === "scheduled-ready";
-  const [now, setNow] = useState(() => Date.now());
+  const offset = state.snapshot.serverTime ? Date.parse(state.snapshot.serverTime) - Date.now() : 0;
+  const [now, setNow] = useState(() => Date.now() + offset);
   useEffect(() => {
     if (!scheduled || !match.startTime) return undefined;
-    const interval = window.setInterval(() => setNow(Date.now()), 1_000);
+    setNow(Date.now() + offset);
+    const interval = window.setInterval(() => setNow(Date.now() + offset), 1_000);
     return () => window.clearInterval(interval);
-  }, [match.startTime, scheduled]);
+  }, [match.startTime, offset, scheduled]);
   const kickoff = match.startTime
     ? new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }).format(new Date(match.startTime))
     : "horario a confirmar";
@@ -197,12 +199,14 @@ function WaitingSignalStage({ state, latestPresentationEvent }: { state: ReplayS
   const predicate = round.resolution.predicate ?? {};
   const opening = typeof predicate.openingValue === "number" ? predicate.openingValue : null;
   const target = typeof predicate.pctGte === "number" ? predicate.pctGte : null;
-  const [now, setNow] = useState(() => Date.now());
+  const offset = state.snapshot.serverTime ? Date.parse(state.snapshot.serverTime) - Date.now() : 0;
+  const [now, setNow] = useState(() => Date.now() + offset);
   useEffect(() => {
     if (round.state !== "open") return undefined;
-    const timer = window.setInterval(() => setNow(Date.now()), 500);
+    setNow(Date.now() + offset);
+    const timer = window.setInterval(() => setNow(Date.now() + offset), 500);
     return () => window.clearInterval(timer);
-  }, [round.id, round.state]);
+  }, [offset, round.id, round.state]);
   const remainingSec = Math.max(0, Math.ceil((Date.parse(round.locksAt) - now) / 1_000));
   const answersClosed = round.state === "locked";
   const football = round.resolution.domain === "football" ? round.resolution.condition : null;

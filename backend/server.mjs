@@ -1,6 +1,6 @@
 import http from "node:http";
 import { randomUUID, timingSafeEqual } from "node:crypto";
-import { readFile, stat } from "node:fs/promises";
+import { readFile, stat, statfs } from "node:fs/promises";
 import path from "node:path";
 import { URL, fileURLToPath } from "node:url";
 
@@ -71,6 +71,10 @@ const adminToken = String(process.env.VIRA_ADMIN_TOKEN || "");
 const allowedOrigins = new Set(String(process.env.VIRA_ALLOWED_ORIGINS || "http://localhost:5173,http://127.0.0.1:5173").split(",").map((value) => value.trim()).filter(Boolean));
 const distDirectory = fileURLToPath(new URL("../dist/", import.meta.url));
 const staticMimeTypes = new Map([[".css", "text/css; charset=utf-8"], [".html", "text/html; charset=utf-8"], [".ico", "image/x-icon"], [".js", "text/javascript; charset=utf-8"], [".json", "application/json; charset=utf-8"], [".png", "image/png"], [".svg", "image/svg+xml"], [".webp", "image/webp"], [".woff2", "font/woff2"]]);
+let eventLoopLagMs = 0;
+let lagProbeAt = Date.now();
+const lagProbe = setInterval(() => { const now = Date.now(); eventLoopLagMs = Math.max(0, now - lagProbeAt - 1_000); lagProbeAt = now; }, 1_000);
+lagProbe.unref?.();
 
 function cryptoRandomId() {
   return randomUUID().slice(0, 8);
@@ -507,6 +511,34 @@ async function handleRequest(request, response) {
         eventStore: eventStore.info(),
         rehydration: runtimeBoot.rehydration ?? null,
       });
+      return;
+    }
+
+    if (request.method === "GET" && url.pathname === "/operational/metrics") {
+      const store = eventStore.info();
+      const disk = await statfs(store.dataDir).catch(() => null);
+      const feeds = [...liveRoomFeeds.values()];
+      sendJson(response, 200, {
+        measuredAt: new Date().toISOString(),
+        process: { uptimeSec: Math.floor(process.uptime()), rssBytes: process.memoryUsage().rss, heapUsedBytes: process.memoryUsage().heapUsed, eventLoopLagMs },
+        runtime: runtime.operationalMetrics(),
+        ledger: { globalPosition: store.globalPosition, streamCount: store.streamCount },
+        txline: { catalog: txlineCatalogCache.status(), feeds: { total: feeds.length, degraded: feeds.filter((feed) => feed.status !== "running").length, lastEventAt: feeds.map((feed) => feed.lastPollAt).filter(Boolean).sort().at(-1) ?? null } },
+        disk: disk ? { freeBytes: Number(disk.bavail) * Number(disk.bsize), totalBytes: Number(disk.blocks) * Number(disk.bsize) } : null,
+      });
+      return;
+    }
+
+    if (request.method === "GET" && url.pathname === "/public/playback") {
+      ensureReady();
+      const requestedRoomId = url.searchParams.get("roomId");
+      const candidates = runtime.publicRoomSummaries().filter((room) => room.lastResolution?.roundId && (!requestedRoomId || room.roomId === requestedRoomId));
+      const selected = candidates.sort((left, right) => Number(right.match.status === "finished") - Number(left.match.status === "finished"))[0] ?? null;
+      if (!selected) {
+        sendJson(response, 200, { available: false, reason: "verified_round_not_available", destination: "/matches" });
+        return;
+      }
+      sendJson(response, 200, { available: true, room: selected, verification: await runtime.verifyRoom(selected.roomId), replay: await runtime.verifiedRoundReplay(selected.roomId, selected.lastResolution.roundId) });
       return;
     }
 

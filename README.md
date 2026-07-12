@@ -4,6 +4,16 @@
 
 > VIRA turns real TxLINE market updates into synchronized, verifiable multiplayer rounds for football fans.
 
+```text
+Live app: https://vira.snelabs.space
+Judge walkthrough: https://vira.snelabs.space/help
+Verified playback: https://vira.snelabs.space/help
+
+No wallet, OAuth, purchase or installation required.
+```
+
+Test the core in under three minutes: make the 1X2 pick on `/`, open its share in an anonymous window, enter the same fixture from both windows, then use `/help` to inspect a resolved round reconstructed from the public ledger.
+
 VIRA is a second-screen match room for live football. Fans join a shared room, answer micro-predictions during the match, and TxLINE score events resolve each round through the runtime engine.
 
 The product goal is a working Consumer and Fan Experience, not a scripted mockup:
@@ -81,6 +91,8 @@ Operational probes:
 ```text
 GET /health  -> process liveness
 GET /ready   -> ledger rehydrated, persistent directory writable, required TxLINE credentials configured
+GET /operational/metrics -> memory, event-loop lag, queues, SSE, ledger, feed and disk metrics
+GET /public/playback     -> latest redacted verified round, reconstructed without mutations
 ```
 
 Run all release checks:
@@ -88,6 +100,16 @@ Run all release checks:
 ```powershell
 npm run verify
 ```
+
+Operational certification:
+
+```powershell
+npm run test:e2e:two-device
+npm run test:judge-playback
+npm run certify:match -- --cycles 3 --target https://vira.snelabs.space
+```
+
+`certify:match` freezes `artifacts/certify-match.json`. The committed gate is accelerated and does not claim four hours of elapsed production time; long wall-clock soak evidence must be executed separately before making that claim.
 
 To test multiplayer, open two independent browser profiles, join the same fixture with different names, submit opposite answers before the server deadline, and compare the resulting ranking and Official VIRA Review.
 

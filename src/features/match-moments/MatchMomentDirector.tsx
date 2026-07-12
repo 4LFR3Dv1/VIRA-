@@ -33,12 +33,12 @@ export function MatchMomentDirector({ moment, ambient, motionPreference, sound, 
   if (!visible) return null;
   return <>
     <div aria-hidden className="pointer-events-none fixed inset-0 z-[35] transition-opacity duration-700" style={{ opacity: ambient ? (ambient.level === "high" ? .58 : .34) : 0, background: ambient?.teamSide === "away" ? "linear-gradient(270deg, rgba(115,185,232,.24), transparent 58%)" : "linear-gradient(90deg, rgba(199,255,24,.2), transparent 58%)" }} />
-    <div className="fixed right-16 top-4 z-[72] flex border border-white/10 bg-[#050814]/90 backdrop-blur">
+    <div className="fixed right-16 top-4 z-[72] hidden border border-white/10 bg-[#050814]/90 backdrop-blur sm:flex">
       <button type="button" onClick={() => onSoundChange(!sound)} className="grid size-9 place-items-center text-white/55 hover:text-primary" title={sound ? "Silenciar momentos" : "Ativar som dos momentos"}>{sound ? <Volume2 className="size-4" /> : <VolumeX className="size-4" />}</button>
       <button type="button" onClick={() => onMotionChange(motionPreference === "full" ? "reduced" : motionPreference === "reduced" ? "off" : "full")} className="relative grid size-9 place-items-center border-l border-white/10 text-white/55 hover:text-primary" title={`Movimento: ${motionPreference}`}><Activity className="size-4" /><span className={`absolute bottom-1 right-1 size-1.5 ${motionPreference === "off" ? "bg-white/25" : motionPreference === "reduced" ? "bg-amber-300" : "bg-primary"}`} /></button>
     </div>
     <AnimatePresence mode="wait">
-      {moment ? <motion.div key={moment.id} initial={{ opacity: 0, y: reduced ? 0 : moment.presentation === "takeover" ? 0 : 30 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: reduced ? 0 : -18 }} transition={{ duration: reduced ? 0 : .38, ease: [.16, 1, .3, 1] }} className={moment.presentation === "takeover" ? "fixed inset-0 z-[70]" : "pointer-events-none fixed inset-x-4 bottom-[max(1rem,env(safe-area-inset-bottom))] z-[60] mx-auto max-w-3xl"}>
+      {moment ? <motion.div key={moment.id} initial={{ opacity: 0, y: reduced ? 0 : moment.presentation === "takeover" ? 0 : 30 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: reduced ? 0 : -18 }} transition={{ duration: reduced ? 0 : .38, ease: [.16, 1, .3, 1] }} className={moment.presentation === "takeover" ? "fixed inset-0 z-[70]" : "pointer-events-none fixed inset-x-4 bottom-[calc(5rem+env(safe-area-inset-bottom))] z-[60] mx-auto max-w-3xl lg:bottom-4"}>
         {moment.presentation === "takeover" ? <Takeover moment={moment} onDismiss={onDismiss} reduced={reduced} /> : <Banner moment={moment} reduced={reduced} />}
       </motion.div> : null}
     </AnimatePresence>

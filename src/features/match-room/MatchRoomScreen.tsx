@@ -248,7 +248,7 @@ export function MatchRoomScreen() {
 
       <button
         onClick={openOfficialReview}
-        className="fixed bottom-4 right-4 grid size-10 place-items-center rounded-full border border-border bg-card text-muted-foreground shadow-xl hover:text-primary"
+        className="fixed bottom-4 right-4 hidden size-10 place-items-center rounded-full border border-border bg-card text-muted-foreground shadow-xl hover:text-primary lg:grid"
         aria-label="Abrir revisao oficial VIRA"
       >
         <Info className="size-4" />
