@@ -178,7 +178,7 @@ export function MatchPreviewScreen() {
   }, [match?.fixtureId]);
 
   const prediction = context?.suggestedPrediction ?? null;
-  const probability = context?.endpoints.odds.data?.winProbability ?? null;
+  const probability = context?.canonical1X2?.selections ?? null;
   const markets = useMemo(() => {
     const all = context?.availableMarkets ?? [];
     return [...all].sort((left, right) => {
@@ -193,7 +193,7 @@ export function MatchPreviewScreen() {
     : probability
       ? `Empate · ${formatPercentage(probability.draw)}`
       : "Mercado em sincronizacao";
-  const signalCount = (context?.endpoints.odds.summary.count ?? 0) + (context?.endpoints.oddsUpdates.summary.count ?? 0);
+  const signalCount = context?.marketTaxonomy?.observed ?? 0;
   const loadingContext = contextState === "idle" || contextState === "loading";
   const roomReady = Boolean(match && (context || contextState === "empty" || contextState === "error"));
   const canonical = deriveCanonicalExperienceState({ matchStatus: match?.status, roomExists: true, hasSignal: markets.length > 0, connectionState: contextState === "error" ? "reconnecting" : "live" });
@@ -279,14 +279,13 @@ export function MatchPreviewScreen() {
             <h2 className="mt-5 max-w-5xl break-words font-['Chakra_Petch'] text-[clamp(2.15rem,4.8vw,5rem)] font-black uppercase leading-[.9]">O futebol cria a próxima pergunta.</h2>
             <p className="mt-6 max-w-3xl text-base leading-7 text-white/55">Quando surge um momento relevante, o VIRA abre uma janela curta para responder. Depois, você volta a acompanhar a partida até o fato ser confirmado.</p>
 
-            <div className="mt-10 grid gap-px bg-white/15 sm:grid-cols-3">
+            <p className="mt-10 font-['DM_Mono'] text-[9px] font-black uppercase tracking-[.16em] text-white/35">Exemplos de momentos ao vivo</p><div className="mt-3 grid gap-px bg-white/15 sm:grid-cols-3">
               <FootballPrompt label="Gol" prompt={`${match.homeTeam} marca nos próximos 10 minutos?`} />
               <FootballPrompt label="Finalização" prompt={`${match.awayTeam} finaliza no alvo nos próximos 5 minutos?`} />
               <FootballPrompt label="Momento" prompt="Teremos um gol antes do fim do tempo?" />
             </div>
 
             <div className="mt-7 flex flex-wrap gap-3">
-              <button type="button" disabled={!roomReady} onClick={() => openRoom(false)} className="inline-flex min-h-14 items-center gap-8 bg-primary px-5 font-['Chakra_Petch'] text-sm font-black uppercase text-[#070a13] disabled:opacity-40">Entrar na sala <ArrowRight className="size-4" /></button>
               <a href="#pre-match-prediction" className="inline-flex min-h-14 items-center border border-white/20 px-5 font-['Chakra_Petch'] text-xs font-black uppercase hover:border-primary hover:text-primary">Palpitar antes do jogo</a>
             </div>
           </div>
@@ -311,7 +310,7 @@ export function MatchPreviewScreen() {
               <span className="font-['DM_Mono'] text-[10px] uppercase text-white/35">Registro TxLINE</span>
             </div>
             {outcomes.length ? <div className="mt-8 flex min-h-24 overflow-hidden border border-white/10">{outcomes.map((outcome) => <div key={outcome.id} style={{ width: `${Math.max(15, outcome.value)}%` }} className={`relative min-w-[86px] border-r border-[#070a13] p-3 last:border-r-0 ${outcome.active ? "bg-primary text-[#070a13]" : "bg-white/[.07]"}`}><span className="block truncate text-[10px] font-black uppercase">{outcome.label}</span><strong className="absolute bottom-3 left-3 font-['Chakra_Petch'] text-2xl font-black"><AnimatedNumber value={outcome.value} suffix="%" format={{ minimumFractionDigits: 1, maximumFractionDigits: 1 }} /></strong></div>)}</div> : <p className="mt-8 border-t border-white/15 py-8 text-sm text-white/45">Aguardando a primeira distribuicao 1X2 desta partida.</p>}
-            <p className="mt-5 font-['DM_Mono'] text-[10px] uppercase text-white/35">{formatMarketCount(markets.length)} · {formatObservedUpdateCount(signalCount)} · partida monitorada</p>
+            <p className="mt-5 font-['DM_Mono'] text-[10px] uppercase text-white/35">{markets.length} mercados em foco de {signalCount} observados · partida monitorada</p>
           </div>
         </section>
 

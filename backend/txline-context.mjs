@@ -167,6 +167,32 @@ function dedupeMarkets(markets, limit = 24) {
   return [...unique.values()];
 }
 
+export function selectCanonicalFixture1X2(markets, fixture) {
+  const candidates = (markets ?? []).filter((market) => market.marketType === "1X2_PARTICIPANT_RESULT" && !market.marketPeriod && market.hasProbabilities);
+  const market = [...candidates].sort((left, right) => Date.parse(right.capturedAt ?? "") - Date.parse(left.capturedAt ?? ""))[0] ?? null;
+  if (!market) return null;
+  const value = (priceName, fallbackIndex) => market.options.find((option) => option.priceName === priceName)?.pct ?? market.options[fallbackIndex]?.pct;
+  const home = Number(value("part1", 0));
+  const draw = Number(value("draw", 1));
+  const away = Number(value("part2", 2));
+  if (![home, draw, away].every(Number.isFinite)) return null;
+  const values = { home, draw, away };
+  const leadingChoice = Object.entries(values).sort((left, right) => right[1] - left[1])[0][0];
+  return {
+    authority: "txline_fixture_market",
+    scope: "fixture",
+    type: "MATCH_RESULT_1X2",
+    fixtureId: String(fixture.fixtureId),
+    marketSignature: market.signature,
+    snapshotId: market.messageId ?? market.id,
+    observedAt: market.capturedAt,
+    providerSequence: market.sequence,
+    bookmakerId: market.bookmakerId,
+    selections: values,
+    leadingChoice,
+  };
+}
+
 function bestPredictionFromMarkets(markets) {
   const withProbabilities = markets.filter((market) => market.hasProbabilities && market.leadingOption);
   const oneXTwo = withProbabilities.find((market) => market.marketType === "1X2_PARTICIPANT_RESULT");
@@ -322,6 +348,7 @@ export async function buildTxlineContext(config, match) {
     ...(odds.data?.availableMarkets ?? []),
   ];
   const uniqueMarkets = dedupeMarkets(availableMarkets, 24);
+  const canonical1X2 = selectCanonicalFixture1X2(uniqueMarkets, match);
 
   return {
     fixtureId,
@@ -333,6 +360,7 @@ export async function buildTxlineContext(config, match) {
       fixtureId,
       title: match.title,
       competitionLabel: match.competitionLabel,
+      competition: match.competition,
       status: match.status,
       startTime: match.startTime,
       homeTeam: match.homeTeam,
@@ -346,6 +374,12 @@ export async function buildTxlineContext(config, match) {
       oddsUpdates,
     },
     availableMarkets: uniqueMarkets,
+    canonical1X2,
+    marketTaxonomy: {
+      observed: uniqueMarkets.length,
+      inFocus: Math.min(5, uniqueMarkets.length),
+      canonical: canonical1X2 ? 1 : 0,
+    },
     suggestedPrediction: bestPredictionFromMarkets(uniqueMarkets),
   };
 }

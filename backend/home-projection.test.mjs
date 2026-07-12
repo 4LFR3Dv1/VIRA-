@@ -3,7 +3,8 @@ import test from "node:test";
 import { deriveHomeProjection } from "./home-projection.mjs";
 
 const now = new Date("2026-07-12T12:00:00.000Z");
-const fixture = (overrides = {}) => ({ fixtureId: "fx-1", competitionLabel: "World Cup", homeTeam: "England", awayTeam: "Argentina", startTime: "2026-07-12T14:00:00.000Z", status: "scheduled", context: { generatedAt: "2026-07-12T11:59:00.000Z", endpoints: { odds: { data: { winProbability: { home: 48, draw: 27, away: 25, capturedAt: "2026-07-12T11:59:00.000Z", messageId: "odds-1" } } } } }, ...overrides });
+const market = (observedAt = "2026-07-12T11:59:00.000Z") => ({ authority: "txline_fixture_market", selections: { home: 48, draw: 27, away: 25 }, observedAt, snapshotId: "odds-1", providerSequence: 1, marketSignature: "fixture|1x2" });
+const fixture = (overrides = {}) => ({ fixtureId: "fx-1", competitionLabel: "Copa do Mundo", competition: { kind: "world_cup" }, homeTeam: "England", awayTeam: "Argentina", startTime: "2026-07-12T14:00:00.000Z", status: "scheduled", context: { generatedAt: "2026-07-12T11:59:00.000Z", canonical1X2: market() }, ...overrides });
 
 test("publishes a fresh fixture market with explicit authority", () => {
   const projection = deriveHomeProjection({ catalog: { generatedAt: now.toISOString(), matches: [fixture()] }, now });
@@ -14,7 +15,7 @@ test("publishes a fresh fixture market with explicit authority", () => {
 });
 
 test("keeps the last confirmed pre-match market authoritative until kickoff", () => {
-  const stable = fixture({ context: { generatedAt: "2026-07-12T10:00:00.000Z", endpoints: { odds: { data: { winProbability: { home: 48, draw: 27, away: 25, capturedAt: "2026-07-12T10:00:00.000Z" } } } } } });
+  const stable = fixture({ context: { generatedAt: "2026-07-12T10:00:00.000Z", canonical1X2: market("2026-07-12T10:00:00.000Z") } });
   const projection = deriveHomeProjection({ catalog: { matches: [stable] }, now });
   assert.equal(projection.editorial.kind, "predict_fixture");
   assert.equal(projection.editorial.fixture.market.freshness.fresh, true);
@@ -28,15 +29,10 @@ test("stops market authority on explicit context loss", () => {
   assert.equal(projection.editorial.fixture.market.freshness.fresh, false);
 });
 
-test("uses preserved full-match 1X2 instead of first-half market", () => {
-  const preserved = fixture({ context: { availableMarkets: [
-    { marketType: "1X2_PARTICIPANT_RESULT", marketPeriod: "half=1", hasProbabilities: true, capturedAt: "2026-07-12T11:59:30.000Z", options: [{ priceName: "part1", pct: 10 }, { priceName: "draw", pct: 20 }, { priceName: "part2", pct: 70 }] },
-    { id: "full-match", marketType: "1X2_PARTICIPANT_RESULT", marketPeriod: null, hasProbabilities: true, capturedAt: "2026-07-12T11:59:30.000Z", options: [{ priceName: "part1", pct: 48 }, { priceName: "draw", pct: 27 }, { priceName: "part2", pct: 25 }] },
-  ] } });
-  const projection = deriveHomeProjection({ catalog: { matches: [preserved] }, now });
-  assert.equal(projection.editorial.kind, "predict_fixture");
-  assert.equal(projection.editorial.fixture.market.leadingChoice, "home");
-  assert.equal(projection.editorial.fixture.market.snapshotId, "full-match");
+test("home refuses to reinterpret raw markets without canonical projection", () => {
+  const rawOnly = fixture({ context: { availableMarkets: [{ marketType: "1X2_PARTICIPANT_RESULT" }] } });
+  const projection = deriveHomeProjection({ catalog: { matches: [rawOnly] }, now });
+  assert.equal(projection.editorial.kind, "open_calendar");
 });
 
 test("live match outranks a scheduled prediction", () => {

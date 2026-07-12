@@ -13,12 +13,16 @@ export interface MatchSummary {
   fixtureId: string;
   title: string;
   competitionLabel: string;
+  competition?: CompetitionClassification;
   startTime: string | null;
   status: string;
   homeTeam: string;
   awayTeam: string;
   source: string;
 }
+
+export interface CompetitionClassification { providerCompetitionId: string | null; canonicalCompetitionId: string | null; name: string; displayName: string; kind: "world_cup" | "continental_cup" | "domestic_league" | "domestic_cup" | "friendly" | "qualifier" | "youth" | "other" | "unknown"; authority: "provider" | "registry" | "unmapped"; mapped: boolean; }
+export interface CanonicalFixture1X2 { authority: "txline_fixture_market"; scope: "fixture"; type: "MATCH_RESULT_1X2"; fixtureId: string; marketSignature: string; snapshotId: string; observedAt: string | null; providerSequence: number | null; bookmakerId: string | number | null; selections: { home: number; draw: number; away: number }; leadingChoice: "home" | "draw" | "away"; }
 
 export interface MatchesResponse {
   source: "txline";
@@ -30,6 +34,9 @@ export interface MatchCatalogEntry extends MatchSummary {
   context: MatchTxlineContext | null;
   availability: {
     marketCount: number;
+    observedMarketCount: number;
+    focusMarketCount: number;
+    canonical1X2Available: boolean;
     hasMarket: boolean;
     hasPlayablePrediction: boolean;
     contextStatus: "ready" | "stale" | "unavailable";
@@ -175,6 +182,8 @@ export interface MatchTxlineContext {
     oddsUpdates: TxlineEndpointContext<{ availableMarkets: TxlineAvailableMarket[]; latest: TxlineLatestRecord[] }>;
   };
   availableMarkets: TxlineAvailableMarket[];
+  canonical1X2: CanonicalFixture1X2 | null;
+  marketTaxonomy: { observed: number; inFocus: number; canonical: number };
   suggestedPrediction: TxlineSuggestedPrediction | null;
 }
 

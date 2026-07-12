@@ -115,8 +115,8 @@ function OperationalStage({ state, kind, context = null, onFanPulse }: { state: 
 function PreMatchMarketWatch({ state, context, participantCount, onFanPulse }: { state: ReplayState; context: MatchTxlineContext | null; participantCount: number; onFanPulse?: (side: "home" | "away") => Promise<void> }) {
   const [submitting, setSubmitting] = useState<"home" | "away" | null>(null);
   const [pulseError, setPulseError] = useState(false);
-  const probability = context?.endpoints.odds.data?.winProbability ?? null;
-  const markets = context?.availableMarkets.length ?? 0;
+  const probability = context?.canonical1X2?.selections ?? null;
+  const markets = context?.marketTaxonomy?.observed ?? context?.availableMarkets.length ?? 0;
   const homeName = context?.fixture.homeTeam ?? state.snapshot.match.homeTeam.name;
   const awayName = context?.fixture.awayTeam ?? state.snapshot.match.awayTeam.name;
   const pulse = state.snapshot.fanPulse ?? { total: 0, byTeam: { home: 0, away: 0 }, currentParticipantChoice: null };
@@ -166,7 +166,7 @@ function PreMatchMarketWatch({ state, context, participantCount, onFanPulse }: {
         {pulseError ? <p className="mt-3 text-xs text-amber-300">Nao foi possivel registrar sua torcida. Tente novamente.</p> : null}
       </div>
 
-      <div className="border-t border-white/15 px-6 py-4 font-['DM_Mono'] text-[9px] uppercase text-white/35"><span>{markets} mercados disponíveis</span><p className="mt-2 normal-case leading-5">A primeira rodada competitiva abre somente quando a partida entrar ao vivo.</p></div>
+      <div className="border-t border-white/15 px-6 py-4 font-['DM_Mono'] text-[9px] uppercase text-white/35"><span>{markets} mercados TxLINE observados · {Math.min(5, markets)} em foco</span><p className="mt-2 normal-case leading-5">A primeira rodada competitiva abre somente quando a partida entrar ao vivo.</p></div>
     </aside>
   );
 }

@@ -17,8 +17,8 @@ import { fixtureAccent, useShellAtmosphere } from "../../app/shell/use-shell-atm
 
 function selectSuggestedMatch(matches: MatchSummary[]) {
   return (
-    matches.find((match) => match.competitionLabel.toLowerCase().includes("world cup") && match.status.toLowerCase().includes("live"))
-    ?? matches.find((match) => match.competitionLabel.toLowerCase().includes("world cup") && match.status.toLowerCase() !== "finished")
+    matches.find((match) => match.competition?.kind === "world_cup" && match.status.toLowerCase().includes("live"))
+    ?? matches.find((match) => match.competition?.kind === "world_cup" && match.status.toLowerCase() !== "finished")
     ?? matches.find((match) => match.status.toLowerCase().includes("live"))
     ?? matches.find((match) => match.status.toLowerCase() !== "finished")
     ?? matches[0]
@@ -39,6 +39,7 @@ export function LobbyScreen() {
   const [probeState, setProbeState] = useState<"idle" | "loading" | "ready" | "error">("idle");
   const [probe, setProbe] = useState<TxlineProbeResult | null>(null);
   const [technicalOpen, setTechnicalOpen] = useState(false);
+  const [competitionFilter, setCompetitionFilter] = useState("world_cup");
 
   useEffect(() => {
     let cancelled = false;
@@ -72,9 +73,12 @@ export function LobbyScreen() {
     };
   }, []);
 
+  const competitionFilters = useMemo(() => Array.from(new Map(matches.map((match) => [match.competition?.canonicalCompetitionId ?? `label:${match.competitionLabel}`, { id: match.competition?.canonicalCompetitionId ?? `label:${match.competitionLabel}`, label: match.competitionLabel, kind: match.competition?.kind ?? "unknown" }])).values()), [matches]);
+  const activeCompetitionId = competitionFilter === "world_cup" && !competitionFilters.some((item) => item.kind === "world_cup") ? "all" : competitionFilter;
+  const visibleMatches = useMemo(() => activeCompetitionId === "all" ? matches : matches.filter((match) => activeCompetitionId === "world_cup" ? match.competition?.kind === "world_cup" : (match.competition?.canonicalCompetitionId ?? `label:${match.competitionLabel}`) === activeCompetitionId), [activeCompetitionId, matches]);
   const selectedMatch = useMemo(
-    () => matches.find((match) => match.fixtureId === selectedMatchId) ?? matches[0] ?? null,
-    [matches, selectedMatchId],
+    () => visibleMatches.find((match) => match.fixtureId === selectedMatchId) ?? selectSuggestedMatch(visibleMatches),
+    [selectedMatchId, visibleMatches],
   );
   const selectedContext = selectedMatch ? fixtureContexts[selectedMatch.fixtureId] ?? null : null;
   const contextState: "idle" | "loading" | "ready" | "error" = selectedMatch
@@ -159,10 +163,11 @@ export function LobbyScreen() {
 
           {loadState === "ready" && selectedMatch ? (
             <>
+              <nav aria-label="Filtrar competições" className="mb-7 flex gap-2 overflow-x-auto pb-2"><button type="button" onClick={() => setCompetitionFilter("all")} aria-pressed={activeCompetitionId === "all"} className={`min-h-10 shrink-0 border px-4 font-['DM_Mono'] text-[9px] font-black uppercase ${activeCompetitionId === "all" ? "border-primary bg-primary text-[#050814]" : "border-white/15 text-white/50"}`}>Todas</button>{competitionFilters.map((competition) => <button key={competition.id} type="button" onClick={() => { setCompetitionFilter(competition.kind === "world_cup" ? "world_cup" : competition.id); setSelectedMatchId(null); }} aria-pressed={activeCompetitionId === competition.id || (activeCompetitionId === "world_cup" && competition.kind === "world_cup")} className={`min-h-10 shrink-0 border px-4 font-['DM_Mono'] text-[9px] font-black uppercase ${(activeCompetitionId === competition.id || (activeCompetitionId === "world_cup" && competition.kind === "world_cup")) ? "border-primary bg-primary text-[#050814]" : "border-white/15 text-white/50"}`}>{competition.label}</button>)}</nav>
               {featuredModel ? <FeaturedMatchStage model={featuredModel} onOpen={() => openPreview()} /> : null}
 
               <FixtureAgenda
-                matches={matches}
+                matches={visibleMatches}
                 selectedId={selectedMatch.fixtureId}
                 selectedContext={selectedContext}
                 contexts={fixtureContexts}

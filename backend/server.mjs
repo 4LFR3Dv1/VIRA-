@@ -10,6 +10,7 @@ import { deriveHomeProjection } from "./home-projection.mjs";
 import { createRoomRuntime } from "./runtime.mjs";
 import { createSolanaCommitmentPublisherFromEnv } from "./solana-commitment-publisher.mjs";
 import { createShareStore } from "./share-store.mjs";
+import { renderSharePng } from "./share-image-png.mjs";
 import { txlineCapabilities } from "./txline-endpoints.mjs";
 import { buildTxlineContext } from "./txline-context.mjs";
 import { discoverTxlineFixtures } from "./txline-discovery.mjs";
@@ -95,6 +96,11 @@ function sendSvg(response, body) {
   response.end(body);
 }
 
+function sendPng(response, body) {
+  response.writeHead(200, { "Content-Type": "image/png", "Content-Length": body.length, "Cache-Control": "public, max-age=31536000, immutable" });
+  response.end(body);
+}
+
 function escapeHtml(value) {
   return String(value ?? "").replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character]);
 }
@@ -112,10 +118,10 @@ function sharePageHtml(share, request) {
   const base = publicBaseUrl(request);
   const title = escapeHtml(share.metadata.title);
   const description = escapeHtml(share.metadata.description);
-  const image = `${base}/vira-icon.png`;
+  const image = `${base}/share-images/${encodeURIComponent(share.publicCode)}.png`;
   const url = `${base}/s/${encodeURIComponent(share.publicCode)}`;
   const destination = `${share.destination.path}${share.destination.path.includes("?") ? "&" : "?"}invite=${encodeURIComponent(share.publicCode)}`;
-  return `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${title}</title><meta name="description" content="${description}"><meta property="og:type" content="website"><meta property="og:site_name" content="VIRA"><meta property="og:title" content="${title}"><meta property="og:description" content="${description}"><meta property="og:image" content="${image}"><meta property="og:image:type" content="image/png"><meta property="og:url" content="${url}"><meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="${title}"><meta name="twitter:description" content="${description}"><meta name="twitter:image" content="${image}"><meta name="theme-color" content="#050814"><link rel="icon" href="/favicon.png"></head><body style="margin:0;background:#050814;color:#f7f8f4;font-family:Arial,sans-serif"><main style="min-height:100vh;display:grid;place-items:center;padding:24px;box-sizing:border-box"><section style="width:min(760px,100%);border-block:1px solid #ffffff26;padding:48px 0"><p style="color:#c7ff18;font:700 11px monospace;letter-spacing:.16em;text-transform:uppercase">VIRA · ${escapeHtml(share.kind)}</p><h1 style="font-size:clamp(42px,9vw,92px);line-height:.88;text-transform:uppercase;margin:24px 0">${title}</h1><p style="max-width:600px;color:#ffffff99;font-size:18px;line-height:1.6">${description}</p><a href="${escapeHtml(destination)}" data-share-cta style="display:inline-block;margin-top:32px;background:#c7ff18;color:#050814;padding:18px 26px;font-weight:900;text-transform:uppercase;text-decoration:none">${escapeHtml(share.destination.ctaLabel)} →</a></section></main><script>document.querySelector('[data-share-cta]').addEventListener('click',()=>{navigator.sendBeacon('/shares/${encodeURIComponent(share.publicCode)}/click')})</script></body></html>`;
+  return `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${title}</title><meta name="description" content="${description}"><meta property="og:type" content="website"><meta property="og:site_name" content="VIRA"><meta property="og:title" content="${title}"><meta property="og:description" content="${description}"><meta property="og:image" content="${image}"><meta property="og:image:secure_url" content="${image}"><meta property="og:image:type" content="image/png"><meta property="og:image:width" content="1200"><meta property="og:image:height" content="630"><meta property="og:url" content="${url}"><meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="${title}"><meta name="twitter:description" content="${description}"><meta name="twitter:image" content="${image}"><meta name="theme-color" content="#050814"><link rel="icon" href="/favicon.png"></head><body style="margin:0;background:#050814;color:#f7f8f4;font-family:Arial,sans-serif"><main style="min-height:100vh;display:grid;place-items:center;padding:24px;box-sizing:border-box"><section style="width:min(760px,100%);border-block:1px solid #ffffff26;padding:48px 0"><p style="color:#c7ff18;font:700 11px monospace;letter-spacing:.16em;text-transform:uppercase">VIRA · ${escapeHtml(share.kind)}</p><h1 style="font-size:clamp(42px,9vw,92px);line-height:.88;text-transform:uppercase;margin:24px 0">${title}</h1><p style="max-width:600px;color:#ffffff99;font-size:18px;line-height:1.6">${description}</p><a href="${escapeHtml(destination)}" data-share-cta style="display:inline-block;margin-top:32px;background:#c7ff18;color:#050814;padding:18px 26px;font-weight:900;text-transform:uppercase;text-decoration:none">${escapeHtml(share.destination.ctaLabel)} →</a></section></main><script>document.querySelector('[data-share-cta]').addEventListener('click',()=>{navigator.sendBeacon('/shares/${encodeURIComponent(share.publicCode)}/click')})</script></body></html>`;
 }
 
 function shareImageSvg(share) {
@@ -702,6 +708,14 @@ async function handleRequest(request, response) {
       const share = shareStore.getShare(decodeURIComponent(shareImageRoute[1]));
       if (!share) throw Object.assign(new Error("share_not_found"), { status: 404 });
       sendSvg(response, shareImageSvg(share));
+      return;
+    }
+
+    const sharePngRoute = url.pathname.match(/^\/share-images\/([^/.]+)\.png$/);
+    if (request.method === "GET" && sharePngRoute) {
+      const share = shareStore.getShare(decodeURIComponent(sharePngRoute[1]));
+      if (!share) throw Object.assign(new Error("share_not_found"), { status: 404 });
+      sendPng(response, renderSharePng(share));
       return;
     }
 

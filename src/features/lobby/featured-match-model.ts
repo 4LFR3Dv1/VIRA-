@@ -114,6 +114,11 @@ function drawSignal(context: MatchTxlineContext): FeaturedSignal | null {
 }
 
 export function selectFeaturedSignal(context: MatchTxlineContext): FeaturedSignal | null {
+  if (context.canonical1X2) {
+    const market = context.canonical1X2;
+    const labels = { home: context.fixture.homeTeam, draw: "Empate", away: context.fixture.awayTeam };
+    return { source: "available_market", marketId: market.snapshotId, label: labels[market.leadingChoice], value: market.selections[market.leadingChoice], updatedAt: market.observedAt, playable: false, distribution: (["home", "draw", "away"] as const).map((choice) => ({ id: choice, label: labels[choice], value: market.selections[choice] })) };
+  }
   const prediction = context.suggestedPrediction ? fromPrediction(context.suggestedPrediction, context) : null;
   return prediction ?? fromAvailableMarket(context) ?? drawSignal(context);
 }
@@ -123,7 +128,7 @@ export function createFeaturedMatchModel(
   context: MatchTxlineContext | null,
   contextState: "idle" | "loading" | "ready" | "error",
 ): FeaturedMatchModel {
-  const signalCount = context?.availableMarkets.length ?? context?.endpoints.odds.data?.availableMarkets.length ?? 0;
+  const signalCount = context?.marketTaxonomy?.observed ?? context?.availableMarkets.length ?? 0;
   if (contextState === "loading" || contextState === "idle") return { fixture, signal: { kind: "loading" }, signalCount };
   const signal = context ? selectFeaturedSignal(context) : null;
   return { fixture, signal: signal ? { kind: "available", value: signal } : { kind: "unavailable" }, signalCount };

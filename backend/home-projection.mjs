@@ -13,24 +13,17 @@ function normalizedStatus(value) {
 }
 
 function fixtureMarket(fixture, nowMs) {
-  let probability = fixture?.context?.endpoints?.odds?.data?.winProbability
-    ?? fixture?.context?.endpoints?.oddsUpdates?.data?.winProbability
-    ?? null;
-  if (!probability) {
-    const preserved = (fixture?.context?.availableMarkets ?? []).find((market) => market.marketType === "1X2_PARTICIPANT_RESULT" && !market.marketPeriod && market.hasProbabilities);
-    if (preserved) {
-      const option = (name, fallbackIndex) => preserved.options?.find((item) => item.priceName === name)?.pct ?? preserved.options?.[fallbackIndex]?.pct;
-      probability = {
-        home: option("part1", 0),
-        draw: option("draw", 1),
-        away: option("part2", 2),
-        capturedAt: preserved.capturedAt,
-        messageId: preserved.messageId ?? preserved.id,
-        providerSequence: preserved.sequence ?? null,
-      };
-    }
-  }
-  if (!probability) return null;
+  const canonical = fixture?.context?.canonical1X2 ?? null;
+  if (!canonical) return null;
+  const probability = {
+    home: canonical.selections.home,
+    draw: canonical.selections.draw,
+    away: canonical.selections.away,
+    capturedAt: canonical.observedAt,
+    messageId: canonical.snapshotId,
+    providerSequence: canonical.providerSequence,
+    marketSignature: canonical.marketSignature,
+  };
   const home = Number(probability.home);
   const draw = Number(probability.draw);
   const away = Number(probability.away);
@@ -54,6 +47,7 @@ function fixtureMarket(fixture, nowMs) {
     selections: { home, draw, away },
     leadingChoice: ["home", "draw", "away"][leadingIndex],
     snapshotId: probability.messageId ?? `${fixture.fixtureId}:${observedAt ?? "unknown"}`,
+    marketSignature: probability.marketSignature ?? null,
     freshness: {
       providerSequence: probability.providerSequence ?? null,
       observedAt,
@@ -67,6 +61,7 @@ function fixtureSummary(fixture, market) {
   return {
     fixtureId: String(fixture.fixtureId),
     competitionLabel: fixture.competitionLabel,
+    competition: fixture.competition,
     homeTeam: fixture.homeTeam,
     awayTeam: fixture.awayTeam,
     startTime: fixture.startTime ?? null,
@@ -79,6 +74,7 @@ function fixtureSummary(fixture, market) {
 function relevanceScore(fixture, market, prediction, nowMs) {
   const status = normalizedStatus(fixture.status);
   let score = status === "live" ? 1_000 : status === "scheduled" ? 100 : 0;
+  if (fixture?.competition?.kind === "world_cup") score += 500;
   if (status === "scheduled" && (!fixture.startTime || asTime(fixture.startTime) > nowMs)) score += 300;
   if (market?.freshness.fresh) score += 180;
   if (prediction?.status === "open") score += 140;
@@ -117,7 +113,7 @@ export function deriveHomeProjection({ catalog, player = null, predictions = {},
   return {
     version: 1,
     tournament: {
-      id: "world-cup",
+      id: selected?.fixture?.competition?.canonicalCompetitionId || "unidentified-competition",
       name: selected?.fixture?.competitionLabel || "World Cup",
       status: live ? "active" : candidates.every((item) => normalizedStatus(item.fixture.status) === "finished") ? "finished" : "active",
       generatedAt: catalog?.generatedAt ?? now.toISOString(),

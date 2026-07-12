@@ -1,7 +1,7 @@
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 
-const SNAPSHOT_VERSION = 1;
+const SNAPSHOT_VERSION = 2;
 
 async function mapWithConcurrency(items, limit, mapper) {
   const results = new Array(items.length);
@@ -20,6 +20,9 @@ function availability(context) {
   const marketCount = context?.availableMarkets?.length ?? context?.endpoints?.odds?.data?.availableMarkets?.length ?? 0;
   return {
     marketCount,
+    observedMarketCount: marketCount,
+    focusMarketCount: Math.min(5, marketCount),
+    canonical1X2Available: Boolean(context?.canonical1X2),
     hasMarket: marketCount > 0,
     hasPlayablePrediction: Boolean(context?.suggestedPrediction),
     contextStatus: context ? "ready" : "unavailable",

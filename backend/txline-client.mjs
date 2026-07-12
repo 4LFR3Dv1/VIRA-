@@ -1,5 +1,7 @@
 import { spawnSync } from "node:child_process";
 
+import { classifyCompetition } from "./competition-registry.mjs";
+
 const MAINNET_ORIGIN = "https://txline.txodds.com";
 const DEVNET_ORIGIN = "https://txline-dev.txodds.com";
 
@@ -294,11 +296,13 @@ export function normalizeTxlineFixture(raw) {
   const status = Number.isFinite(startTimeMs) && startTimeMs > Date.now() + 60_000
     ? "scheduled"
     : normalizedStatus;
+  const competition = classifyCompetition(raw);
   return {
     id: fixtureId,
     fixtureId,
     title: `${homeTeam} vs ${awayTeam}`,
-    competitionLabel: String(raw?.FixtureGroup ?? raw?.fixtureGroup ?? raw?.Competition ?? raw?.competition ?? "TxLINE Fixture"),
+    competitionLabel: competition.displayName,
+    competition,
     startTime,
     status,
     homeTeam,
