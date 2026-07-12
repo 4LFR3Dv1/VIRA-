@@ -47,12 +47,13 @@ function capsuleState(state: ReplayState, event: PresentationEvent | null | unde
 
   if (event?.kind === "answer_registered" || state.currentAnswerState === "submitted") {
     const closed = round?.state === "locked";
+    const football = round?.resolution.domain === "football" ? round.resolution.condition : null;
     return {
       tone: "registered",
       icon: CheckCircle2,
       label: closed ? "Respostas encerradas" : "Palpite confirmado",
-      title: closed ? "O proximo sinal decide" : "Sua escolha esta protegida",
-      detail: closed ? optionLabel(state.snapshot.currentParticipantAnswer?.optionId) : remainingLabel(round?.locksAt, now),
+      title: closed ? football ? "Seu palpite esta em jogo" : "O proximo sinal decide" : "Sua escolha esta protegida",
+      detail: closed && football?.endsAtClockSec !== undefined ? `ate ${formatMatchClock(football.endsAtClockSec)}` : closed ? optionLabel(state.snapshot.currentParticipantAnswer?.optionId) : remainingLabel(round?.locksAt, now),
       event,
     };
   }

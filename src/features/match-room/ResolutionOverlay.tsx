@@ -27,9 +27,19 @@ export function ResolutionOverlay({ result, presentationEvent, open, onClose }: 
   const success = result.wasCurrentUserCorrect;
   const opening = event?.openingValue ?? null;
   const current = event?.resolutionValue ?? null;
-  const acts = [
+  const football = result.resolutionDomain === "football";
+  const openingScore = result.condition?.openingObservation;
+  const finalScore = result.event?.absoluteScore;
+  const footballActs = [
+    <Act key="observation" eyebrow="Observacao oficial TxLINE"><Big>{openingScore?.homeScore ?? 0}-{openingScore?.awayScore ?? 0}<span className="text-primary"> → </span>{finalScore?.home ?? 0}-{finalScore?.away ?? 0}</Big><p className="mt-7 text-white/45">Placar consolidado no minuto {Math.floor((result.event?.matchClockSec ?? 0) / 60)}.</p></Act>,
+    <Act key="rule" eyebrow="Condicao avaliada"><Big>{result.resolutionReason === "window_expired" ? "Janela encerrada" : "Gol confirmado"}</Big><p className="mt-7 text-white/45">Opcao vencedora: <strong className="uppercase text-white">{result.winningOptionId === "yes" ? "Sim" : "Nao"}</strong></p></Act>,
+  ];
+  const marketActs = [
     <Act key="signal" eyebrow="Novo sinal TxLINE"><Big><Pct value={opening} /><span className="text-primary"> → </span><Pct value={current} /></Big><p className="mt-7 text-white/45">A probabilidade recebeu uma nova observacao.</p></Act>,
     <Act key="rule" eyebrow="Regra avaliada"><Big>{event?.winningOptionId === "yes" ? "Alvo cruzado" : "Abaixo do alvo"}</Big><p className="mt-7 text-white/45">Opcao vencedora: <strong className="uppercase text-white">{result.winningOptionId === "yes" ? "Sim" : "Nao"}</strong></p></Act>,
+  ];
+  const acts = [
+    ...(football ? footballActs : marketActs),
     <Act key="result" eyebrow="Rodada resolvida"><h2 className="font-['Chakra_Petch'] text-[clamp(3.5rem,10vw,10rem)] font-black uppercase leading-[.74]">{success ? "Voce acertou" : "Resultado recebido"}</h2><p className="mt-10 font-['Chakra_Petch'] text-[clamp(5rem,13vw,12rem)] font-black leading-none text-primary"><AnimatedNumber value={result.pointsAwarded} prefix={result.pointsAwarded > 0 ? "+" : ""} /></p></Act>,
     <Act key="ranking" eyebrow="Ranking atualizado"><h2 className="font-['Chakra_Petch'] text-[clamp(3.2rem,9vw,8rem)] font-black uppercase leading-[.78]">{event?.previousRank && event.currentRank ? <><span className="text-white/35">#{event.previousRank}</span><span className="text-primary"> → </span>#{event.currentRank}</> : result.movementLabel}</h2><p className="mt-8 font-['DM_Mono'] text-xs uppercase tracking-[.16em] text-primary">Resultado registrado no ledger</p></Act>,
   ];

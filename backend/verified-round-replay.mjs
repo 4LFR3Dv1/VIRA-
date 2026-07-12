@@ -2,6 +2,7 @@ import { canonicalJson, projectionHash, sha256Hex } from "./event-codec.mjs";
 
 export const VERIFIED_ROUND_REPLAY_SCHEMA_VERSION = 1;
 export const VERIFIED_ROUND_REPLAY_DOMAIN = "VIRA:VERIFIED_ROUND_REPLAY:V1";
+export const VERIFIED_FOOTBALL_REPLAY_DOMAIN = "VIRA:VERIFIED_ROUND_REPLAY:V2";
 
 const AUTHORITATIVE_ORIGINS = new Set([
   "txline_live_stream",
@@ -143,6 +144,93 @@ export function deriveVerifiedRoundReplay(events, roundId, verification) {
   for (const answerEvent of answers) {
     const optionId = String(eventPayload(answerEvent).answer?.optionId ?? "unknown");
     distribution[optionId] = (distribution[optionId] ?? 0) + 1;
+  }
+
+  const lockedRound = lockPayload.round ?? round;
+  if (lockedRound.resolution?.domain === "football") {
+    const condition = lockedRound.resolution.condition ?? {};
+    const resolutionObservation = resolvedPayload.event ?? {};
+    const acceptedEvent = ordered.find((event) => event.type === "txline.event.accepted" && String(eventPayload(event).providerEventId) === String(resolutionObservation.id ?? resolvedPayload.causedByTxlineEventId ?? ""));
+    const origin = normalizedOrigin(resolvedPayload, eventPayload(acceptedEvent));
+    const authorityValid = AUTHORITATIVE_ORIGINS.has(origin) && verification?.authorityValid !== false;
+    const lockedAt = iso(lockPayload.lockedAt, lockEvent.createdAt);
+    const timingValid = answers.every((event) => Date.parse(event.createdAt) <= Date.parse(lockedAt));
+    const leaderboardHashes = deriveLeaderboardHashes(ordered, resolvedEvent);
+    const opening = condition.openingObservation ?? {};
+    const targetSide = condition.targetSide === "away" ? "away" : "home";
+    const openingTargetScore = asNumber(targetSide === "home" ? opening.homeScore : opening.awayScore) ?? 0;
+    const finalHomeScore = asNumber(resolutionObservation.absoluteScore?.home);
+    const finalAwayScore = asNumber(resolutionObservation.absoluteScore?.away);
+    const finalTargetScore = targetSide === "home" ? finalHomeScore : finalAwayScore;
+    const observedClock = asNumber(resolutionObservation.matchClockSec) ?? 0;
+    const endClock = asNumber(condition.endsAtClockSec) ?? 0;
+    const conditionMet = finalTargetScore !== null && finalTargetScore > openingTargetScore && observedClock <= endClock;
+    const winningOptionId = String(resolvedPayload.winningOptionId ?? (conditionMet ? "yes" : "no"));
+    const deterministicWinner = conditionMet ? "yes" : observedClock >= endClock ? "no" : null;
+    const replay = {
+      domain: VERIFIED_FOOTBALL_REPLAY_DOMAIN,
+      schemaVersion: 2,
+      resolutionDomain: "football",
+      roomId: String(openedEvent.streamId ?? openedEvent.roomId),
+      roundId: String(roundId),
+      roundVersion: asNumber(lockedRound.version) ?? 1,
+      prompt: {
+        text: String(lockedRound.title ?? round.title ?? ""),
+        operator: "score_increase",
+        targetValue: null,
+        priceName: targetSide,
+        marketSignature: "football:team_scores",
+      },
+      condition,
+      opening: {
+        eventId: opening.eventId ? String(opening.eventId) : null,
+        providerSequence: asNumber(opening.providerSequence),
+        value: null,
+        score: { home: asNumber(opening.homeScore) ?? 0, away: asNumber(opening.awayScore) ?? 0 },
+        matchClockSec: asNumber(opening.matchClockSec) ?? 0,
+        observedAt: iso(opening.observedAt, lockedAt),
+        acquisitionOrigin: "txline_snapshot",
+      },
+      participation: { confirmedAnswers: answers.length, distributionVisible: true, distribution },
+      lock: { lockedAt, reason: "deadline", causedByEventId: lockEvent.causationId ? String(lockEvent.causationId) : null, temporalIntegrityValid: timingValid },
+      resolution: {
+        eventId: String(resolutionObservation.id ?? resolvedEvent.eventId),
+        providerSequence: asNumber(resolutionObservation.providerSequence ?? resolutionObservation.payload?.Seq),
+        observedValue: null,
+        score: { home: finalHomeScore ?? 0, away: finalAwayScore ?? 0 },
+        matchClockSec: observedClock,
+        winningOptionId,
+        reason: String(resolvedPayload.resolutionReason ?? (conditionMet ? "condition_confirmed" : "window_expired")),
+        expression: conditionMet
+          ? `${targetSide}Score ${finalTargetScore} > openingScore ${openingTargetScore} before ${endClock}`
+          : `${targetSide}Score ${finalTargetScore} == openingScore ${openingTargetScore} at ${observedClock}`,
+        predicateResult: conditionMet,
+        resolvedAt: iso(resolutionObservation.receivedAt ?? resolutionObservation.occurredAt, resolvedEvent.createdAt),
+        acquisitionOrigin: origin,
+      },
+      scoring: {
+        answersEvaluated: asNumber(resolvedPayload.answersEvaluated) ?? answers.length,
+        answersCorrect: asNumber(resolvedPayload.answersCorrect) ?? 0,
+        totalPointsApplied: asNumber(resolvedPayload.totalPointsApplied) ?? 0,
+        leaderboardBeforeHash: leaderboardHashes.before,
+        leaderboardAfterHash: leaderboardHashes.after,
+      },
+      proof: {
+        firstStreamVersion: Number(openedEvent.streamVersion), lastStreamVersion: Number(resolvedEvent.streamVersion), roundEventRangeHash: String(resolvedEvent.eventHash),
+        hashChainValid: verification?.hashChainValid === true, projectionMatches: verification?.projectionMatches === true, rankingMatches: verification?.rankingMatches === true,
+        authorityValid, temporalIntegrityValid: timingValid,
+        eligibilityValid: finalHomeScore !== null && finalAwayScore !== null && observedClock >= Number(condition.startsAtClockSec ?? 0),
+        determinismValid: deterministicWinner === winningOptionId,
+      },
+      technical: {
+        openingStreamVersion: Number(openedEvent.streamVersion), lockStreamVersion: Number(lockEvent.streamVersion), resolutionStreamVersion: Number(resolvedEvent.streamVersion),
+        marketType: null, line: null, period: null, minimumProviderSequence: null,
+        eligibilityChecks: { authoritativeScore: finalHomeScore !== null && finalAwayScore !== null, startsAfterLock: observedClock >= Number(condition.startsAtClockSec ?? 0), withinResolutionPolicy: deterministicWinner !== null },
+        causationId: resolvedEvent.causationId ?? null, correlationId: resolvedEvent.correlationId ?? null,
+        openingEventHash: String(openedEvent.eventHash), lockEventHash: String(lockEvent.eventHash), resolutionEventHash: String(resolvedEvent.eventHash),
+      },
+    };
+    return { ...replay, replayHash: hashVerifiedRoundReplay(replay) };
   }
 
   const resolutionObservation = resolvedPayload.event ?? {};

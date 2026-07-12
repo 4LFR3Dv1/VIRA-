@@ -177,6 +177,11 @@ function formatCountdown(remainingMs: number) {
   return [hours, minutes, seconds].map((value) => String(value).padStart(2, "0")).join(":");
 }
 
+function formatClock(totalSeconds: number) {
+  const safe = Math.max(0, Math.floor(totalSeconds));
+  return `${String(Math.floor(safe / 60)).padStart(2, "0")}:${String(safe % 60).padStart(2, "0")}`;
+}
+
 function StatusMetric({ label, active = true }: { label: string; active?: boolean }) {
   return <span className="inline-flex items-center gap-2"><span className={`size-1.5 rounded-full ${active ? "bg-primary" : "bg-amber-400"}`} />{label}</span>;
 }
@@ -198,6 +203,23 @@ function WaitingSignalStage({ state, latestPresentationEvent }: { state: ReplayS
   }, [round.id, round.state]);
   const remainingSec = Math.max(0, Math.ceil((Date.parse(round.locksAt) - now) / 1_000));
   const answersClosed = round.state === "locked";
+  const football = round.resolution.domain === "football" ? round.resolution.condition : null;
+  const targetTeam = football?.targetSide === "away" ? state.snapshot.match.awayTeam : state.snapshot.match.homeTeam;
+  const openingScore = football?.openingObservation
+    ? `${football.openingObservation.homeScore}-${football.openingObservation.awayScore}`
+    : `${state.snapshot.match.homeScore}-${state.snapshot.match.awayScore}`;
+
+  if (football) {
+    return (
+      <motion.section layout className="overflow-hidden border-y border-white/15 bg-[#090d18] px-5 py-10 md:px-8 md:py-14">
+        <div className="flex items-center gap-2 font-['DM_Mono'] text-[10px] font-black uppercase tracking-[.18em] text-primary"><Check className="size-4" /> {answersClosed ? "Palpite em jogo" : "Palpite confirmado"}</div>
+        <div className="mt-7 grid gap-10 lg:grid-cols-[1fr_.72fr] lg:items-end">
+          <div><h1 className="font-['Chakra_Petch'] text-[clamp(2.8rem,6vw,6.3rem)] font-black uppercase leading-[.8]">{targetTeam.name}<span className="block text-primary">marca?</span></h1><p className="mt-7 text-sm text-white/50">Voce respondeu: <strong className="ml-1 uppercase text-white">{option?.label ?? answer?.optionId ?? "--"}</strong></p><div className="mt-6 border-l-2 border-primary pl-4"><p className="font-['DM_Mono'] text-[9px] uppercase text-white/35">{answersClosed ? "Horizonte da previsao" : "Janela de resposta"}</p><strong className="mt-1 block font-['Chakra_Petch'] text-2xl font-black uppercase">{answersClosed && football.endsAtClockSec !== undefined ? `Ate ${formatClock(football.endsAtClockSec)}` : `Fecha em ${remainingSec}s`}</strong><p className="mt-1 text-xs text-white/40">{answersClosed ? "Um gol confirmado resolve SIM. Sem gol ate o limite, NAO vence." : "Os 10 minutos de jogo começam depois que todas as respostas forem bloqueadas."}</p></div></div>
+          <div className="border-l border-white/15 pl-6"><p className="font-['DM_Mono'] text-[10px] uppercase text-white/35">Acompanhamento oficial</p><div className="mt-5 grid grid-cols-2 gap-5"><div><p className="font-['DM_Mono'] text-[9px] uppercase text-white/35">Placar na abertura</p><strong className="mt-2 block font-['Chakra_Petch'] text-4xl font-black">{openingScore}</strong></div><div><p className="font-['DM_Mono'] text-[9px] uppercase text-white/35">Placar atual</p><strong className="mt-2 block font-['Chakra_Petch'] text-4xl font-black text-primary">{state.snapshot.match.homeScore}-{state.snapshot.match.awayScore}</strong></div></div><div className="mt-7 h-1 overflow-hidden bg-white/10"><motion.div className="h-full bg-primary" animate={{ width: `${football.startsAtClockSec !== undefined && football.endsAtClockSec !== undefined ? Math.max(0, Math.min(100, ((state.snapshot.match.matchClockSec - football.startsAtClockSec) / (football.endsAtClockSec - football.startsAtClockSec)) * 100)) : 0}%` }} /></div><p className="mt-4 font-['DM_Mono'] text-[9px] uppercase text-white/35">Agora {formatClock(state.snapshot.match.matchClockSec)} · limite {football.endsAtClockSec !== undefined ? formatClock(football.endsAtClockSec) : "apos o lock"}</p></div>
+        </div>
+      </motion.section>
+    );
+  }
 
   return (
     <motion.section layout className="overflow-hidden border-y border-white/15 bg-[#090d18] px-5 py-10 md:px-8 md:py-14">

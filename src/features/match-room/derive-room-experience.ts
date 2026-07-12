@@ -14,6 +14,7 @@ export type MatchExperienceState =
   | "provider_unavailable";
 
 function hasMarketSignal(state: ReplayState) {
+  if (state.snapshot.currentRound?.resolution.domain === "football") return true;
   const distributionHasValue = Object.values(state.snapshot.marketDistribution).some((value) => Number.isFinite(value) && value > 0);
   const predicate = state.snapshot.currentRound?.resolution.predicate;
   return distributionHasValue

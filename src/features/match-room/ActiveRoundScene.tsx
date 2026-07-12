@@ -25,6 +25,7 @@ export function ActiveRoundScene({ model, state, answerSummary, onSelect, onSubm
   }, [state.snapshot.currentRound?.id]);
   const remainingSec = Math.max(0, Math.ceil((Date.parse(state.snapshot.currentRound?.locksAt ?? "") - now) / 1_000));
   const total = Object.values(answerSummary).reduce((sum, value) => sum + value, 0);
+  const football = state.snapshot.currentRound?.resolution.domain === "football";
 
   return (
     <motion.section initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} className="overflow-hidden border-y border-white/15 bg-[#090d18] px-5 py-8 md:px-8 md:py-11">
@@ -35,7 +36,7 @@ export function ActiveRoundScene({ model, state, answerSummary, onSelect, onSubm
 
       <h1 className="mt-8 max-w-5xl font-['Chakra_Petch'] text-[clamp(2.6rem,5.8vw,6rem)] font-black uppercase leading-[.8]">{model.round.question}</h1>
 
-      {model.market ? <MarketScoreboard model={model} remainingSec={remainingSec} /> : null}
+      {football ? <FootballRoundBrief state={state} remainingSec={remainingSec} /> : model.market ? <MarketScoreboard model={model} remainingSec={remainingSec} /> : null}
 
       <div className="mt-8 grid min-h-52 overflow-hidden border-y border-white/15 md:grid-cols-2">
         {model.round.options.map((option) => {
@@ -61,6 +62,15 @@ export function ActiveRoundScene({ model, state, answerSummary, onSelect, onSubm
       {!locked ? <button type="button" disabled={!selected} onClick={onSubmit} className="mt-5 flex min-h-14 w-full items-center justify-center gap-2 bg-primary px-7 font-['Chakra_Petch'] text-sm font-black uppercase text-[#070a13] disabled:cursor-not-allowed disabled:opacity-25"><Send className="size-4" /> Confirmar palpite</button> : null}
     </motion.section>
   );
+}
+
+function FootballRoundBrief({ state, remainingSec }: { state: ReplayState; remainingSec: number }) {
+  const condition = state.snapshot.currentRound?.resolution.condition;
+  const team = condition?.targetSide === "away" ? state.snapshot.match.awayTeam : state.snapshot.match.homeTeam;
+  return <section className="mt-9 grid gap-5 border-y border-white/15 py-6 md:grid-cols-[1fr_auto] md:items-end">
+    <div><p className="font-['DM_Mono'] text-[9px] uppercase text-primary">Condicao futebolistica</p><h2 className="mt-2 font-['Chakra_Petch'] text-2xl font-black uppercase">{team?.name} precisa marcar</h2><p className="mt-2 text-sm text-white/45">A janela de 10 minutos começa quando as respostas forem encerradas.</p></div>
+    <div className="border-l border-white/15 pl-5 text-right"><p className="font-['DM_Mono'] text-[9px] uppercase text-white/35">Respostas fecham</p><strong className="font-['Chakra_Petch'] text-4xl font-black text-primary">{remainingSec}s</strong></div>
+  </section>;
 }
 
 function MarketScoreboard({ model, remainingSec }: { model: ViraExperienceModel; remainingSec: number }) {

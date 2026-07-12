@@ -208,6 +208,76 @@ test("concurrent admission is idempotent and remains reusable after restart", as
   }
 });
 
+test("football team_scores condition resolves yes on score increase and no on confirmed expiry", async () => {
+  const dataDir = await mkdtemp(path.join(os.tmpdir(), "vira-football-condition-"));
+  try {
+    const eventStore = await createFileEventStore({ dataDir });
+    const runtime = createRoomRuntime({ eventStore });
+    const configure = (roomId) => runtime.configureMatch({ fixtureId: roomId, title: "Norway vs England", status: "live", homeTeam: "Norway", awayTeam: "England" }, { suggestedPrediction: { priceName: "part1" } });
+
+    configure("football-yes");
+    const yesPlayer = await runtime.join("football-yes", "Ana");
+    let yesRoom = runtime.getRoom("football-yes");
+    const yesRoundId = yesRoom.currentRound.id;
+    assert.equal(yesRoom.currentRound.resolution.domain, "football");
+    await runtime.submitAnswer("football-yes", yesRoom.currentRound.id, yesPlayer.participant.id, "yes", "football-answer-yes", yesRoom.currentRound.version, yesPlayer.sessionToken);
+    yesRoom.currentRound = { ...yesRoom.currentRound, locksAt: new Date(Date.now() - 1).toISOString() };
+    await runtime.applyNormalizedEvent("football-yes", scoreSnapshotEvent("football-yes", { id: "score-open-yes", seq: 800, home: 0, away: 0, clock: 1200 }));
+    yesRoom = runtime.getRoom("football-yes");
+    assert.equal(yesRoom.currentRound.state, "locked");
+    assert.equal(yesRoom.currentRound.resolution.condition.startsAtClockSec, 1200);
+    assert.equal(yesRoom.currentRound.resolution.condition.endsAtClockSec, 1800);
+    await runtime.applyNormalizedEvent("football-yes", scoreSnapshotEvent("football-yes", { id: "score-candidate-var", seq: 801, home: 1, away: 0, clock: 1300 }));
+    assert.equal(runtime.getRoom("football-yes").currentRound.resolution.condition.state, "candidate_met");
+    await runtime.applyNormalizedEvent("football-yes", scoreSnapshotEvent("football-yes", { id: "score-revoked-var", seq: 802, home: 0, away: 0, clock: 1301 }));
+    assert.equal(runtime.getRoom("football-yes").currentRound.resolution.condition.state, "tracking");
+    await runtime.applyNormalizedEvent("football-yes", scoreSnapshotEvent("football-yes", { id: "score-goal-yes", seq: 803, home: 1, away: 0, clock: 1400 }));
+    assert.equal(runtime.getRoom("football-yes").currentRound.resolution.condition.state, "candidate_met");
+    await runtime.applyNormalizedEvent("football-yes", scoreSnapshotEvent("football-yes", { id: "score-goal-confirmed", seq: 804, home: 1, away: 0, clock: 1401 }));
+    assert.equal(runtime.snapshot("football-yes", yesPlayer.participant.id).lastResolution.winningOptionId, "yes");
+    assert.equal(runtime.snapshot("football-yes", yesPlayer.participant.id).leaderboard[0].points, 100);
+    await runtime.applyNormalizedEvent("football-yes", scoreSnapshotEvent("football-yes", { id: "score-cooldown", seq: 805, home: 1, away: 0, clock: 1520 }));
+    assert.equal(runtime.getRoom("football-yes").currentRound.state, "resolved");
+    await runtime.applyNormalizedEvent("football-yes", scoreSnapshotEvent("football-yes", { id: "score-director", seq: 806, home: 1, away: 0, clock: 1521 }));
+    assert.equal(runtime.getRoom("football-yes").currentRound.state, "open");
+    assert.equal(runtime.getRoom("football-yes").currentRound.sequence, 2);
+
+    configure("football-no");
+    const noPlayer = await runtime.join("football-no", "Jhon");
+    let noRoom = runtime.getRoom("football-no");
+    const noRoundId = noRoom.currentRound.id;
+    await runtime.submitAnswer("football-no", noRoom.currentRound.id, noPlayer.participant.id, "no", "football-answer-no", noRoom.currentRound.version, noPlayer.sessionToken);
+    noRoom.currentRound = { ...noRoom.currentRound, locksAt: new Date(Date.now() - 1).toISOString() };
+    await runtime.applyNormalizedEvent("football-no", scoreSnapshotEvent("football-no", { id: "score-open-no", seq: 900, home: 0, away: 0, clock: 1200 }));
+    await runtime.applyNormalizedEvent("football-no", scoreSnapshotEvent("football-no", { id: "score-expire-no", seq: 901, home: 0, away: 0, clock: 1800 }));
+    const noSnapshot = runtime.snapshot("football-no", noPlayer.participant.id);
+    assert.equal(noSnapshot.lastResolution.winningOptionId, "no");
+    assert.equal(noSnapshot.lastResolution.resolutionReason, "window_expired");
+    assert.equal(noSnapshot.leaderboard[0].points, 100);
+    const noVerification = await runtime.verifyRoom("football-no");
+    const noReplay = await runtime.verifiedRoundReplay("football-no", noRoundId);
+    assert.equal(noReplay.schemaVersion, 2);
+    assert.equal(noReplay.resolutionDomain, "football");
+    assert.deepEqual(noReplay.opening.score, { home: 0, away: 0 });
+    assert.deepEqual(noReplay.resolution.score, { home: 0, away: 0 });
+    assert.equal(noReplay.proof.determinismValid, true);
+    assert.equal(noVerification.projectionMatches, true);
+
+    const restoredStore = await createFileEventStore({ dataDir });
+    const restoredRuntime = createRoomRuntime({ eventStore: restoredStore });
+    await restoredRuntime.rehydrateFromLedger();
+    assert.equal(restoredRuntime.snapshot("football-yes").leaderboard[0].points, 100);
+    const restoredNo = restoredRuntime.authenticatedSnapshot("football-no", noPlayer.participant.id, noPlayer.sessionToken);
+    assert.ok(restoredNo.lastResolution);
+    assert.equal(restoredNo.lastResolution.winningOptionId, "no");
+    const restoredNoReplay = await restoredRuntime.verifiedRoundReplay("football-no", noRoundId);
+    assert.equal(restoredNoReplay.replayHash, noReplay.replayHash);
+    assert.equal((await restoredRuntime.verifiedRoundReplay("football-yes", yesRoundId)).schemaVersion, 2);
+  } finally {
+    await rm(dataDir, { recursive: true, force: true });
+  }
+});
+
 test("optimistic concurrency rejects stale append and succeeds after reload/redecision", async () => {
   const dataDir = await mkdtemp(path.join(os.tmpdir(), "vira-concurrency-"));
   try {

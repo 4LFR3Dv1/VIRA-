@@ -73,7 +73,7 @@ export function RoundPulse({
   roomDistribution,
   latestPresentationEvent,
 }: RoundPulseProps) {
-  const hasMarketSignal = Object.values(marketDistribution).some((value) => value > 0);
+  const hasMarketSignal = round?.resolution.domain === "football" || Object.values(marketDistribution).some((value) => value > 0);
   const predicate = round?.resolution.predicate ?? {};
   const openingValue = typeof predicate.openingValue === "number" ? predicate.openingValue : null;
   const isDirectionRound = predicate.direction === "up";

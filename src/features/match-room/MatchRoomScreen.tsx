@@ -94,7 +94,7 @@ export function MatchRoomScreen() {
       setLatestPresentationEvent(event);
       if (event.kind === "answer_registered") {
         toast.success("Palpite registrado", {
-          description: "Aguardando o proximo sinal elegivel da TxLINE.",
+          description: currentRound?.resolution.domain === "football" ? "A janela futebolistica começa quando as respostas fecharem." : "Aguardando o proximo sinal elegivel da TxLINE.",
         });
       }
       if (event.kind === "round_resolved") {
@@ -102,7 +102,7 @@ export function MatchRoomScreen() {
       }
       acknowledgePresentationEvent(event.id);
     });
-  }, [acknowledgePresentationEvent, presentationEvents]);
+  }, [acknowledgePresentationEvent, currentRound?.resolution.domain, presentationEvents]);
 
   useEffect(() => {
     if (!resolutionOpen) {

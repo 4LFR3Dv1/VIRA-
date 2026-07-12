@@ -42,6 +42,7 @@ export function createExperienceModel(state: ReplayState, event: PresentationEve
   const snapshot = state.snapshot;
   const round = snapshot.currentRound;
   const predicate = round?.resolution.predicate ?? {};
+  const football = round?.resolution.domain === "football" ? round.resolution.condition : null;
   const openingValue = typeof predicate.openingValue === "number" ? predicate.openingValue : null;
   const targetValue = typeof predicate.pctGte === "number" ? predicate.pctGte : null;
   const eventValue = event?.kind === "round_resolved" ? event.resolutionValue : null;
@@ -69,7 +70,7 @@ export function createExperienceModel(state: ReplayState, event: PresentationEve
       away: { ...snapshot.match.awayTeam, score: snapshot.match.awayScore },
     },
     room: { participantCount: snapshot.roomPopulation, connected: snapshot.connectionState === "live" },
-    market: openingValue !== null || currentValue !== null || targetValue !== null ? {
+    market: !football && (openingValue !== null || currentValue !== null || targetValue !== null) ? {
       label: marketLabel(round?.title),
       openingValue,
       currentValue,
@@ -84,8 +85,12 @@ export function createExperienceModel(state: ReplayState, event: PresentationEve
       options: round.options.map((option) => ({
         id: option.id,
         shortLabel: option.shortLabel ?? option.label,
-        label: option.id === "yes" ? "Sim, chega ao alvo" : option.id === "no" ? "Nao, fica abaixo" : option.label,
-        explanation: option.id === "yes" ? "O valor chega ao alvo ou o supera no proximo sinal." : "O valor permanece abaixo do alvo.",
+        label: football
+          ? option.id === "yes" ? "Sim, marca" : option.id === "no" ? "Nao marca" : option.label
+          : option.id === "yes" ? "Sim, chega ao alvo" : option.id === "no" ? "Nao, fica abaixo" : option.label,
+        explanation: football
+          ? option.id === "yes" ? "O time marca dentro da janela acompanhada." : "A janela termina sem gol do time."
+          : option.id === "yes" ? "O valor chega ao alvo ou o supera no proximo sinal." : "O valor permanece abaixo do alvo.",
       })),
     } : null,
     leaderboard: snapshot.leaderboard,

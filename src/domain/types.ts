@@ -19,7 +19,42 @@ export type NormalizedMatchEventType = "goal" | "card" | "period" | "odds_shift"
 
 export type EventSource = "txline-live" | "txline-snapshot" | "txline-history";
 
-export type ResolutionMode = "first_matching_event" | "window_elapsed" | "match_state";
+export type ResolutionMode = "first_matching_event" | "window_elapsed" | "match_state" | "football_condition";
+
+export interface TeamScoresCondition {
+  kind: "team_scores";
+  targetSide: "home" | "away";
+  durationSec: number;
+  state: "awaiting_lock" | "tracking" | "candidate_met" | "confirmed";
+  startsAtClockSec?: number;
+  endsAtClockSec?: number;
+  openingObservation?: {
+    eventId: string | null;
+    providerSequence: number | null;
+    homeScore: number;
+    awayScore: number;
+    matchClockSec: number;
+    observedAt: string;
+  };
+  candidateObservation?: {
+    eventId: string;
+    providerSequence: number | null;
+    targetScore: number;
+    homeScore: number;
+    awayScore: number;
+    matchClockSec: number;
+    observedAt: string;
+  } | null;
+  confirmedObservation?: {
+    eventId: string;
+    providerSequence: number | null;
+    targetScore: number;
+    homeScore: number;
+    awayScore: number;
+    matchClockSec: number;
+    observedAt: string;
+  } | null;
+}
 
 export interface Team {
   id: string;
@@ -58,11 +93,13 @@ export interface PredictionOption {
 }
 
 export interface PredictionResolution {
+  domain?: "market" | "football";
   mode: ResolutionMode;
   eventType?: NormalizedMatchEventType;
   predicate?: Record<string, unknown>;
   windowEndsAtClockSec?: number;
   elapsedOptionId?: string;
+  condition?: TeamScoresCondition;
 }
 
 export interface PredictionRound {
@@ -121,6 +158,8 @@ export interface NormalizedMatchEvent {
   type: NormalizedMatchEventType;
   teamId?: string;
   playerId?: string;
+  participantSide?: "home" | "away" | null;
+  absoluteScore?: { home: number; away: number } | null;
   payload: Record<string, unknown>;
   source: EventSource;
   providerSequence?: number;
@@ -134,6 +173,9 @@ export interface RoundResolutionResult {
   streakAfterResolve: number;
   movementLabel: string;
   resolvedBy: "event" | "window" | "match_state";
+  resolutionDomain?: "market" | "football";
+  resolutionReason?: string | null;
+  condition?: TeamScoresCondition | null;
   event?: NormalizedMatchEvent;
   answersEvaluated?: number;
   answersCorrect?: number;
@@ -329,17 +371,19 @@ export interface RoomVerification {
 }
 
 export interface VerifiedRoundReplayV1 {
-  domain: "VIRA:VERIFIED_ROUND_REPLAY:V1";
-  schemaVersion: 1;
+  domain: "VIRA:VERIFIED_ROUND_REPLAY:V1" | "VIRA:VERIFIED_ROUND_REPLAY:V2";
+  schemaVersion: 1 | 2;
+  resolutionDomain?: "market" | "football";
   replayHash: string;
   roomId: string;
   roundId: string;
   roundVersion: number;
-  prompt: { text: string; operator: ">=" | ">"; targetValue: number; priceName: string; marketSignature: string };
-  opening: { eventId: string | null; providerSequence: number | null; value: number | null; observedAt: string; acquisitionOrigin: string };
+  prompt: { text: string; operator: ">=" | ">" | "score_increase"; targetValue: number | null; priceName: string; marketSignature: string };
+  condition?: TeamScoresCondition;
+  opening: { eventId: string | null; providerSequence: number | null; value: number | null; score?: { home: number; away: number }; matchClockSec?: number; observedAt: string; acquisitionOrigin: string };
   participation: { confirmedAnswers: number; distributionVisible: boolean; distribution: Record<string, number> };
   lock: { lockedAt: string; reason: "deadline" | "eligible_signal"; causedByEventId: string | null; temporalIntegrityValid: boolean };
-  resolution: { eventId: string; providerSequence: number | null; observedValue: number | null; winningOptionId: string; expression: string; predicateResult: boolean; resolvedAt: string; acquisitionOrigin: string };
+  resolution: { eventId: string; providerSequence: number | null; observedValue: number | null; score?: { home: number; away: number }; matchClockSec?: number; reason?: string; winningOptionId: string; expression: string; predicateResult: boolean; resolvedAt: string; acquisitionOrigin: string };
   scoring: { answersEvaluated: number; answersCorrect: number; totalPointsApplied: number; leaderboardBeforeHash: string; leaderboardAfterHash: string };
   proof: {
     firstStreamVersion: number;

@@ -84,22 +84,17 @@ function matchForRoom(roomId) {
 }
 
 function roundSeedsForMatch(match) {
+  const footballConditionsEnabled = match.status === "live" && dynamicPredictionSeeds.has(String(match.id));
   return [
     {
       ...roundSeeds[0],
       answerWindowSec: DEFAULT_ROUND_ANSWER_WINDOW_SEC,
       matchId: match.id,
-      title: `${match.homeTeam.name} chega a 55% ou mais no proximo sinal?`,
-      contextLabel: "Mercado 1X2 · proximo sinal elegivel",
-      resolution: {
-        mode: "first_matching_event",
-        eventType: "odds_shift",
-        predicate: {
-          market: "1X2_PARTICIPANT_RESULT",
-          side: "home",
-          pctGte: 55,
-        },
-      },
+      title: footballConditionsEnabled ? `${match.homeTeam.name} marca nos proximos 10 minutos?` : `${match.homeTeam.name} chega a 55% ou mais no proximo sinal?`,
+      contextLabel: footballConditionsEnabled ? "Previsao de jogo · proximos 10 minutos" : "Mercado 1X2 · proximo sinal elegivel",
+      resolution: footballConditionsEnabled
+        ? { domain: "football", mode: "football_condition", condition: { kind: "team_scores", targetSide: "home", durationSec: 600, state: "awaiting_lock" } }
+        : { mode: "first_matching_event", eventType: "odds_shift", predicate: { market: "1X2_PARTICIPANT_RESULT", side: "home", pctGte: 55 } },
     },
     {
       ...roundSeeds[1],
@@ -247,17 +242,52 @@ export function createRoomRuntime({ eventStore = null, commitmentPublisher = nul
     const round = room.currentRound;
     if (!round || round.state !== "open") return false;
     const lockedAt = options.lockedAt ?? nowIso();
-    const lockedRound = { ...round, state: "locked", lockedAt, lockReason: reason, version: (Number(round.version) || 1) + 1 };
-    await appendDomainEvents(room, [domainEvent(room, "round.locked", {
+    const condition = round.resolution?.domain === "football"
+      ? {
+          ...(round.resolution.condition ?? {}),
+          state: "tracking",
+          startsAtClockSec: room.match.matchClockSec,
+          endsAtClockSec: room.match.matchClockSec + Number(round.resolution.condition?.durationSec ?? 600),
+          openingObservation: {
+            eventId: room.lastNormalizedEvent?.id ?? null,
+            providerSequence: room.lastNormalizedEvent?.providerSequence ?? null,
+            homeScore: room.match.homeScore,
+            awayScore: room.match.awayScore,
+            matchClockSec: room.match.matchClockSec,
+            observedAt: room.lastNormalizedEvent?.occurredAt ?? lockedAt,
+          },
+        }
+      : null;
+    const lockedRound = {
+      ...round,
+      state: "locked",
+      lockedAt,
+      lockReason: reason,
+      version: (Number(round.version) || 1) + 1,
+      resolution: condition ? { ...round.resolution, condition } : round.resolution,
+    };
+    const lockEvents = [domainEvent(room, "round.locked", {
       roundId: round.id,
       roundVersion: lockedRound.version,
       lockedAt,
       reason,
+      round: lockedRound,
     }, {
       idempotencyKey: `round-locked:${room.roomId}:${round.id}`,
       causationId: options.causationId,
       correlationId: options.correlationId,
-    })]);
+    })];
+    if (condition) {
+      lockEvents.push(domainEvent(room, "football.condition.tracking_started", {
+        roundId: round.id,
+        condition,
+      }, {
+        idempotencyKey: `football-condition-tracking:${room.roomId}:${round.id}`,
+        causationId: options.causationId,
+        correlationId: options.correlationId,
+      }));
+    }
+    await appendDomainEvents(room, lockEvents);
     room.currentRound = lockedRound;
     room.version += 1;
     clearRoundTimer(room.roomId);
@@ -360,6 +390,7 @@ export function createRoomRuntime({ eventStore = null, commitmentPublisher = nul
       if (room.currentRound && room.currentRound.id === updatedRounds[0].id && room.currentRound.state !== "resolved") {
         room.currentRound = {
           ...updatedRounds[0],
+          resolution: room.currentRound.state === "open" ? updatedRounds[0].resolution : room.currentRound.resolution,
           state: room.currentRound.state,
           version: room.currentRound.version,
           openedAt: room.currentRound.openedAt,
@@ -382,6 +413,19 @@ export function createRoomRuntime({ eventStore = null, commitmentPublisher = nul
     if (!suggestedPrediction || !room.currentRound || room.currentRound.state !== "open") return;
     if (room.match.status === "finished") return;
     if (Object.keys(currentRoundAnswers(room)).length > 0) return;
+    if (room.currentRound.resolution?.domain === "football") {
+      const suggestedSide = suggestedPrediction?.priceName === "part2" ? "away" : "home";
+      const team = suggestedSide === "away" ? room.match.awayTeam : room.match.homeTeam;
+      room.currentRound = {
+        ...room.currentRound,
+        title: `${team.name} marca nos proximos 10 minutos?`,
+        resolution: {
+          ...room.currentRound.resolution,
+          condition: { ...room.currentRound.resolution.condition, targetSide: suggestedSide },
+        },
+      };
+      return;
+    }
     room.currentRound = {
       ...room.currentRound,
       title: suggestedPrediction.prompt,
@@ -749,6 +793,9 @@ export function createRoomRuntime({ eventStore = null, commitmentPublisher = nul
   }
 
   function winningOptionFor(round, event) {
+    if (round.resolution?.domain === "football") {
+      return footballConditionEvaluation(round, event).winningOptionId;
+    }
     if (round.resolution.mode === "first_matching_event") {
       if (event.type !== round.resolution.eventType) return null;
       if (round.resolution.windowEndsAtClockSec && event.matchClockSec > round.resolution.windowEndsAtClockSec) {
@@ -764,6 +811,85 @@ export function createRoomRuntime({ eventStore = null, commitmentPublisher = nul
       return round.resolution.elapsedOptionId ?? round.options[0]?.id ?? null;
     }
     return null;
+  }
+
+  function footballConditionEvaluation(round, event) {
+    const condition = round?.resolution?.condition ?? {};
+    if (condition.kind !== "team_scores" || !["tracking", "candidate_met", "confirmed"].includes(condition.state)) {
+      return { winningOptionId: null, reason: "condition_not_tracking", expression: "football condition awaiting lock" };
+    }
+    const home = Number(event.absoluteScore?.home);
+    const away = Number(event.absoluteScore?.away);
+    const clock = Number(event.matchClockSec);
+    const start = Number(condition.startsAtClockSec);
+    const end = Number(condition.endsAtClockSec);
+    if (!Number.isFinite(home) || !Number.isFinite(away)) {
+      return { winningOptionId: null, reason: "score_observation_missing", expression: "authoritative score required" };
+    }
+    if (!Number.isFinite(clock) || !Number.isFinite(start) || !Number.isFinite(end) || clock < start) {
+      return { winningOptionId: null, reason: "observation_outside_window", expression: `${clock} >= ${start}` };
+    }
+    const targetSide = condition.targetSide === "away" ? "away" : "home";
+    const openingScore = Number(condition.openingObservation?.[targetSide === "home" ? "homeScore" : "awayScore"]);
+    const currentScore = targetSide === "home" ? home : away;
+    const confirmed = condition.confirmedObservation;
+    if (confirmed && Number(confirmed.matchClockSec) <= end) {
+      return {
+        winningOptionId: "yes",
+        reason: "condition_confirmed",
+        expression: `${targetSide}Score ${confirmed.targetScore} > openingScore ${openingScore} before ${end}`,
+        actualValue: Number(confirmed.targetScore),
+        expectedValue: openingScore,
+      };
+    }
+    if (clock >= end && !condition.candidateObservation) {
+      return {
+        winningOptionId: "no",
+        reason: "window_expired",
+        expression: `${targetSide}Score ${currentScore} == openingScore ${openingScore} at ${clock}`,
+        actualValue: currentScore,
+        expectedValue: openingScore,
+      };
+    }
+    return {
+      winningOptionId: null,
+      reason: "condition_pending",
+      expression: `${targetSide}Score ${currentScore} == openingScore ${openingScore}; tracking until ${end}`,
+      actualValue: currentScore,
+      expectedValue: openingScore,
+    };
+  }
+
+  function advanceFootballCondition(room, event, correlationId) {
+    const round = room.currentRound;
+    const condition = round?.resolution?.condition;
+    if (!round || round.state !== "locked" || round.resolution?.domain !== "football" || condition?.kind !== "team_scores") return [];
+    const home = Number(event.absoluteScore?.home);
+    const away = Number(event.absoluteScore?.away);
+    const clock = Number(event.matchClockSec);
+    if (!Number.isFinite(home) || !Number.isFinite(away) || !Number.isFinite(clock)) return [];
+    const targetSide = condition.targetSide === "away" ? "away" : "home";
+    const openingScore = Number(targetSide === "home" ? condition.openingObservation?.homeScore : condition.openingObservation?.awayScore);
+    const targetScore = targetSide === "home" ? home : away;
+    const end = Number(condition.endsAtClockSec);
+    if (!Number.isFinite(openingScore) || !Number.isFinite(end)) return [];
+    const observation = { eventId: event.id, providerSequence: event.providerSequence ?? null, targetScore, homeScore: home, awayScore: away, matchClockSec: clock, observedAt: event.occurredAt ?? nowIso() };
+    if (targetScore > openingScore && clock <= end && !condition.candidateObservation) {
+      const nextCondition = { ...condition, state: "candidate_met", candidateObservation: observation };
+      round.resolution = { ...round.resolution, condition: nextCondition };
+      return [domainEvent(room, "football.condition.candidate_met", { roundId: round.id, condition: nextCondition, observation }, { idempotencyKey: `football-candidate:${room.roomId}:${round.id}:${event.id}`, causationId: event.id, correlationId })];
+    }
+    if (condition.candidateObservation && targetScore > openingScore) {
+      const nextCondition = { ...condition, state: "confirmed", confirmedObservation: observation };
+      round.resolution = { ...round.resolution, condition: nextCondition };
+      return [domainEvent(room, "football.condition.confirmed", { roundId: round.id, condition: nextCondition, observation }, { idempotencyKey: `football-confirmed:${room.roomId}:${round.id}:${event.id}`, causationId: event.id, correlationId })];
+    }
+    if (condition.candidateObservation && targetScore <= openingScore) {
+      const nextCondition = { ...condition, state: "tracking", candidateObservation: null, confirmedObservation: null };
+      round.resolution = { ...round.resolution, condition: nextCondition };
+      return [domainEvent(room, "football.condition.candidate_revoked", { roundId: round.id, condition: nextCondition, observation }, { idempotencyKey: `football-candidate-revoked:${room.roomId}:${round.id}:${event.id}`, causationId: event.id, correlationId })];
+    }
+    return [];
   }
 
   function oddsEvaluation(round, event) {
@@ -877,6 +1003,9 @@ export function createRoomRuntime({ eventStore = null, commitmentPublisher = nul
   }
 
   function openNextRound(room, resolvedRound, event) {
+    if (resolvedRound.resolution?.domain === "football") {
+      return null;
+    }
     const resolvedPredicate = resolvedRound.resolution?.predicate ?? {};
     const odds = event.type === "odds_shift" ? oddsEvaluation(resolvedRound, event) : null;
     const openingValue = odds?.actualValue;
@@ -930,6 +1059,41 @@ export function createRoomRuntime({ eventStore = null, commitmentPublisher = nul
     return nextRound;
   }
 
+  function maybeOpenDirectedFootballRound(room, event) {
+    const previous = room.currentRound;
+    if (!previous || previous.state !== "resolved" || previous.resolution?.domain !== "football" || room.match.status !== "live") return null;
+    const clock = Number(event.matchClockSec);
+    if (!Number.isFinite(Number(event.absoluteScore?.home)) || !Number.isFinite(Number(event.absoluteScore?.away))) return null;
+    const resolvedAtClock = Number(room.lastResolution?.event?.matchClockSec ?? previous.resolution.condition?.endsAtClockSec ?? 0);
+    const safeWindow = (clock >= 900 && clock <= 2100) || (clock >= 2700 && clock <= 4500);
+    if (!safeWindow || clock < resolvedAtClock + 120) return null;
+    const targetSide = room.match.homeScore < room.match.awayScore
+      ? "home"
+      : room.match.awayScore < room.match.homeScore
+        ? "away"
+        : previous.resolution.condition?.targetSide === "home" ? "away" : "home";
+    const team = targetSide === "home" ? room.match.homeTeam : room.match.awayTeam;
+    const round = openedRound({
+      id: `round-${previous.sequence + 1}`,
+      matchId: room.match.id,
+      sequence: previous.sequence + 1,
+      contextLabel: "Previsao de jogo · proximos 10 minutos",
+      options: [{ id: "yes", label: "Sim" }, { id: "no", label: "Nao" }],
+      title: `${team.name} marca nos proximos 10 minutos?`,
+      opensAtClockSec: clock,
+      locksAtClockSec: clock + DEFAULT_ROUND_ANSWER_WINDOW_SEC,
+      answerWindowSec: DEFAULT_ROUND_ANSWER_WINDOW_SEC,
+      state: "open",
+      resolution: { domain: "football", mode: "football_condition", condition: { kind: "team_scores", targetSide, durationSec: 600, state: "awaiting_lock" } },
+    }, eventServerTimeMs(event));
+    room.currentRound = round;
+    room.answersByRound[round.id] ??= {};
+    room.roomDistribution = optionDistributionForRound(round);
+    pushTimeline(room, { id: `timeline-${round.id}-open-${event.id}`, matchClockSec: clock, title: "Nova previsao aberta", description: round.title, tone: "info" });
+    scheduleRoundLock(room);
+    return round;
+  }
+
   function ruleEvaluationFor(round, event) {
     if (!round) {
       return {
@@ -964,6 +1128,23 @@ export function createRoomRuntime({ eventStore = null, commitmentPublisher = nul
       };
     }
 
+    if (round.resolution?.domain === "football") {
+      const evaluation = footballConditionEvaluation(round, event);
+      return {
+        roundId: round.id,
+        roundPrompt: round.title,
+        eventId: event.id,
+        ruleMode: "football_condition",
+        expression: evaluation.expression,
+        actualValue: evaluation.actualValue ?? null,
+        expectedOperator: evaluation.winningOptionId === "yes" ? ">" : "==",
+        expectedValue: evaluation.expectedValue ?? null,
+        predicateResult: Boolean(evaluation.winningOptionId),
+        roundStateBefore: round.state,
+        windowValid: evaluation.reason !== "observation_outside_window",
+        ignoredReason: evaluation.winningOptionId ? undefined : evaluation.reason,
+      };
+    }
     if (event.type === "odds_shift") {
       const odds = oddsEvaluation(round, event);
       return {
@@ -1003,7 +1184,8 @@ export function createRoomRuntime({ eventStore = null, commitmentPublisher = nul
     const round = room.currentRound;
     if (!round || round.state !== "locked") return null;
     const answersForRound = room.answersByRound[round.id] ?? {};
-    const winningOptionId = winningOptionFor(round, event);
+    const footballEvaluation = round.resolution?.domain === "football" ? footballConditionEvaluation(round, event) : null;
+    const winningOptionId = footballEvaluation?.winningOptionId ?? winningOptionFor(round, event);
     if (!winningOptionId) return null;
 
     let currentUserDelta = 0;
@@ -1038,12 +1220,16 @@ export function createRoomRuntime({ eventStore = null, commitmentPublisher = nul
     room.currentRound = resolvedRound;
     room.lastResolution = {
       roundId: round.id,
+      roundVersion: resolvedRound.version,
       winningOptionId,
       wasCurrentUserCorrect: false,
       pointsAwarded: currentUserDelta,
       streakAfterResolve: 0,
       movementLabel: "ranking atualizado",
-      resolvedBy: round.resolution.mode === "window_elapsed" ? "window" : "event",
+      resolvedBy: footballEvaluation?.reason === "window_expired" || round.resolution.mode === "window_elapsed" ? "window" : "event",
+      resolutionDomain: round.resolution?.domain ?? "market",
+      resolutionReason: footballEvaluation?.reason ?? null,
+      condition: round.resolution?.condition ?? null,
       event,
       answersEvaluated,
       answersCorrect,
@@ -1309,14 +1495,31 @@ export function createRoomRuntime({ eventStore = null, commitmentPublisher = nul
       }
       case "round.locked": {
         if (!room.currentRound || room.currentRound.id !== payload.roundId) break;
+        room.currentRound = payload.round
+          ? cloneJson(payload.round)
+          : {
+              ...room.currentRound,
+              state: "locked",
+              version: payload.roundVersion ?? (Number(room.currentRound.version) || 1) + 1,
+              lockedAt: payload.lockedAt ?? storedEvent.createdAt,
+              lockReason: payload.reason ?? "ledger_replay",
+            };
+        pushTimeline(room, { id: `timeline-${payload.roundId}-locked`, matchClockSec: room.match.matchClockSec, title: "Respostas encerradas", description: "Somente respostas confirmadas antes do fechamento participam do resultado.", tone: "info" });
+        break;
+      }
+      case "football.condition.tracking_started": {
+        if (!room.currentRound || room.currentRound.id !== payload.roundId || !payload.condition) break;
         room.currentRound = {
           ...room.currentRound,
-          state: "locked",
-          version: payload.roundVersion ?? (Number(room.currentRound.version) || 1) + 1,
-          lockedAt: payload.lockedAt ?? storedEvent.createdAt,
-          lockReason: payload.reason ?? "ledger_replay",
+          resolution: { ...room.currentRound.resolution, domain: "football", condition: payload.condition },
         };
-        pushTimeline(room, { id: `timeline-${payload.roundId}-locked`, matchClockSec: room.match.matchClockSec, title: "Respostas encerradas", description: "Somente respostas confirmadas antes do fechamento participam do resultado.", tone: "info" });
+        break;
+      }
+      case "football.condition.candidate_met":
+      case "football.condition.candidate_revoked":
+      case "football.condition.confirmed": {
+        if (!room.currentRound || room.currentRound.id !== payload.roundId || !payload.condition) break;
+        room.currentRound = { ...room.currentRound, resolution: { ...room.currentRound.resolution, domain: "football", condition: payload.condition } };
         break;
       }
       case "txline.event.accepted": {
@@ -1369,7 +1572,7 @@ export function createRoomRuntime({ eventStore = null, commitmentPublisher = nul
         });
         room.leaderboard = rankLeaderboard(room.leaderboard);
         if (room.currentRound?.id === roundId) {
-          room.currentRound = { ...room.currentRound, state: "resolved" };
+          room.currentRound = { ...room.currentRound, state: "resolved", version: payload.roundVersion ?? (Number(room.currentRound.version) || 1) + 1 };
         }
         room.lastResolution = {
           roundId,
@@ -1379,6 +1582,9 @@ export function createRoomRuntime({ eventStore = null, commitmentPublisher = nul
           streakAfterResolve: 0,
           movementLabel: "ranking atualizado",
           resolvedBy: payload.resolvedBy ?? "event",
+          resolutionDomain: payload.resolutionDomain ?? "market",
+          resolutionReason: payload.resolutionReason ?? null,
+          condition: payload.condition ?? null,
           event: payload.event,
           answersEvaluated: payload.answersEvaluated,
           answersCorrect: payload.answersCorrect,
@@ -1646,6 +1852,7 @@ export function createRoomRuntime({ eventStore = null, commitmentPublisher = nul
       return snapshot(roomId);
     }
     if (normalizedEvent.type === "odds_shift" && activeRound?.state === "locked") {
+      if (activeRound.resolution?.domain === "football") return snapshot(roomId);
       const predicate = activeRound.resolution?.predicate ?? {};
       const payload = normalizedEvent.payload ?? {};
       const signatureMatches = !predicate.marketSignature || marketSignatureFromPayload(payload) === predicate.marketSignature;
@@ -1860,6 +2067,8 @@ export function createRoomRuntime({ eventStore = null, commitmentPublisher = nul
       updateMarketDistribution(room, event);
     }
     applyAuthoritativeScore(room, event);
+    const footballConditionEvents = advanceFootballCondition(room, event, correlationId);
+    if (footballConditionEvents.length) await appendDomainEvents(room, footballConditionEvents);
     const timelineEntryId = event.type === "match_end" ? `timeline-match-finished-${event.id}` : `timeline-${event.id}`;
     if (event.type !== "match_end") {
       pushTimeline(room, {
@@ -1878,13 +2087,29 @@ export function createRoomRuntime({ eventStore = null, commitmentPublisher = nul
       }
     }
     const resolution = resolveCurrentRound(room, event);
+    const directedRound = resolution ? null : maybeOpenDirectedFootballRound(room, event);
     if (resolution) {
       await appendDomainEvents(room, [
+        ...(resolution.resolutionDomain === "football" && resolution.resolutionReason === "window_expired"
+          ? [domainEvent(room, "football.condition.expired", {
+              roundId: resolution.roundId,
+              condition: resolution.condition,
+              observation: event,
+            }, {
+              idempotencyKey: `football-condition-expired:${room.roomId}:${resolution.roundId}`,
+              causationId: event.id,
+              correlationId,
+            })]
+          : []),
         domainEvent(room, "round.resolved", {
           roundId: resolution.roundId,
+          roundVersion: resolution.roundVersion,
           causedByTxlineEventId: event.id,
           winningOptionId: resolution.winningOptionId,
           resolvedBy: resolution.resolvedBy,
+          resolutionDomain: resolution.resolutionDomain,
+          resolutionReason: resolution.resolutionReason,
+          condition: resolution.condition,
           answersEvaluated: resolution.answersEvaluated,
           answersCorrect: resolution.answersCorrect,
           totalPointsApplied: resolution.totalPointsApplied,
@@ -1917,6 +2142,18 @@ export function createRoomRuntime({ eventStore = null, commitmentPublisher = nul
           : []),
       ]);
       scheduleRoundCommitment(room.roomId, resolution.roundId);
+    }
+    if (directedRound) {
+      await appendDomainEvents(room, [domainEvent(room, "round.opened", {
+        round: directedRound,
+        causedByEventId: event.id,
+        timelineEntryId: `timeline-${directedRound.id}-open-${event.id}`,
+        timelineMatchClockSec: directedRound.opensAtClockSec,
+      }, {
+        idempotencyKey: `round-opened:${room.roomId}:${directedRound.id}`,
+        causationId: event.id,
+        correlationId,
+      })]);
     }
     room.version += 1;
     const outputs = [
