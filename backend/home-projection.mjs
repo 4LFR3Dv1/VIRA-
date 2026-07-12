@@ -1,5 +1,4 @@
 const MATCH_RESULT_MARKET = "MATCH_RESULT_1X2";
-const FRESHNESS_MS = 5 * 60 * 1000;
 
 function asTime(value) {
   const time = Date.parse(String(value ?? ""));
@@ -38,8 +37,13 @@ function fixtureMarket(fixture, nowMs) {
   if (![home, draw, away].every((value) => Number.isFinite(value) && value >= 0)) return null;
   const observedAt = probability.capturedAt ?? fixture.context?.generatedAt ?? null;
   const observedMs = asTime(observedAt);
-  const staleAfterMs = observedMs === null ? null : observedMs + FRESHNESS_MS;
-  const fresh = staleAfterMs !== null && staleAfterMs > nowMs && normalizedStatus(fixture.status) !== "finished";
+  const kickoffMs = asTime(fixture.startTime);
+  const contextUnavailable = fixture?.availability?.contextStatus === "unavailable";
+  const fresh = observedMs !== null
+    && observedMs <= nowMs
+    && normalizedStatus(fixture.status) !== "finished"
+    && !contextUnavailable
+    && (kickoffMs === null || kickoffMs > nowMs);
   const values = [home, draw, away];
   const leadingIndex = values.indexOf(Math.max(...values));
   return {
@@ -53,7 +57,7 @@ function fixtureMarket(fixture, nowMs) {
     freshness: {
       providerSequence: probability.providerSequence ?? null,
       observedAt,
-      staleAfter: staleAfterMs === null ? null : new Date(staleAfterMs).toISOString(),
+      staleAfter: kickoffMs === null ? null : new Date(kickoffMs).toISOString(),
       fresh,
     },
   };

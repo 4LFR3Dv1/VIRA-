@@ -13,9 +13,17 @@ test("publishes a fresh fixture market with explicit authority", () => {
   assert.equal(projection.tournament.outrightMarket, null);
 });
 
-test("never publishes stale fixture market copy", () => {
-  const stale = fixture({ context: { generatedAt: "2026-07-12T10:00:00.000Z", endpoints: { odds: { data: { winProbability: { home: 48, draw: 27, away: 25, capturedAt: "2026-07-12T10:00:00.000Z" } } } } } });
-  const projection = deriveHomeProjection({ catalog: { matches: [stale] }, now });
+test("keeps the last confirmed pre-match market authoritative until kickoff", () => {
+  const stable = fixture({ context: { generatedAt: "2026-07-12T10:00:00.000Z", endpoints: { odds: { data: { winProbability: { home: 48, draw: 27, away: 25, capturedAt: "2026-07-12T10:00:00.000Z" } } } } } });
+  const projection = deriveHomeProjection({ catalog: { matches: [stable] }, now });
+  assert.equal(projection.editorial.kind, "predict_fixture");
+  assert.equal(projection.editorial.fixture.market.freshness.fresh, true);
+  assert.equal(projection.editorial.fixture.market.freshness.staleAfter, stable.startTime);
+});
+
+test("stops market authority on explicit context loss", () => {
+  const unavailable = fixture({ availability: { contextStatus: "unavailable" } });
+  const projection = deriveHomeProjection({ catalog: { matches: [unavailable] }, now });
   assert.equal(projection.editorial.kind, "open_calendar");
   assert.equal(projection.editorial.fixture.market.freshness.fresh, false);
 });
