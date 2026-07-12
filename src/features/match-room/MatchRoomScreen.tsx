@@ -70,10 +70,11 @@ export function MatchRoomScreen() {
   const experienceModel = useMemo(() => createExperienceModel(state, latestPresentationEvent, verification), [latestPresentationEvent, state, verification]);
 
   useEffect(() => {
-    if (state.snapshot.match.status !== "scheduled") return undefined;
     let cancelled = false;
-    void fetchMatchTxlineContext(matchId).then((context) => { if (!cancelled) setPreMatchContext(context); }).catch(() => { if (!cancelled) setPreMatchContext(null); });
-    return () => { cancelled = true; };
+    const refresh = () => void fetchMatchTxlineContext(matchId).then((context) => { if (!cancelled) setPreMatchContext(context); }).catch(() => { if (!cancelled) setPreMatchContext(null); });
+    refresh();
+    const interval = window.setInterval(refresh, 60_000);
+    return () => { cancelled = true; window.clearInterval(interval); };
   }, [matchId, state.snapshot.match.status]);
 
   useEffect(() => {

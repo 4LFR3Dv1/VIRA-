@@ -54,9 +54,9 @@ export function createExperienceModel(state: ReplayState, event: PresentationEve
     ? baseScene
     : verified && snapshot.match.status === "finished"
     ? "verified_final"
-    : event?.kind === "round_resolved" || state.currentUiState === "resolved_success" || state.currentUiState === "resolved_failure"
+    : event?.kind === "round_resolved"
       ? "round_resolved"
-      : event?.kind === "txline_update" && Boolean(round)
+      : event?.kind === "txline_update" && Boolean(round) && round?.resolution.domain !== "football"
         ? "signal_received"
         : baseScene;
   const resolvedEvidence = snapshot.evidenceHistory.filter((item) => item.status === "resolved" && item.resolution);

@@ -37,6 +37,9 @@ const matchSeed = {
 const dynamicFixtureSeeds = new Map();
 const dynamicPredictionSeeds = new Map();
 const DEFAULT_ROUND_ANSWER_WINDOW_SEC = Math.max(10, Math.min(120, Number(process.env.VIRA_ROUND_ANSWER_WINDOW_SEC) || 30));
+const MARKET_ROUNDS_ENABLED = process.env.VIRA_MARKET_ROUNDS_ENABLED === "true" || (process.env.NODE_ENV !== "production" && process.env.VIRA_MARKET_ROUNDS_ENABLED !== "false");
+const FOOTBALL_ROUND_COOLDOWN_SEC = Math.max(120, Number(process.env.VIRA_FOOTBALL_ROUND_COOLDOWN_SEC) || 240);
+const FOOTBALL_ROUNDS_MAX = Math.max(1, Math.min(12, Number(process.env.VIRA_FOOTBALL_ROUNDS_MAX) || 7));
 
 function openedRound(round, openedAtMs = Date.now()) {
   const durationSec = Math.max(1, Number(round.answerWindowSec) || Number(round.locksAtClockSec) - Number(round.opensAtClockSec) || DEFAULT_ROUND_ANSWER_WINDOW_SEC);
@@ -85,7 +88,8 @@ function matchForRoom(roomId) {
 
 function roundSeedsForMatch(match) {
   const footballConditionsEnabled = match.status === "live" && dynamicPredictionSeeds.has(String(match.id));
-  return [
+  if (!footballConditionsEnabled && !MARKET_ROUNDS_ENABLED) return [];
+  const seeds = [
     {
       ...roundSeeds[0],
       answerWindowSec: DEFAULT_ROUND_ANSWER_WINDOW_SEC,
@@ -119,6 +123,7 @@ function roundSeedsForMatch(match) {
       title: `${match.homeTeam.name} segura a vantagem ate os 80?`,
     },
   ];
+  return footballConditionsEnabled ? seeds.slice(0, 1) : seeds;
 }
 
 const roundSeeds = [
@@ -315,7 +320,7 @@ export function createRoomRuntime({ eventStore = null, commitmentPublisher = nul
   function defaultRoom(roomId) {
     const match = matchForRoom(roomId);
     const matchRounds = roundSeedsForMatch(match);
-    const initialRound = match.status === "finished" ? null : openedRound({ ...matchRounds[0] });
+    const initialRound = match.status === "finished" || !matchRounds[0] ? null : openedRound({ ...matchRounds[0] });
     const room = {
       roomId,
       roomLabel: `Sala VIRA · ${match.title}`,
@@ -387,7 +392,7 @@ export function createRoomRuntime({ eventStore = null, commitmentPublisher = nul
         room.currentRound = { ...room.currentRound, state: "expired" };
       }
       room.roomLabel = `Sala VIRA · ${updatedMatch.title}`;
-      if (room.currentRound && room.currentRound.id === updatedRounds[0].id && room.currentRound.state !== "resolved") {
+      if (room.currentRound && updatedRounds[0] && room.currentRound.id === updatedRounds[0].id && room.currentRound.state !== "resolved") {
         room.currentRound = {
           ...updatedRounds[0],
           resolution: room.currentRound.state === "open" ? updatedRounds[0].resolution : room.currentRound.resolution,
@@ -1003,7 +1008,7 @@ export function createRoomRuntime({ eventStore = null, commitmentPublisher = nul
   }
 
   function openNextRound(room, resolvedRound, event) {
-    if (resolvedRound.resolution?.domain === "football") {
+    if (resolvedRound.resolution?.domain === "football" || !MARKET_ROUNDS_ENABLED) {
       return null;
     }
     const resolvedPredicate = resolvedRound.resolution?.predicate ?? {};
@@ -1061,22 +1066,24 @@ export function createRoomRuntime({ eventStore = null, commitmentPublisher = nul
 
   function maybeOpenDirectedFootballRound(room, event) {
     const previous = room.currentRound;
-    if (!previous || previous.state !== "resolved" || previous.resolution?.domain !== "football" || room.match.status !== "live") return null;
+    if (room.match.status !== "live" || !dynamicPredictionSeeds.has(String(room.match.id))) return null;
+    if (previous && (previous.state !== "resolved" || previous.resolution?.domain !== "football")) return null;
+    if (previous && previous.sequence >= FOOTBALL_ROUNDS_MAX) return null;
     const clock = Number(event.matchClockSec);
     if (!Number.isFinite(Number(event.absoluteScore?.home)) || !Number.isFinite(Number(event.absoluteScore?.away))) return null;
-    const resolvedAtClock = Number(room.lastResolution?.event?.matchClockSec ?? previous.resolution.condition?.endsAtClockSec ?? 0);
-    const safeWindow = (clock >= 900 && clock <= 2100) || (clock >= 2700 && clock <= 4500);
-    if (!safeWindow || clock < resolvedAtClock + 120) return null;
+    const resolvedAtClock = Number(room.lastResolution?.event?.matchClockSec ?? previous?.resolution.condition?.endsAtClockSec ?? 0);
+    const safeWindow = (clock >= 300 && clock <= 2100) || (clock >= 2700 && clock <= 4500);
+    if (!safeWindow || (previous && clock < resolvedAtClock + FOOTBALL_ROUND_COOLDOWN_SEC)) return null;
     const targetSide = room.match.homeScore < room.match.awayScore
       ? "home"
       : room.match.awayScore < room.match.homeScore
         ? "away"
-        : previous.resolution.condition?.targetSide === "home" ? "away" : "home";
+        : previous?.resolution.condition?.targetSide === "home" ? "away" : "home";
     const team = targetSide === "home" ? room.match.homeTeam : room.match.awayTeam;
     const round = openedRound({
-      id: `round-${previous.sequence + 1}`,
+      id: `round-${(previous?.sequence ?? 0) + 1}`,
       matchId: room.match.id,
-      sequence: previous.sequence + 1,
+      sequence: (previous?.sequence ?? 0) + 1,
       contextLabel: "Previsao de jogo · proximos 10 minutos",
       options: [{ id: "yes", label: "Sim" }, { id: "no", label: "Nao" }],
       title: `${team.name} marca nos proximos 10 minutos?`,
@@ -1286,6 +1293,7 @@ export function createRoomRuntime({ eventStore = null, commitmentPublisher = nul
   function reanchorOpenRoundFromLiveOdds(room, event) {
     const round = room.currentRound;
     if (!round || round.state !== "open" || event.type !== "odds_shift") return;
+    if (round.resolution?.domain === "football") return;
     if (Object.keys(currentRoundAnswers(room)).length > 0) return;
     const predicate = round.resolution?.predicate ?? {};
     if (Number.isFinite(Number(predicate.openingValue)) && predicate.openedFromEventId) return;

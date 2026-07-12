@@ -236,9 +236,9 @@ test("football team_scores condition resolves yes on score increase and no on co
     await runtime.applyNormalizedEvent("football-yes", scoreSnapshotEvent("football-yes", { id: "score-goal-confirmed", seq: 804, home: 1, away: 0, clock: 1401 }));
     assert.equal(runtime.snapshot("football-yes", yesPlayer.participant.id).lastResolution.winningOptionId, "yes");
     assert.equal(runtime.snapshot("football-yes", yesPlayer.participant.id).leaderboard[0].points, 100);
-    await runtime.applyNormalizedEvent("football-yes", scoreSnapshotEvent("football-yes", { id: "score-cooldown", seq: 805, home: 1, away: 0, clock: 1520 }));
+    await runtime.applyNormalizedEvent("football-yes", scoreSnapshotEvent("football-yes", { id: "score-cooldown", seq: 805, home: 1, away: 0, clock: 1640 }));
     assert.equal(runtime.getRoom("football-yes").currentRound.state, "resolved");
-    await runtime.applyNormalizedEvent("football-yes", scoreSnapshotEvent("football-yes", { id: "score-director", seq: 806, home: 1, away: 0, clock: 1521 }));
+    await runtime.applyNormalizedEvent("football-yes", scoreSnapshotEvent("football-yes", { id: "score-director", seq: 806, home: 1, away: 0, clock: 1641 }));
     assert.equal(runtime.getRoom("football-yes").currentRound.state, "open");
     assert.equal(runtime.getRoom("football-yes").currentRound.sequence, 2);
 

@@ -27,8 +27,8 @@ export function RoomStage({ state, model, answerSummary, latestPresentationEvent
   if (experience === "no_live_fixture") return <OperationalStage state={state} kind="no-fixture" />;
   if (experience === "scheduled_without_market") return <OperationalStage state={state} kind="scheduled-empty" context={preMatchContext} onFanPulse={onFanPulse} />;
   if (experience === "scheduled_with_market") return <OperationalStage state={state} kind="scheduled-ready" context={preMatchContext} onFanPulse={onFanPulse} />;
-  if (experience === "live_waiting_for_market") return <PreparingRoundStage state={state} kind="market" />;
-  if (experience === "live_waiting_for_round") return <PreparingRoundStage state={state} kind="round" />;
+  if (experience === "live_waiting_for_market") return <PreparingRoundStage state={state} kind="market" context={preMatchContext} />;
+  if (experience === "live_waiting_for_round") return <PreparingRoundStage state={state} kind="round" context={preMatchContext} />;
 
   if (round && state.currentAnswerState === "submitted") {
     return <WaitingSignalStage state={state} latestPresentationEvent={latestPresentationEvent} />;
@@ -37,10 +37,11 @@ export function RoomStage({ state, model, answerSummary, latestPresentationEvent
   return <ActiveRoundScene model={model} state={state} answerSummary={answerSummary} onSelect={onSelect} onSubmit={onSubmit} />;
 }
 
-function PreparingRoundStage({ state, kind }: { state: ReplayState; kind: "market" | "round" }) {
+function PreparingRoundStage({ state, kind, context }: { state: ReplayState; kind: "market" | "round"; context: MatchTxlineContext | null }) {
   const reduceMotion = useReducedMotion();
   const connected = state.snapshot.connectionState === "live";
   const receivedSignals = state.snapshot.timeline.length;
+  const watch = context?.suggestedPrediction ?? null;
 
   return (
     <motion.section layout className="relative min-h-[31rem] overflow-hidden border-y border-white/15 bg-[#090d18]">
@@ -57,15 +58,15 @@ function PreparingRoundStage({ state, kind }: { state: ReplayState; kind: "marke
       </div>
 
       <div className="relative z-10 flex min-h-[31rem] flex-col items-center justify-center px-5 py-14 text-center">
-        <p className="font-['DM_Mono'] text-[10px] font-black uppercase tracking-[.2em] text-primary">{kind === "market" ? "Partida ao vivo" : "Sinal encontrado"}</p>
+        <p className="font-['DM_Mono'] text-[10px] font-black uppercase tracking-[.2em] text-primary">{kind === "market" ? "Modo observacao" : "Momento encontrado"}</p>
         <h1 className="mt-6 max-w-5xl font-['Chakra_Petch'] text-[clamp(2.7rem,6.5vw,6.5rem)] font-black uppercase leading-[.8]">
-          {kind === "market" ? "Procurando um" : "Preparando"}
-          <span className="block text-primary">{kind === "market" ? "sinal jogavel" : "proxima rodada"}</span>
+          {kind === "market" ? "Acompanhando a" : "Preparando"}
+          <span className="block text-primary">{kind === "market" ? "partida" : "proxima rodada"}</span>
         </h1>
         <p className="mt-8 max-w-xl text-sm leading-6 text-white/50 md:text-base">
           {kind === "market"
-            ? "A TxLINE esta conectada e enviando observacoes, mas ainda nao forneceu um mercado que possa abrir uma rodada."
-            : "O mercado foi encontrado. A sala esta transformando o sinal real na proxima pergunta."}
+            ? "O VIRA observa placar, relogio e contexto de mercado. Uma nova pergunta aparece apenas quando a partida produzir um momento relevante."
+            : "Um momento futebolistico relevante foi encontrado. A sala esta preparando uma pergunta curta para todos."}
         </p>
 
         <div className="mt-10 flex flex-wrap justify-center gap-x-7 gap-y-3 font-['DM_Mono'] text-[10px] font-bold uppercase tracking-[.12em] text-white/55">
@@ -73,7 +74,8 @@ function PreparingRoundStage({ state, kind }: { state: ReplayState; kind: "marke
           <StatusMetric label={`${receivedSignals} observacoes recebidas`} />
           <StatusMetric label={`${state.snapshot.roomPopulation} na sala`} />
         </div>
-        <p className="mt-12 border-t border-white/15 pt-5 text-xs text-white/35">{kind === "market" ? "Nenhum valor sintetico ou mercado substituto sera criado." : "A rodada abre automaticamente quando a pergunta estiver pronta."}</p>
+        <p className="mt-12 border-t border-white/15 pt-5 text-xs text-white/35">{kind === "market" ? "Sem botoes agora. Assista ao jogo; o VIRA avisa quando houver algo que valha um palpite." : "A rodada abre somente quando o contrato futebolistico estiver pronto."}</p>
+        {watch ? <div className="mt-7 grid w-full max-w-xl grid-cols-[1fr_auto] items-center border-y border-white/15 py-4 text-left"><div><p className="font-['DM_Mono'] text-[9px] uppercase text-white/35">Market Watch · contexto passivo</p><strong className="mt-1 block font-['Chakra_Petch'] text-xl font-black uppercase">{watch.priceLabel} ganhou contexto</strong></div><span className="font-['Chakra_Petch'] text-3xl font-black text-primary">{watch.pct.toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%</span></div> : null}
       </div>
     </motion.section>
   );
