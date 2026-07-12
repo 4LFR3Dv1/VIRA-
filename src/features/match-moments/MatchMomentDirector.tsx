@@ -1,7 +1,9 @@
 import { Activity, Check, ChevronRight, Crosshair, Flag, Goal, ShieldAlert, TimerReset, Volume2, VolumeX } from "lucide-react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
+import { useEffect } from "react";
 
 import type { MatchMoment, MotionPreference, PressureMoment } from "./match-moment-types";
+import { setShellOverlayState } from "../../app/shell/shell-events";
 
 interface Props {
   moment: MatchMoment | null;
@@ -23,6 +25,11 @@ function clock(seconds: number) {
 export function MatchMomentDirector({ moment, ambient, motionPreference, sound, onDismiss, onMotionChange, onSoundChange, visible = true }: Props) {
   const systemReduced = useReducedMotion();
   const reduced = Boolean(systemReduced) || motionPreference !== "full";
+  const takeoverOpen = visible && moment?.presentation === "takeover";
+  useEffect(() => {
+    setShellOverlayState("match-moment", takeoverOpen);
+    return () => setShellOverlayState("match-moment", false);
+  }, [takeoverOpen]);
   if (!visible) return null;
   return <>
     <div aria-hidden className="pointer-events-none fixed inset-0 z-[35] transition-opacity duration-700" style={{ opacity: ambient ? (ambient.level === "high" ? .58 : .34) : 0, background: ambient?.teamSide === "away" ? "linear-gradient(270deg, rgba(115,185,232,.24), transparent 58%)" : "linear-gradient(90deg, rgba(199,255,24,.2), transparent 58%)" }} />

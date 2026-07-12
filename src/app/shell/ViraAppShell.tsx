@@ -11,6 +11,7 @@ import { matchCurrentRoute } from "../routing/route-manifest";
 import { resolveNavigationTransition } from "../routing/navigation-transition";
 import type { ShellActiveRoom } from "./shell-experience";
 import { OPEN_OFFICIAL_REVIEW_EVENT, SHELL_OVERLAY_STATE_EVENT } from "./shell-events";
+import { ViraShellBackground } from "./ViraShellBackground";
 
 export function ViraAppShell() {
   const shell = useShellExperience();
@@ -62,7 +63,9 @@ export function ViraAppShell() {
   const overlayOpen = reviewOpen || externalOverlays.size > 0;
   const continuityVisible = shell.activeRoom.kind === "confirmed" && shell.mode !== "immersive" && !overlayOpen && activeFixtureId !== currentFixtureId;
   const style = { "--shell-alert-height": alertVisible ? "56px" : "0px", "--shell-mobile-dock-height": shell.mode === "immersive" ? "0px" : "68px", "--shell-continuity-height": continuityVisible ? "92px" : "0px" } as CSSProperties;
-  return <LayoutGroup id="vira-shell"><div data-shell-mode={shell.mode} data-shell-alert={alertVisible ? "visible" : "hidden"} data-active-room={continuityVisible ? "visible" : "hidden"} style={style} className="min-h-dvh bg-[#050814] text-white">
+  return <LayoutGroup id="vira-shell"><div data-shell-mode={shell.mode} data-shell-alert={alertVisible ? "visible" : "hidden"} data-active-room={continuityVisible ? "visible" : "hidden"} style={style} className="vira-app-shell">
+    <ViraShellBackground paused={overlayOpen || Boolean(roomTakeover)} />
+    <div className="vira-app-shell__content">
     <ShellSignalRail />
     <ShellConnectionSurface />
     <ConnectionRestoredNotice open={restored} />
@@ -73,6 +76,7 @@ export function ViraAppShell() {
     {!overlayOpen ? <MobileContextDock onOpenReview={() => setReviewOpen(true)} /> : null}
     <OfficialReviewPortal open={reviewOpen} roomId={shell.review.kind === "available" ? shell.review.roomId : null} onClose={() => setReviewOpen(false)} />
     <ShellReadinessLayer />
+    </div>
   </div></LayoutGroup>;
 }
 

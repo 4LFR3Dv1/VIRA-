@@ -1,0 +1,41 @@
+@property --shell-home-intensity { syntax: "<number>"; inherits: true; initial-value: 0; }
+@property --shell-away-intensity { syntax: "<number>"; inherits: true; initial-value: 0; }
+@property --shell-pitch-opacity { syntax: "<number>"; inherits: true; initial-value: .13; }
+@property --shell-light-opacity { syntax: "<number>"; inherits: true; initial-value: .4; }
+
+.vira-app-shell { position: relative; min-height: 100dvh; isolation: isolate; background: #040711; color: #f7f8f4; }
+.vira-app-shell__content { position: relative; z-index: 1; min-height: 100dvh; }
+.vira-shell-background {
+  --shell-home-accent: #c7ff18;
+  --shell-away-accent: #719fbd;
+  --shell-fixture-focus: 0;
+  --shell-home-intensity: .08;
+  --shell-away-intensity: .08;
+  --shell-pitch-opacity: .13;
+  --shell-light-opacity: .4;
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+  contain: strict;
+  background: linear-gradient(180deg, #08101c 0%, #050914 38%, #03050d 100%);
+  transition: --shell-home-intensity 480ms cubic-bezier(.16,1,.3,1), --shell-away-intensity 480ms cubic-bezier(.16,1,.3,1), --shell-pitch-opacity 480ms cubic-bezier(.16,1,.3,1), --shell-light-opacity 480ms cubic-bezier(.16,1,.3,1);
+}
+.vira-shell-background[data-atmosphere="idle"] { --shell-home-intensity: var(--shell-fixture-focus); --shell-away-intensity: var(--shell-fixture-focus); --shell-pitch-opacity: .13; --shell-light-opacity: .4; }
+.vira-shell-background[data-atmosphere="anticipation"] { --shell-home-intensity: .42; --shell-away-intensity: .42; --shell-pitch-opacity: .25; --shell-light-opacity: .56; }
+.vira-shell-background[data-atmosphere="live"] { --shell-home-intensity: .2; --shell-away-intensity: .2; --shell-pitch-opacity: .21; --shell-light-opacity: .52; }
+.vira-shell-background[data-atmosphere="halftime"] { --shell-home-intensity: .08; --shell-away-intensity: .08; --shell-pitch-opacity: .15; --shell-light-opacity: .33; }
+.vira-shell-background[data-atmosphere="finished"] { --shell-home-intensity: .04; --shell-away-intensity: .04; --shell-pitch-opacity: .28; --shell-light-opacity: .25; }
+.vira-shell-background__light { position: absolute; top: -24vh; left: 50%; width: min(150vw,1800px); height: 82vh; transform: translateX(-50%); opacity: var(--shell-light-opacity); background: radial-gradient(ellipse 72% 54% at 50% 0%, rgb(180 205 228 / 16%) 0%, rgb(88 122 153 / 8%) 42%, transparent 74%); filter: blur(18px); transform-origin: top center; }
+.vira-shell-background__light::before,.vira-shell-background__light::after { content: ""; position: absolute; top: 5%; bottom: 0; width: 52%; opacity: calc(var(--shell-home-intensity) * .14); transition: opacity 480ms cubic-bezier(.16,1,.3,1); }
+.vira-shell-background__light::before { left: 0; background: radial-gradient(ellipse at 0% 15%,rgb(199 255 24 / 24%),transparent 66%); background: radial-gradient(ellipse at 0% 15%,color-mix(in srgb,var(--shell-home-accent) 40%,transparent),transparent 66%); }
+.vira-shell-background__light::after { right: 0; opacity: calc(var(--shell-away-intensity) * .14); background: radial-gradient(ellipse at 100% 15%,rgb(113 159 189 / 24%),transparent 66%); background: radial-gradient(ellipse at 100% 15%,color-mix(in srgb,var(--shell-away-accent) 40%,transparent),transparent 66%); }
+.vira-shell-background__pitch { position: absolute; left: 50%; bottom: -29vw; width: min(142vw,1900px); aspect-ratio: 1.82; transform: translateX(-50%) perspective(1100px) rotateX(69deg); opacity: var(--shell-pitch-opacity); border: 1px solid rgb(230 240 250 / 8%); background: linear-gradient(90deg,transparent calc(50% - .5px),rgb(230 240 250 / 7%) 50%,transparent calc(50% + .5px)),radial-gradient(circle at center,transparent 0 10.2%,rgb(230 240 250 / 6%) 10.35% 10.55%,transparent 10.7%),repeating-linear-gradient(90deg,transparent 0 11%,rgb(255 255 255 / 1.2%) 11% 22%); mask-image: linear-gradient(to top,#000 0%,rgb(0 0 0 / 82%) 48%,transparent 89%); }
+.vira-shell-background__grain { position: absolute; inset: 0; opacity: .032; mix-blend-mode: screen; background-image: radial-gradient(circle at 17% 23%,rgb(255 255 255 / 18%) 0 .45px,transparent .7px),radial-gradient(circle at 73% 61%,rgb(255 255 255 / 13%) 0 .4px,transparent .65px); background-size: 11px 13px,17px 19px; }
+.vira-shell-background__vignette { position: absolute; inset: 0; background: linear-gradient(90deg,rgb(2 4 10 / 46%),transparent 20% 80%,rgb(2 4 10 / 46%)),radial-gradient(ellipse at 50% 42%,transparent 18%,rgb(3 5 13 / 16%) 58%,rgb(3 5 13 / 74%) 100%); }
+.vira-shell-background[data-atmosphere="live"]:not([data-paused="true"]) .vira-shell-background__light { animation: vira-live-breath 14s ease-in-out infinite; }
+.vira-shell-background[data-paused="true"] * { animation-play-state: paused !important; }
+@keyframes vira-live-breath { 0%,100% { opacity: calc(var(--shell-light-opacity) * .92); transform: translateX(-50%) scaleY(.98); } 50% { opacity: var(--shell-light-opacity); transform: translateX(-50%) scaleY(1.015); } }
+@media (max-width:767px) { .vira-shell-background__light { top:-16vh; width:190vw; height:64vh; filter:blur(10px); } .vira-shell-background__pitch { bottom:-26vh; width:175vw; } .vira-shell-background__grain { opacity:.02; } .vira-shell-background__vignette { background:linear-gradient(to bottom,rgb(3 5 13 / 8%),transparent 34%,rgb(3 5 13 / 68%) 100%); } }
+@media (prefers-reduced-motion:reduce) { .vira-shell-background * { animation:none !important; transition-duration:.01ms !important; } }

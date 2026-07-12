@@ -13,6 +13,7 @@ import { FixtureAgenda } from "./FixtureAgenda";
 import { createFeaturedMatchModel } from "./featured-match-model";
 import { TxlineTechnicalInspector } from "./TxlineTechnicalInspector";
 import { TxlineVerificationRail } from "./TxlineVerificationRail";
+import { fixtureAccent, useShellAtmosphere } from "../../app/shell/use-shell-atmosphere";
 
 function selectSuggestedMatch(matches: MatchSummary[]) {
   return (
@@ -82,6 +83,15 @@ export function LobbyScreen() {
     () => selectedMatch ? createFeaturedMatchModel(selectedMatch, selectedContext, contextState) : null,
     [contextState, selectedContext, selectedMatch],
   );
+  useShellAtmosphere("route:lobby", {
+    atmosphere: "idle",
+    context: "discovery",
+    fixtureId: selectedMatch?.fixtureId,
+    homeAccent: selectedMatch ? fixtureAccent(selectedMatch.homeTeam, "home") : undefined,
+    awayAccent: selectedMatch ? fixtureAccent(selectedMatch.awayTeam, "away") : undefined,
+    fixtureFocus: selectedMatch ? .25 : .08,
+    priority: 10,
+  });
 
   useEffect(() => {
     setProbe(null);

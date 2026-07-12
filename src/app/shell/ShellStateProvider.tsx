@@ -1,11 +1,11 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useLocation } from "react-router";
 
 import { fetchBackendHealth, fetchRoomState, fetchRoomVerification, validateRoomSession } from "../../runtime/api";
 import { matchCurrentRoute } from "../routing/route-manifest";
 import { ShellExperienceContext } from "./ShellContext";
 import { SHELL_ROOM_PRESENCE_EVENT, SHELL_ROOM_REFERENCE_KEY } from "./room-presence";
-import { deriveConnectionPresentation, type ActiveRoomPresenceState, type OfficialReviewAvailability, type PersistedRoomReference, type ShellActiveRoom, type ShellConnectivity, type ShellReadiness } from "./shell-experience";
+import { deriveConnectionPresentation, type ActiveRoomPresenceState, type OfficialReviewAvailability, type PersistedRoomReference, type ShellActiveRoom, type ShellAtmosphereExperience, type ShellAtmosphereIntent, type ShellConnectivity, type ShellReadiness } from "./shell-experience";
 import { deriveCanonicalExperienceState, experienceCopy } from "../../features/match-experience/state-model";
 
 function readReference(): PersistedRoomReference | null {
@@ -33,6 +33,26 @@ export function ShellStateProvider({ children }: { children: ReactNode }) {
   });
   const [review, setReview] = useState<OfficialReviewAvailability>({ kind: "unavailable" });
   const [readiness, setReadiness] = useState<ShellReadiness>({ kind: "booting", scope: "global" });
+  const [atmosphereOwners, setAtmosphereOwners] = useState<Map<string, ShellAtmosphereIntent>>(() => new Map());
+
+  const registerAtmosphere = useCallback((owner: string, intent: ShellAtmosphereIntent) => {
+    setAtmosphereOwners((current) => {
+      const previous = current.get(owner);
+      if (previous && JSON.stringify(previous) === JSON.stringify(intent)) return current;
+      const next = new Map(current);
+      next.set(owner, intent);
+      return next;
+    });
+  }, []);
+
+  const releaseAtmosphere = useCallback((owner: string) => {
+    setAtmosphereOwners((current) => {
+      if (!current.has(owner)) return current;
+      const next = new Map(current);
+      next.delete(owner);
+      return next;
+    });
+  }, []);
 
   useEffect(() => {
     const online = () => setBrowserOnline(true);
@@ -138,6 +158,18 @@ export function ShellStateProvider({ children }: { children: ReactNode }) {
     };
   }, [backend, browserOnline, presence]);
 
+  const atmosphere = useMemo<ShellAtmosphereExperience>(() => {
+    const fallback: ShellAtmosphereExperience = route.shellMode === "immersive"
+      ? { atmosphere: "live", context: "match-room", fixtureFocus: .18 }
+      : route.id === "match-preview"
+        ? { atmosphere: "anticipation", context: "fixture-preview", fixtureFocus: .36 }
+        : { atmosphere: "idle", context: "discovery", fixtureFocus: 0 };
+    const winner = [...atmosphereOwners.entries()]
+      .sort(([leftOwner, left], [rightOwner, right]) => (Number(right.priority) - Number(left.priority)) || rightOwner.localeCompare(leftOwner))[0]?.[1];
+    if (!winner) return fallback;
+    return { atmosphere: winner.atmosphere, context: winner.context, fixtureId: winner.fixtureId, homeAccent: winner.homeAccent, awayAccent: winner.awayAccent, fixtureFocus: Math.max(0, Math.min(1, winner.fixtureFocus ?? fallback.fixtureFocus)) };
+  }, [atmosphereOwners, route.id, route.shellMode]);
+
   const value = useMemo(() => ({
     mode: route.shellMode,
     route: { id: route.id, title: route.title, context: route.context, backPath: route.backPath },
@@ -146,7 +178,10 @@ export function ShellStateProvider({ children }: { children: ReactNode }) {
     readiness,
     activeRoom: presence,
     review,
-  }), [connectivity, presence, readiness, review, route]);
+    atmosphere,
+    registerAtmosphere,
+    releaseAtmosphere,
+  }), [atmosphere, connectivity, presence, readiness, registerAtmosphere, releaseAtmosphere, review, route]);
 
   return <ShellExperienceContext.Provider value={value}>{children}</ShellExperienceContext.Provider>;
 }

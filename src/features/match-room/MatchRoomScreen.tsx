@@ -28,6 +28,8 @@ import { ViraShareButton } from "../../social/ViraShareButton";
 import { MiniLeaguePanel } from "../../social/MiniLeaguePanel";
 import { MatchMomentDirector } from "../match-moments/MatchMomentDirector";
 import { useMatchMomentDirector } from "../match-moments/use-match-moment-director";
+import { useShellAtmosphere } from "../../app/shell/use-shell-atmosphere";
+import { setShellOverlayState } from "../../app/shell/shell-events";
 
 export function MatchRoomScreen() {
   const { matchId = DEFAULT_MATCH_ID } = useParams();
@@ -46,6 +48,15 @@ export function MatchRoomScreen() {
   const [verification, setVerification] = useState<RoomVerification | null>(null);
   const [preMatchContext, setPreMatchContext] = useState<MatchTxlineContext | null>(null);
   const matchDirection = useMatchMomentDirector(matchId, state.snapshot.match, matchMomentEvents);
+  useShellAtmosphere("route:match-room", {
+    atmosphere: state.snapshot.match.status === "finished" ? "finished" : state.snapshot.match.status === "paused" ? "halftime" : "live",
+    context: state.snapshot.match.status === "finished" ? "post-match" : "match-room",
+    fixtureId: state.snapshot.match.id,
+    homeAccent: state.snapshot.match.homeTeam.accent,
+    awayAccent: state.snapshot.match.awayTeam.accent,
+    fixtureFocus: state.snapshot.match.status === "finished" ? .08 : .2,
+    priority: 30,
+  });
 
   const confirmPlayerName = () => {
     const safeName = playerName.trim();
@@ -72,6 +83,11 @@ export function MatchRoomScreen() {
     return state.snapshot.answerSummary?.byOption ?? {};
   }, [currentRound, state.snapshot.answerSummary]);
   const experienceModel = useMemo(() => createExperienceModel(state, latestPresentationEvent, verification), [latestPresentationEvent, state, verification]);
+
+  useEffect(() => {
+    setShellOverlayState("match-inspector", inspect);
+    return () => setShellOverlayState("match-inspector", false);
+  }, [inspect]);
 
   useEffect(() => {
     let cancelled = false;
@@ -151,7 +167,7 @@ export function MatchRoomScreen() {
   }, [matchId, state.lastResolution?.roundId, state.snapshot.ledger?.streamVersion, state.snapshot.match.status]);
 
   return (
-    <div className="min-h-screen bg-background text-foreground">
+    <div className="min-h-screen bg-background/55 text-foreground">
       <MatchHeader state={state} onBack={() => navigate("/")} />
       <TournamentLifecycleRail model={experienceModel} />
       <main className="mx-auto w-full max-w-[1440px] px-4 pb-24 pt-5 md:px-7 lg:px-10 lg:pb-12">

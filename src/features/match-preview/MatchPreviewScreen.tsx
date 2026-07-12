@@ -21,6 +21,7 @@ import { TeamIcon } from "../../shared/team/team-icons";
 import { JoinRoomDialog } from "../lobby/JoinRoomDialog";
 import { deriveCanonicalExperienceState, experienceCopy, formatMarketCount, formatObservedUpdateCount } from "../match-experience/state-model";
 import { PredictionSharePanel } from "../../social/PredictionSharePanel";
+import { fixtureAccent, useShellAtmosphere } from "../../app/shell/use-shell-atmosphere";
 
 type ContextState = "idle" | "loading" | "ready" | "empty" | "error";
 const CONTEXT_CACHE_TTL_MS = 60_000;
@@ -146,6 +147,15 @@ export function MatchPreviewScreen() {
   }, []);
 
   const match = useMemo(() => matches.find((item) => item.fixtureId === matchId) ?? matches[0] ?? null, [matchId, matches]);
+  useShellAtmosphere("route:preview", match ? {
+    atmosphere: match.status === "finished" ? "finished" : "anticipation",
+    context: match.status === "finished" ? "post-match" : "fixture-preview",
+    fixtureId: match.fixtureId,
+    homeAccent: fixtureAccent(match.homeTeam, "home"),
+    awayAccent: fixtureAccent(match.awayTeam, "away"),
+    fixtureFocus: .42,
+    priority: 20,
+  } : null);
 
   useEffect(() => {
     if (!match) return;
@@ -229,7 +239,7 @@ export function MatchPreviewScreen() {
 
   return (
     <AppShell>
-      <main className="overflow-hidden bg-[#070a13] text-white">
+      <main className="overflow-hidden bg-[#070a13]/55 text-white">
         <section style={{ viewTransitionName: "featured-match" } as CSSProperties} className="relative isolate overflow-hidden border-b border-white/15">
           <div className="absolute inset-0 -z-10 grid grid-cols-2 opacity-80">
             <div className="bg-[linear-gradient(135deg,#263d20_0%,#101a17_56%,#070a13_100%)]" />

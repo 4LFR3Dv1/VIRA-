@@ -1,7 +1,12 @@
 import { createContext, useContext } from "react";
-import type { ShellExperience } from "./shell-experience";
+import type { ShellAtmosphereIntent, ShellExperience } from "./shell-experience";
 
-export const ShellExperienceContext = createContext<ShellExperience | null>(null);
+export type ShellExperienceContextValue = ShellExperience & {
+  registerAtmosphere: (owner: string, intent: ShellAtmosphereIntent) => void;
+  releaseAtmosphere: (owner: string) => void;
+};
+
+export const ShellExperienceContext = createContext<ShellExperienceContextValue | null>(null);
 
 export function useShellExperience() {
   const value = useContext(ShellExperienceContext);

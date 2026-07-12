@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 
 import type { PresentationEvent, RoundResolutionResult } from "../../domain/types";
 import { AnimatedNumber } from "../../shared/number/AnimatedNumber";
+import { setShellOverlayState } from "../../app/shell/shell-events";
 
 interface Props { result: RoundResolutionResult | null; presentationEvent?: PresentationEvent | null; open: boolean; onClose: () => void; shareAction?: React.ReactNode }
 
@@ -15,6 +16,10 @@ export function ResolutionOverlay({ result, presentationEvent, open, onClose, sh
   const [act, setAct] = useState(0);
   const reduceMotion = useReducedMotion();
   const event = presentationEvent?.kind === "round_resolved" ? presentationEvent : null;
+  useEffect(() => {
+    setShellOverlayState("round-resolution", open);
+    return () => setShellOverlayState("round-resolution", false);
+  }, [open]);
   useEffect(() => {
     if (!open || !result) return undefined;
     setAct(reduceMotion ? 3 : 0);

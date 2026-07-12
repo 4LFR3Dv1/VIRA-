@@ -55,6 +55,20 @@ export type OfficialReviewAvailability =
   | { kind: "available"; roomId: string }
   | { kind: "failed"; roomId: string; reason: string };
 
+export type ShellAtmosphere = "idle" | "anticipation" | "live" | "halftime" | "finished";
+export type ShellAtmosphereContext = "discovery" | "fixture-preview" | "match-room" | "post-match";
+
+export type ShellAtmosphereExperience = {
+  atmosphere: ShellAtmosphere;
+  context: ShellAtmosphereContext;
+  fixtureId?: string;
+  homeAccent?: string;
+  awayAccent?: string;
+  fixtureFocus: number;
+};
+
+export type ShellAtmosphereIntent = Omit<ShellAtmosphereExperience, "fixtureFocus"> & { fixtureFocus?: number; priority?: number };
+
 export type ShellExperience = {
   mode: ShellMode;
   route: { id: string; title: string; context?: string; backPath?: string };
@@ -63,6 +77,7 @@ export type ShellExperience = {
   readiness: ShellReadiness;
   activeRoom: ActiveRoomPresenceState;
   review: OfficialReviewAvailability;
+  atmosphere: ShellAtmosphereExperience;
 };
 
 export function deriveConnectionPresentation(value: ShellConnectivity): ShellConnectionPresentation {
