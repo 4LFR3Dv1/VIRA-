@@ -44,7 +44,7 @@ export function FeaturedMatchStage({ model, onOpen }: Props) {
         animate={{ opacity: 1, y: 0 }}
         exit={reduceMotion ? undefined : { opacity: 0, y: -10 }}
         transition={{ duration: reduceMotion ? 0 : 0.34, ease: [0.22, 1, 0.36, 1] }}
-        className="relative overflow-hidden border-y border-white/12 bg-[#080d19]"
+        className="relative w-full min-w-0 max-w-full overflow-hidden border-y border-white/12 bg-[#080d19]"
       >
         <StageBackdrop home={fixture.homeTeam} away={fixture.awayTeam} />
         <header className="relative z-10 flex flex-wrap items-center justify-between gap-3 border-b border-white/12 px-4 py-4 sm:px-7 lg:px-10">

@@ -128,7 +128,7 @@ function RouteTransitionFrame() {
   const transitionKind = resolveNavigationTransition(matchCurrentRoute(previousPath.current), matchCurrentRoute(location.pathname));
   useEffect(() => { previousPath.current = location.pathname; }, [location.pathname]);
   const animateRoute = !reduceMotion && transitionKind === "route";
-  return <main data-navigation-transition={transitionKind} className={mode === "discovery" ? "pb-[calc(var(--shell-mobile-dock-height)+var(--shell-continuity-height)+env(safe-area-inset-bottom)+24px)] lg:pb-[calc(var(--shell-continuity-height)+32px)]" : ""}><AnimatePresence mode="wait" initial={false}><motion.div key={key} initial={animateRoute ? { opacity: 0, y: 14 } : { opacity: 1 }} animate={{ opacity: 1, y: 0 }} exit={animateRoute ? { opacity: 0, y: -6 } : { opacity: 1 }} transition={{ duration: animateRoute ? .24 : 0, ease: [.22, 1, .36, 1] }}>{outlet}</motion.div></AnimatePresence></main>;
+  return <main data-navigation-transition={transitionKind} className={`w-full min-w-0 max-w-full overflow-x-clip ${mode === "discovery" ? "pb-[calc(var(--shell-mobile-dock-height)+var(--shell-continuity-height)+env(safe-area-inset-bottom)+24px)] lg:pb-[calc(var(--shell-continuity-height)+32px)]" : ""}`}><AnimatePresence mode="wait" initial={false}><motion.div className="w-full min-w-0 max-w-full" key={key} initial={animateRoute ? { opacity: 0, y: 14 } : { opacity: 1 }} animate={{ opacity: 1, y: 0 }} exit={animateRoute ? { opacity: 0, y: -6 } : { opacity: 1 }} transition={{ duration: animateRoute ? .24 : 0, ease: [.22, 1,.36, 1] }}>{outlet}</motion.div></AnimatePresence></main>;
 }
 
 function ActiveRoomContinuity({ onEnterRoom }: { onEnterRoom: (room: ShellActiveRoom) => void }) {
