@@ -14,9 +14,23 @@ function normalizedStatus(value) {
 }
 
 function fixtureMarket(fixture, nowMs) {
-  const probability = fixture?.context?.endpoints?.odds?.data?.winProbability
+  let probability = fixture?.context?.endpoints?.odds?.data?.winProbability
     ?? fixture?.context?.endpoints?.oddsUpdates?.data?.winProbability
     ?? null;
+  if (!probability) {
+    const preserved = (fixture?.context?.availableMarkets ?? []).find((market) => market.marketType === "1X2_PARTICIPANT_RESULT" && !market.marketPeriod && market.hasProbabilities);
+    if (preserved) {
+      const option = (name, fallbackIndex) => preserved.options?.find((item) => item.priceName === name)?.pct ?? preserved.options?.[fallbackIndex]?.pct;
+      probability = {
+        home: option("part1", 0),
+        draw: option("draw", 1),
+        away: option("part2", 2),
+        capturedAt: preserved.capturedAt,
+        messageId: preserved.messageId ?? preserved.id,
+        providerSequence: preserved.sequence ?? null,
+      };
+    }
+  }
   if (!probability) return null;
   const home = Number(probability.home);
   const draw = Number(probability.draw);
@@ -37,7 +51,7 @@ function fixtureMarket(fixture, nowMs) {
     leadingChoice: ["home", "draw", "away"][leadingIndex],
     snapshotId: probability.messageId ?? `${fixture.fixtureId}:${observedAt ?? "unknown"}`,
     freshness: {
-      providerSequence: null,
+      providerSequence: probability.providerSequence ?? null,
       observedAt,
       staleAfter: staleAfterMs === null ? null : new Date(staleAfterMs).toISOString(),
       fresh,

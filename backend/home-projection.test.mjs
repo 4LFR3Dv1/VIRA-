@@ -20,6 +20,17 @@ test("never publishes stale fixture market copy", () => {
   assert.equal(projection.editorial.fixture.market.freshness.fresh, false);
 });
 
+test("uses preserved full-match 1X2 instead of first-half market", () => {
+  const preserved = fixture({ context: { availableMarkets: [
+    { marketType: "1X2_PARTICIPANT_RESULT", marketPeriod: "half=1", hasProbabilities: true, capturedAt: "2026-07-12T11:59:30.000Z", options: [{ priceName: "part1", pct: 10 }, { priceName: "draw", pct: 20 }, { priceName: "part2", pct: 70 }] },
+    { id: "full-match", marketType: "1X2_PARTICIPANT_RESULT", marketPeriod: null, hasProbabilities: true, capturedAt: "2026-07-12T11:59:30.000Z", options: [{ priceName: "part1", pct: 48 }, { priceName: "draw", pct: 27 }, { priceName: "part2", pct: 25 }] },
+  ] } });
+  const projection = deriveHomeProjection({ catalog: { matches: [preserved] }, now });
+  assert.equal(projection.editorial.kind, "predict_fixture");
+  assert.equal(projection.editorial.fixture.market.leadingChoice, "home");
+  assert.equal(projection.editorial.fixture.market.snapshotId, "full-match");
+});
+
 test("live match outranks a scheduled prediction", () => {
   const live = fixture({ fixtureId: "live", status: "live", startTime: "2026-07-12T11:00:00.000Z" });
   const projection = deriveHomeProjection({ catalog: { matches: [fixture(), live] }, now });
