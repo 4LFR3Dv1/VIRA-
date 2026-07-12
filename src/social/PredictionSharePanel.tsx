@@ -37,7 +37,7 @@ export function PredictionSharePanel({ fixture, displayName, onChangeDisplayName
     }
   };
 
-  return <section className="border-y border-white/15 bg-[#0d111c]">
+  return <section id="pre-match-prediction" className="scroll-mt-24 border-y border-white/15 bg-[#0d111c]">
     <div className="mx-auto grid max-w-[1440px] gap-8 px-5 py-14 sm:px-8 lg:grid-cols-[minmax(0,1fr)_360px] lg:px-14">
       <div>
         <p className="font-['DM_Mono'] text-[10px] font-black uppercase text-primary">Palpite antes do jogo</p>

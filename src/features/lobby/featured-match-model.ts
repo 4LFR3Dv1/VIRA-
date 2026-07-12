@@ -62,7 +62,7 @@ function fromPrediction(prediction: TxlineSuggestedPrediction, context: MatchTxl
     value: prediction.pct,
     updatedAt: market?.capturedAt ?? context.generatedAt,
     playable: true,
-    prompt: prediction.prompt,
+    prompt: `${prediction.priceLabel} lidera a leitura atual do mercado.`,
     distribution: market ? distributionFromMarket(market) : [],
     ...movementForMarket(context, market, prediction.priceName, prediction.pct),
   };

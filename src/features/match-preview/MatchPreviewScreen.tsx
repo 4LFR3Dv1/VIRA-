@@ -118,6 +118,10 @@ function Principle({ number, icon, title, children }: { number: string; icon: Re
   );
 }
 
+function FootballPrompt({ label, prompt }: { label: string; prompt: string }) {
+  return <article className="min-h-40 bg-[#0a0e1a] p-5 sm:p-6"><p className="font-['DM_Mono'] text-[9px] font-black uppercase tracking-[.16em] text-primary">{label}</p><h3 className="mt-8 font-['Chakra_Petch'] text-xl font-black uppercase leading-[.95]">{prompt}</h3></article>;
+}
+
 export function MatchPreviewScreen() {
   const { matchId = "" } = useParams();
   const navigate = useNavigate();
@@ -129,7 +133,6 @@ export function MatchPreviewScreen() {
   const [playerName, setPlayerName] = useState(() => window.localStorage.getItem("vira:displayName") ?? "");
   const [joinDialogOpen, setJoinDialogOpen] = useState(false);
   const [inspectOnJoin, setInspectOnJoin] = useState(false);
-  const [choiceOnJoin, setChoiceOnJoin] = useState<"yes" | "no" | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -175,24 +178,18 @@ export function MatchPreviewScreen() {
     }).slice(0, 5);
   }, [context?.availableMarkets, prediction?.marketSignature]);
 
-  const opening = prediction?.pct ?? null;
-  const target = prediction?.threshold ?? null;
   const currentSignal = prediction
     ? `${prediction.priceLabel} · ${formatPercentage(prediction.pct)}`
     : probability
       ? `Empate · ${formatPercentage(probability.draw)}`
       : "Mercado em sincronizacao";
-  const question = target !== null && prediction?.priceLabel
-    ? `${prediction.priceLabel} passa de ${percentageFormatter.format(target)}% no proximo sinal?`
-    : "O mercado muda no proximo sinal?";
   const signalCount = (context?.endpoints.odds.summary.count ?? 0) + (context?.endpoints.oddsUpdates.summary.count ?? 0);
   const loadingContext = contextState === "idle" || contextState === "loading";
   const roomReady = Boolean(match && (context || contextState === "empty" || contextState === "error"));
   const canonical = deriveCanonicalExperienceState({ matchStatus: match?.status, roomExists: true, hasSignal: markets.length > 0, connectionState: contextState === "error" ? "reconnecting" : "live" });
 
-  const openRoom = (inspect = false, choice: "yes" | "no" | null = null) => {
+  const openRoom = (inspect = false) => {
     setInspectOnJoin(inspect);
-    setChoiceOnJoin(choice);
     setJoinDialogOpen(true);
   };
 
@@ -205,7 +202,6 @@ export function MatchPreviewScreen() {
     const inviteCode = searchParams.get("invite");
     if (inviteCode) params.set("invite", inviteCode);
     if (inspectOnJoin) params.set("inspect", "true");
-    if (choiceOnJoin) params.set("choice", choiceOnJoin);
     navigate(`/match/${match.fixtureId}${params.size ? `?${params.toString()}` : ""}`);
   };
 
@@ -261,7 +257,7 @@ export function MatchPreviewScreen() {
                 <h1 style={{ viewTransitionName: "market-value" } as CSSProperties} className="max-w-4xl font-['Chakra_Petch'] text-[clamp(2rem,4.6vw,4.9rem)] font-black uppercase leading-[.9]">
                   {loadingContext && !context ? "Lendo o mercado" : currentSignal}
                 </h1>
-                <p className="max-w-xs text-sm leading-6 text-white/50">Agora transforme o movimento do mercado em uma previsao jogavel.</p>
+                <p className="max-w-xs text-sm leading-6 text-white/50">O mercado ajuda o VIRA a identificar pressão e relevância. Os fatos da partida decidem o jogo.</p>
               </div>
             </div>
           </div>
@@ -269,23 +265,19 @@ export function MatchPreviewScreen() {
 
         <section className="mx-auto grid max-w-[1440px] gap-12 px-5 py-16 sm:px-8 lg:grid-cols-[minmax(0,1fr)_320px] lg:px-14 lg:py-24">
           <div className="min-w-0">
-            <p className="font-['DM_Mono'] text-[10px] font-black uppercase text-primary">Previsao ativa</p>
-            <h2 className="mt-5 max-w-5xl break-words font-['Chakra_Petch'] text-[clamp(2.15rem,4.8vw,5rem)] font-black uppercase leading-[.9]">{question}</h2>
+            <p className="font-['DM_Mono'] text-[10px] font-black uppercase text-primary">Desafios ao vivo</p>
+            <h2 className="mt-5 max-w-5xl break-words font-['Chakra_Petch'] text-[clamp(2.15rem,4.8vw,5rem)] font-black uppercase leading-[.9]">O futebol cria a próxima pergunta.</h2>
+            <p className="mt-6 max-w-3xl text-base leading-7 text-white/55">Quando surge um momento relevante, o VIRA abre uma janela curta para responder. Depois, você volta a acompanhar a partida até o fato ser confirmado.</p>
 
-            <div className="mt-10 flex items-end gap-5 border-y border-white/15 py-7 sm:gap-10">
-              <div>
-                <p className="font-['DM_Mono'] text-[10px] uppercase text-white/40">Abertura</p>
-                <strong className="mt-2 block font-['Chakra_Petch'] text-4xl font-black sm:text-5xl">{opening === null ? "--" : <AnimatedNumber value={opening} suffix="%" format={{ minimumFractionDigits: 1, maximumFractionDigits: 1 }} />}</strong>
-              </div>
-              <ArrowRight className="mb-2 size-7 text-primary sm:size-9" />
-              <div>
-                <p className="font-['DM_Mono'] text-[10px] uppercase text-primary">Alvo</p>
-                <strong className="mt-2 block font-['Chakra_Petch'] text-4xl font-black text-primary sm:text-5xl">{target === null ? "--" : <AnimatedNumber value={target} suffix="%" format={{ minimumFractionDigits: 1, maximumFractionDigits: 1 }} />}</strong>
-              </div>
+            <div className="mt-10 grid gap-px bg-white/15 sm:grid-cols-3">
+              <FootballPrompt label="Gol" prompt={`${match.homeTeam} marca nos próximos 10 minutos?`} />
+              <FootballPrompt label="Finalização" prompt={`${match.awayTeam} finaliza no alvo nos próximos 5 minutos?`} />
+              <FootballPrompt label="Momento" prompt="Teremos um gol antes do fim do tempo?" />
             </div>
 
-            <div className="mt-7 grid grid-cols-2 gap-3">
-              {([["yes", "Sim, chega ao alvo"], ["no", "Nao, fica abaixo"]] as const).map(([value, label]) => <button key={value} type="button" onClick={() => openRoom(false, value)} className="min-h-16 border border-white/20 bg-white/[.045] px-4 font-['Chakra_Petch'] text-base font-black uppercase transition hover:-translate-y-0.5 hover:border-primary hover:bg-primary hover:text-[#070a13] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary active:translate-y-0">{label}</button>)}
+            <div className="mt-7 flex flex-wrap gap-3">
+              <button type="button" disabled={!roomReady} onClick={() => openRoom(false)} className="inline-flex min-h-14 items-center gap-8 bg-primary px-5 font-['Chakra_Petch'] text-sm font-black uppercase text-[#070a13] disabled:opacity-40">Entrar na sala <ArrowRight className="size-4" /></button>
+              <a href="#pre-match-prediction" className="inline-flex min-h-14 items-center border border-white/20 px-5 font-['Chakra_Petch'] text-xs font-black uppercase hover:border-primary hover:text-primary">Palpitar antes do jogo</a>
             </div>
           </div>
 
@@ -293,7 +285,7 @@ export function MatchPreviewScreen() {
             <div className="flex items-center justify-between text-primary"><p className="font-['DM_Mono'] text-[10px] font-black uppercase">{experienceCopy.room[canonical.room]} · {experienceCopy.match[canonical.match]}</p><Zap className="size-4" /></div>
             <h3 className="mt-5 font-['Chakra_Petch'] text-3xl font-black uppercase leading-[.9]">Entre em {match.homeTeam}<br />vs {match.awayTeam}</h3>
             <dl className="mt-8 divide-y divide-white/15 border-y border-white/15 text-sm">
-              {[["Participantes", "Pessoas reais"], ["Resposta", "Uma por rodada"], ["Resolucao", "Proximo sinal TxLINE"]].map(([label, value]) => <div key={label} className="flex justify-between gap-4 py-4"><dt className="text-white/40">{label}</dt><dd className="text-right font-semibold">{value}</dd></div>)}
+              {[["Participantes", "Pessoas reais"], ["Resposta", "Uma por momento"], ["Resolucao", "Fatos oficiais da partida"]].map(([label, value]) => <div key={label} className="flex justify-between gap-4 py-4"><dt className="text-white/40">{label}</dt><dd className="text-right font-semibold">{value}</dd></div>)}
             </dl>
             <button type="button" disabled={!roomReady} onClick={() => openRoom(false)} className="mt-6 flex min-h-14 w-full items-center justify-between bg-primary px-5 font-['Chakra_Petch'] text-sm font-black uppercase text-[#070a13] disabled:opacity-40">Entrar na sala <ArrowRight className="size-4" /></button>
             <button type="button" onClick={() => openRoom(true)} className="mt-3 flex w-full items-center justify-center gap-2 py-3 text-xs font-bold uppercase text-white/45 hover:text-white"><Eye className="size-4" /> Ver revisao oficial</button>
@@ -314,8 +306,8 @@ export function MatchPreviewScreen() {
         </section>
 
         <section className="mx-auto max-w-[1440px] px-5 py-16 sm:px-8 lg:px-14 lg:py-24">
-          <p className="font-['DM_Mono'] text-[10px] font-black uppercase text-primary">Mercados para jogar</p>
-          <h2 className="mt-3 font-['Chakra_Petch'] text-4xl font-black uppercase">{formatMarketCount(markets.length)}</h2>
+          <p className="font-['DM_Mono'] text-[10px] font-black uppercase text-primary">Mercados monitorados</p>
+          <h2 className="mt-3 font-['Chakra_Petch'] text-4xl font-black uppercase">Contexto para o diretor de rodadas</h2>
           <div className="mt-8 border-t border-white/15">
             {markets.length ? markets.map((market, index) => {
               const strongest = strongestMarketValue(market);
