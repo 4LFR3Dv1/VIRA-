@@ -33,7 +33,10 @@ Market rounds remain available only through an explicit flag for internal tests 
 - No `team_scores` round across halftime or after 75:00.
 - Maximum seven competitive football rounds per fixture.
 - No candidate is preferable to a weak or repetitive candidate.
+- Shot-on-target rounds require reliable factual coverage, never repeat consecutively, and are limited to two per fixture.
 
 ## Passive Market Watch
 
 The room refreshes market context at most once per minute while observing. It has no answer buttons and does not replace the active football condition. Odds inform selection; score and match clock resolve the condition.
+
+See [Football Moment Engine](FOOTBALL_MOMENT_ENGINE.md) for factual event normalization, authoritative statistics and condition replay.

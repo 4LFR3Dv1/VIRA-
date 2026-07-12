@@ -12,7 +12,7 @@
     "test:replay": "node --test backend/verified-round-replay.test.mjs",
     "test:commitment": "node --test backend/round-commitment.test.mjs",
     "test:social": "node --test backend/share-store.test.mjs",
-    "test:all": "npm run typecheck && node --test backend/event-sourcing.test.mjs backend/event-sourcing-adversarial.test.mjs backend/http-security.test.mjs backend/txline-catalog-cache.test.mjs backend/verified-round-replay.test.mjs backend/round-commitment.test.mjs backend/share-store.test.mjs backend/consumer-cadence.test.mjs",
+    "test:all": "npm run typecheck && node --test backend/event-sourcing.test.mjs backend/event-sourcing-adversarial.test.mjs backend/http-security.test.mjs backend/txline-catalog-cache.test.mjs backend/verified-round-replay.test.mjs backend/round-commitment.test.mjs backend/share-store.test.mjs backend/consumer-cadence.test.mjs backend/football-events.test.mjs",
     "test:container": "node scripts/ci/container-smoke.mjs",
     "verify": "npm run test:all && npm run build",
     "dev": "vite",

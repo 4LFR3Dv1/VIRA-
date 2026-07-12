@@ -342,20 +342,52 @@ export function normalizeTxlineScore(raw, { matchId, sequenceFallback = 0, sourc
       }
     : null;
   const participant = Number(raw?.Participant ?? raw?.participant);
+  const action = eventType.replaceAll("-", "_");
+  const isAmendment = action.startsWith("amend_") || action.startsWith("amended_");
+  const amendedActionType = isAmendment ? action.replace(/^amend(?:ed)?_/, "") : null;
+  const type = action === "action_discarded"
+    ? "action_discarded"
+    : isAmendment
+      ? "action_amended"
+      : action.startsWith("unreliable_")
+        ? "reliability"
+      : action.includes("penalty")
+        ? "penalty"
+        : action.includes("corner")
+          ? "corner"
+          : action.includes("shot")
+            ? "shot"
+            : action.includes("possession")
+              ? "possession"
+              : action === "var" || action.includes("video_assistant")
+                ? "var"
+                : action.includes("goal")
+                  ? "goal"
+                  : action.includes("card")
+                    ? "card"
+                    : action.includes("score_adjustment")
+                      ? "score_adjustment"
+                      : action.includes("end") ? "match_end" : "period";
+  const statValue = (side, field) => Number(raw?.Stats?.[side]?.[field] ?? raw?.Stats?.[side]?.Total?.[field] ?? raw?.Score?.[side]?.Total?.[field]);
+  const statsFor = (side) => {
+    const values = { shots: statValue(side, "Shots"), shotsOnTarget: statValue(side, "ShotsOnTarget"), corners: statValue(side, "Corners"), yellowCards: statValue(side, "YellowCards"), redCards: statValue(side, "RedCards") };
+    const filtered = Object.fromEntries(Object.entries(values).filter(([, value]) => Number.isFinite(value)));
+    return Object.keys(filtered).length ? filtered : null;
+  };
+  const participant1Stats = statsFor("Participant1");
+  const participant2Stats = statsFor("Participant2");
+  const cumulativeStats = participant1Stats || participant2Stats ? {
+    home: participant1IsHome ? participant1Stats : participant2Stats,
+    away: participant1IsHome ? participant2Stats : participant1Stats,
+  } : null;
 
   return {
-    id: String(raw?.id ?? raw?.Id ?? `${fixtureId}-${sequence}`),
+    id: String(type === "action_amended" || type === "action_discarded" ? `${raw?.id ?? raw?.Id ?? fixtureId}:${action}:${sequence}` : raw?.id ?? raw?.Id ?? `${fixtureId}-${sequence}`),
     matchId: fixtureId,
     sequence,
     occurredAt: String(raw?.ts ?? raw?.timestamp ?? raw?.Timestamp ?? new Date().toISOString()),
     matchClockSec,
-    type: eventType.includes("goal")
-      ? "goal"
-      : eventType.includes("card")
-        ? "card"
-        : eventType.includes("end")
-          ? "match_end"
-          : "period",
+    type,
     teamId: raw?.teamId ?? raw?.TeamId ?? raw?.participantId ?? raw?.ParticipantId,
     participantSide: participant === 1
       ? (participant1IsHome ? "home" : "away")
@@ -363,6 +395,12 @@ export function normalizeTxlineScore(raw, { matchId, sequenceFallback = 0, sourc
         ? (participant1IsHome ? "away" : "home")
         : null,
     absoluteScore,
+    confirmed: raw?.Confirmed !== false && raw?.confirmed !== false,
+    sourceActionId: String(raw?.SourceActionId ?? raw?.ActionId ?? raw?.Id ?? raw?.id ?? `${fixtureId}-${sequence}`),
+    amendedActionType,
+    discardedActionId: raw?.DiscardedActionId ?? raw?.Data?.ActionId ?? (type === "action_discarded" ? raw?.Id : null),
+    outcome: raw?.Data?.Outcome ?? raw?.Outcome ?? null,
+    cumulativeStats,
     playerId: raw?.playerId ?? raw?.PlayerId,
     payload: raw,
     source,

@@ -15,7 +15,7 @@ export type MatchRoomUiState =
   | "next_round_transition"
   | "match_finished";
 
-export type NormalizedMatchEventType = "goal" | "card" | "period" | "odds_shift" | "match_end";
+export type NormalizedMatchEventType = "goal" | "shot" | "corner" | "penalty" | "card" | "possession" | "var" | "reliability" | "action_amended" | "action_discarded" | "score_adjustment" | "period" | "odds_shift" | "match_end";
 
 export type EventSource = "txline-live" | "txline-snapshot" | "txline-history";
 
@@ -54,6 +54,43 @@ export interface TeamScoresCondition {
     matchClockSec: number;
     observedAt: string;
   } | null;
+}
+
+export interface TeamShotOnTargetCondition {
+  kind: "team_shot_on_target";
+  targetSide: "home" | "away";
+  durationSec: number;
+  state: "awaiting_lock" | "tracking" | "candidate_met" | "confirmed";
+  startsAtClockSec?: number;
+  endsAtClockSec?: number;
+  openingObservation?: {
+    eventId: string | null;
+    providerSequence: number | null;
+    shotsOnTarget: number;
+    matchClockSec: number;
+    observedAt: string;
+  };
+  candidateObservation?: FootballStatObservation | null;
+  confirmedObservation?: FootballStatObservation | null;
+}
+
+export interface FootballStatObservation {
+  eventId: string;
+  sourceActionId?: string | null;
+  providerSequence: number | null;
+  value: number;
+  matchClockSec: number;
+  observedAt: string;
+}
+
+export type FootballCondition = TeamScoresCondition | TeamShotOnTargetCondition;
+
+export interface AuthoritativeMatchStats {
+  home: { shots: number; shotsOnTarget: number; corners: number; yellowCards: number; redCards: number };
+  away: { shots: number; shotsOnTarget: number; corners: number; yellowCards: number; redCards: number };
+  reliability: { shots: "reliable" | "unreliable" | "unknown"; corners: "reliable" | "unreliable" | "unknown"; cards: "reliable" | "unreliable" | "unknown" };
+  updatedAtClockSec: number;
+  sourceEventId: string | null;
 }
 
 export interface Team {
@@ -99,7 +136,7 @@ export interface PredictionResolution {
   predicate?: Record<string, unknown>;
   windowEndsAtClockSec?: number;
   elapsedOptionId?: string;
-  condition?: TeamScoresCondition;
+  condition?: FootballCondition;
 }
 
 export interface PredictionRound {
@@ -160,6 +197,13 @@ export interface NormalizedMatchEvent {
   playerId?: string;
   participantSide?: "home" | "away" | null;
   absoluteScore?: { home: number; away: number } | null;
+  confirmed?: boolean;
+  sourceActionId?: string | null;
+  amendedActionType?: string | null;
+  discardedActionId?: string | null;
+  outcome?: string | null;
+  cumulativeStats?: Partial<Record<"home" | "away", Partial<AuthoritativeMatchStats["home"]>>> | null;
+  authoritativeStats?: AuthoritativeMatchStats;
   payload: Record<string, unknown>;
   source: EventSource;
   providerSequence?: number;
@@ -175,7 +219,7 @@ export interface RoundResolutionResult {
   resolvedBy: "event" | "window" | "match_state";
   resolutionDomain?: "market" | "football";
   resolutionReason?: string | null;
-  condition?: TeamScoresCondition | null;
+  condition?: FootballCondition | null;
   event?: NormalizedMatchEvent;
   answersEvaluated?: number;
   answersCorrect?: number;
@@ -325,6 +369,7 @@ export interface RoomSnapshot {
   roomLabel: string;
   roomPopulation: number;
   match: Match;
+  matchStats?: AuthoritativeMatchStats;
   connectionState: ConnectionState;
   currentRound: PredictionRound | null;
   currentParticipant?: Participant | null;

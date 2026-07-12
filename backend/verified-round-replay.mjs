@@ -157,6 +157,32 @@ export function deriveVerifiedRoundReplay(events, roundId, verification) {
     const timingValid = answers.every((event) => Date.parse(event.createdAt) <= Date.parse(lockedAt));
     const leaderboardHashes = deriveLeaderboardHashes(ordered, resolvedEvent);
     const opening = condition.openingObservation ?? {};
+    if (condition.kind === "team_shot_on_target") {
+      const targetSide = condition.targetSide === "away" ? "away" : "home";
+      const openingValue = asNumber(opening.shotsOnTarget) ?? 0;
+      const confirmedShot = resolutionObservation.type === "shot" && resolutionObservation.participantSide === targetSide && resolutionObservation.confirmed !== false && String(resolutionObservation.outcome ?? "").toLowerCase().replaceAll("_", "") === "ontarget";
+      const observedFinalValue = asNumber(resolutionObservation.authoritativeStats?.[targetSide]?.shotsOnTarget) ?? asNumber(condition.confirmedObservation?.value) ?? openingValue;
+      const finalValue = confirmedShot ? Math.max(observedFinalValue, openingValue + 1) : observedFinalValue;
+      const observedClock = asNumber(resolutionObservation.matchClockSec) ?? 0;
+      const endClock = asNumber(condition.endsAtClockSec) ?? 0;
+      const conditionMet = (confirmedShot || finalValue > openingValue) && observedClock <= endClock;
+      const winningOptionId = String(resolvedPayload.winningOptionId ?? (conditionMet ? "yes" : "no"));
+      const deterministicWinner = conditionMet ? "yes" : observedClock >= endClock ? "no" : null;
+      const replay = {
+        domain: VERIFIED_FOOTBALL_REPLAY_DOMAIN, schemaVersion: 2, resolutionDomain: "football",
+        roomId: String(openedEvent.streamId ?? openedEvent.roomId), roundId: String(roundId), roundVersion: asNumber(lockedRound.version) ?? 1,
+        prompt: { text: String(lockedRound.title ?? round.title ?? ""), operator: "stat_increase", targetValue: openingValue + 1, priceName: targetSide, marketSignature: "football:team_shot_on_target" },
+        condition,
+        opening: { eventId: opening.eventId ? String(opening.eventId) : null, providerSequence: asNumber(opening.providerSequence), value: openingValue, stats: { shotsOnTarget: openingValue }, matchClockSec: asNumber(opening.matchClockSec) ?? 0, observedAt: iso(opening.observedAt, lockedAt), acquisitionOrigin: "txline_snapshot" },
+        participation: { confirmedAnswers: answers.length, distributionVisible: true, distribution },
+        lock: { lockedAt, reason: "deadline", causedByEventId: lockEvent.causationId ? String(lockEvent.causationId) : null, temporalIntegrityValid: timingValid },
+        resolution: { eventId: String(resolutionObservation.id ?? resolvedEvent.eventId), providerSequence: asNumber(resolutionObservation.providerSequence ?? resolutionObservation.payload?.Seq), observedValue: finalValue, stats: { shotsOnTarget: finalValue }, matchClockSec: observedClock, winningOptionId, reason: String(resolvedPayload.resolutionReason ?? (conditionMet ? "condition_confirmed" : "window_expired")), expression: conditionMet ? `${targetSide} shotsOnTarget ${finalValue} > ${openingValue} before ${endClock}` : `${targetSide} shotsOnTarget ${finalValue} == ${openingValue} at ${observedClock}`, predicateResult: conditionMet, resolvedAt: iso(resolutionObservation.receivedAt ?? resolutionObservation.occurredAt, resolvedEvent.createdAt), acquisitionOrigin: origin },
+        scoring: { answersEvaluated: asNumber(resolvedPayload.answersEvaluated) ?? answers.length, answersCorrect: asNumber(resolvedPayload.answersCorrect) ?? 0, totalPointsApplied: asNumber(resolvedPayload.totalPointsApplied) ?? 0, leaderboardBeforeHash: leaderboardHashes.before, leaderboardAfterHash: leaderboardHashes.after },
+        proof: { firstStreamVersion: Number(openedEvent.streamVersion), lastStreamVersion: Number(resolvedEvent.streamVersion), roundEventRangeHash: String(resolvedEvent.eventHash), hashChainValid: verification?.hashChainValid === true, projectionMatches: verification?.projectionMatches === true, rankingMatches: verification?.rankingMatches === true, authorityValid, temporalIntegrityValid: timingValid, eligibilityValid: observedClock >= Number(condition.startsAtClockSec ?? 0), determinismValid: deterministicWinner === winningOptionId },
+        technical: { openingStreamVersion: Number(openedEvent.streamVersion), lockStreamVersion: Number(lockEvent.streamVersion), resolutionStreamVersion: Number(resolvedEvent.streamVersion), marketType: null, line: null, period: null, minimumProviderSequence: null, eligibilityChecks: { confirmedOrCumulative: conditionMet || winningOptionId === "no", startsAfterLock: observedClock >= Number(condition.startsAtClockSec ?? 0), withinResolutionPolicy: deterministicWinner !== null }, causationId: resolvedEvent.causationId ?? null, correlationId: resolvedEvent.correlationId ?? null, openingEventHash: String(openedEvent.eventHash), lockEventHash: String(lockEvent.eventHash), resolutionEventHash: String(resolvedEvent.eventHash) },
+      };
+      return { ...replay, replayHash: hashVerifiedRoundReplay(replay) };
+    }
     const targetSide = condition.targetSide === "away" ? "away" : "home";
     const openingTargetScore = asNumber(targetSide === "home" ? opening.homeScore : opening.awayScore) ?? 0;
     const finalHomeScore = asNumber(resolutionObservation.absoluteScore?.home);

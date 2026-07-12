@@ -36,6 +36,8 @@ Room invitations, resolved-result memories, pre-match 1X2 predictions and implic
 
 Production disables market-update rounds. TxLINE odds remain a passive editorial input while football conditions create at most seven meaningful rounds with match-clock cooldowns. See [Consumer Match Cadence](docs/CONSUMER_CADENCE.md).
 
+The [Football Moment Engine](docs/FOOTBALL_MOMENT_ENGINE.md) normalizes factual actions and currently supports score and shot-on-target conditions with deterministic replay.
+
 ```text
 TxLINE snapshots and live streams
              |

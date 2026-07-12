@@ -41,6 +41,11 @@ const MARKET_ROUNDS_ENABLED = process.env.VIRA_MARKET_ROUNDS_ENABLED === "true" 
 const FOOTBALL_ROUND_COOLDOWN_SEC = Math.max(120, Number(process.env.VIRA_FOOTBALL_ROUND_COOLDOWN_SEC) || 240);
 const FOOTBALL_ROUNDS_MAX = Math.max(1, Math.min(12, Number(process.env.VIRA_FOOTBALL_ROUNDS_MAX) || 7));
 
+function emptyMatchStats() {
+  const side = () => ({ shots: 0, shotsOnTarget: 0, corners: 0, yellowCards: 0, redCards: 0 });
+  return { home: side(), away: side(), reliability: { shots: "unknown", corners: "unknown", cards: "unknown" }, updatedAtClockSec: 0, sourceEventId: null };
+}
+
 function openedRound(round, openedAtMs = Date.now()) {
   const durationSec = Math.max(1, Number(round.answerWindowSec) || Number(round.locksAtClockSec) - Number(round.opensAtClockSec) || DEFAULT_ROUND_ANSWER_WINDOW_SEC);
   return {
@@ -247,20 +252,29 @@ export function createRoomRuntime({ eventStore = null, commitmentPublisher = nul
     const round = room.currentRound;
     if (!round || round.state !== "open") return false;
     const lockedAt = options.lockedAt ?? nowIso();
+    const conditionSeed = round.resolution?.condition ?? {};
     const condition = round.resolution?.domain === "football"
       ? {
-          ...(round.resolution.condition ?? {}),
+          ...conditionSeed,
           state: "tracking",
           startsAtClockSec: room.match.matchClockSec,
-          endsAtClockSec: room.match.matchClockSec + Number(round.resolution.condition?.durationSec ?? 600),
-          openingObservation: {
-            eventId: room.lastNormalizedEvent?.id ?? null,
-            providerSequence: room.lastNormalizedEvent?.providerSequence ?? null,
-            homeScore: room.match.homeScore,
-            awayScore: room.match.awayScore,
-            matchClockSec: room.match.matchClockSec,
-            observedAt: room.lastNormalizedEvent?.occurredAt ?? lockedAt,
-          },
+          endsAtClockSec: room.match.matchClockSec + Number(conditionSeed.durationSec ?? (conditionSeed.kind === "team_shot_on_target" ? 300 : 600)),
+          openingObservation: conditionSeed.kind === "team_shot_on_target"
+            ? {
+                eventId: room.matchStats.sourceEventId,
+                providerSequence: room.lastNormalizedEvent?.providerSequence ?? null,
+                shotsOnTarget: room.matchStats[conditionSeed.targetSide === "away" ? "away" : "home"].shotsOnTarget,
+                matchClockSec: room.match.matchClockSec,
+                observedAt: room.lastNormalizedEvent?.occurredAt ?? lockedAt,
+              }
+            : {
+                eventId: room.lastNormalizedEvent?.id ?? null,
+                providerSequence: room.lastNormalizedEvent?.providerSequence ?? null,
+                homeScore: room.match.homeScore,
+                awayScore: room.match.awayScore,
+                matchClockSec: room.match.matchClockSec,
+                observedAt: room.lastNormalizedEvent?.occurredAt ?? lockedAt,
+              },
         }
       : null;
     const lockedRound = {
@@ -346,6 +360,9 @@ export function createRoomRuntime({ eventStore = null, commitmentPublisher = nul
       source: undefined,
       lastNormalizedEvent: null,
       lastAuthoritativeScoreObservation: null,
+      matchStats: emptyMatchStats(),
+      footballActions: new Map(),
+      roundHistory: [],
       lastResolution: null,
       latestEvidence: null,
       evidenceHistory: [],
@@ -544,6 +561,7 @@ export function createRoomRuntime({ eventStore = null, commitmentPublisher = nul
       roomLabel: room.roomLabel,
       roomPopulation: room.participants.length,
       match: room.match,
+      matchStats: cloneJson(room.matchStats),
       connectionState: room.connectionState,
       currentRound: room.currentRound,
       currentParticipant,
@@ -821,9 +839,24 @@ export function createRoomRuntime({ eventStore = null, commitmentPublisher = nul
 
   function footballConditionEvaluation(round, event) {
     const condition = round?.resolution?.condition ?? {};
-    if (condition.kind !== "team_scores" || !["tracking", "candidate_met", "confirmed"].includes(condition.state)) {
+    if (!["tracking", "candidate_met", "confirmed"].includes(condition.state)) {
       return { winningOptionId: null, reason: "condition_not_tracking", expression: "football condition awaiting lock" };
     }
+    if (condition.kind === "team_shot_on_target") {
+      const targetSide = condition.targetSide === "away" ? "away" : "home";
+      const openingValue = Number(condition.openingObservation?.shotsOnTarget ?? 0);
+      const currentValue = Number(event.authoritativeStats?.[targetSide]?.shotsOnTarget);
+      const clock = Number(event.matchClockSec);
+      const start = Number(condition.startsAtClockSec);
+      const end = Number(condition.endsAtClockSec);
+      const confirmedShot = event.type === "shot" && event.participantSide === targetSide && event.confirmed !== false && String(event.outcome ?? "").toLowerCase().replaceAll("_", "") === "ontarget";
+      const confirmed = condition.confirmedObservation;
+      if (confirmed && Number(confirmed.matchClockSec) <= end) return { winningOptionId: "yes", reason: "condition_confirmed", expression: `${targetSide} shotsOnTarget ${confirmed.value} > ${openingValue} before ${end}`, actualValue: confirmed.value, expectedValue: openingValue };
+      if (Number.isFinite(clock) && clock >= start && clock <= end && (confirmedShot || (Number.isFinite(currentValue) && currentValue > openingValue))) return { winningOptionId: "yes", reason: "condition_confirmed", expression: `${targetSide} shotsOnTarget ${currentValue} > ${openingValue} before ${end}`, actualValue: currentValue, expectedValue: openingValue };
+      if (Number.isFinite(clock) && clock >= end && !condition.candidateObservation) return { winningOptionId: "no", reason: "window_expired", expression: `${targetSide} shotsOnTarget ${currentValue} == ${openingValue} at ${clock}`, actualValue: currentValue, expectedValue: openingValue };
+      return { winningOptionId: null, reason: "condition_pending", expression: `${targetSide} shotsOnTarget ${currentValue} == ${openingValue}; tracking until ${end}`, actualValue: currentValue, expectedValue: openingValue };
+    }
+    if (condition.kind !== "team_scores") return { winningOptionId: null, reason: "unsupported_football_condition", expression: String(condition.kind) };
     const home = Number(event.absoluteScore?.home);
     const away = Number(event.absoluteScore?.away);
     const clock = Number(event.matchClockSec);
@@ -869,7 +902,47 @@ export function createRoomRuntime({ eventStore = null, commitmentPublisher = nul
   function advanceFootballCondition(room, event, correlationId) {
     const round = room.currentRound;
     const condition = round?.resolution?.condition;
-    if (!round || round.state !== "locked" || round.resolution?.domain !== "football" || condition?.kind !== "team_scores") return [];
+    if (!round || round.state !== "locked" || round.resolution?.domain !== "football") return [];
+    if (condition?.kind === "team_shot_on_target") {
+      const targetSide = condition.targetSide === "away" ? "away" : "home";
+      const openingValue = Number(condition.openingObservation?.shotsOnTarget ?? 0);
+      let currentValue = Number(event.authoritativeStats?.[targetSide]?.shotsOnTarget);
+      const clock = Number(event.matchClockSec);
+      const end = Number(condition.endsAtClockSec);
+      if (!Number.isFinite(currentValue) || !Number.isFinite(clock) || !Number.isFinite(end)) return [];
+      const confirmedShot = event.type === "shot" && event.participantSide === targetSide && event.confirmed !== false && String(event.outcome ?? "").toLowerCase().replaceAll("_", "") === "ontarget";
+      const candidateShot = event.type === "shot" && event.participantSide === targetSide && event.confirmed === false && String(event.outcome ?? "").toLowerCase().replaceAll("_", "") === "ontarget";
+      if (confirmedShot && currentValue <= openingValue) {
+        currentValue = openingValue + 1;
+        room.matchStats[targetSide].shotsOnTarget = Math.max(room.matchStats[targetSide].shotsOnTarget, currentValue);
+        event.authoritativeStats = cloneJson(room.matchStats);
+      }
+      const observation = { eventId: event.id, sourceActionId: event.sourceActionId ?? null, providerSequence: event.providerSequence ?? null, value: currentValue, matchClockSec: clock, observedAt: event.occurredAt ?? nowIso() };
+      if (candidateShot && clock <= end && !condition.candidateObservation) {
+        const candidateObservation = { ...observation, value: openingValue + 1 };
+        const nextCondition = { ...condition, state: "candidate_met", candidateObservation };
+        round.resolution = { ...round.resolution, condition: nextCondition };
+        return [domainEvent(room, "football.condition.candidate_met", { roundId: round.id, condition: nextCondition, observation: candidateObservation }, { idempotencyKey: `football-candidate:${room.roomId}:${round.id}:${event.id}`, causationId: event.id, correlationId })];
+      }
+      const directConfirmation = clock <= end && currentValue > openingValue && (event.confirmed !== false || event.cumulativeStats);
+      if (directConfirmation) {
+        const nextCondition = { ...condition, state: "confirmed", candidateObservation: condition.candidateObservation ?? observation, confirmedObservation: observation };
+        round.resolution = { ...round.resolution, condition: nextCondition };
+        return [domainEvent(room, "football.condition.confirmed", { roundId: round.id, condition: nextCondition, observation }, { idempotencyKey: `football-confirmed:${room.roomId}:${round.id}:${event.id}`, causationId: event.id, correlationId })];
+      }
+      if (clock <= end && currentValue > openingValue && !condition.candidateObservation) {
+        const nextCondition = { ...condition, state: "candidate_met", candidateObservation: observation };
+        round.resolution = { ...round.resolution, condition: nextCondition };
+        return [domainEvent(room, "football.condition.candidate_met", { roundId: round.id, condition: nextCondition, observation }, { idempotencyKey: `football-candidate:${room.roomId}:${round.id}:${event.id}`, causationId: event.id, correlationId })];
+      }
+      if (condition.candidateObservation && currentValue <= openingValue) {
+        const nextCondition = { ...condition, state: "tracking", candidateObservation: null, confirmedObservation: null };
+        round.resolution = { ...round.resolution, condition: nextCondition };
+        return [domainEvent(room, "football.condition.candidate_revoked", { roundId: round.id, condition: nextCondition, observation }, { idempotencyKey: `football-candidate-revoked:${room.roomId}:${round.id}:${event.id}`, causationId: event.id, correlationId })];
+      }
+      return [];
+    }
+    if (condition?.kind !== "team_scores") return [];
     const home = Number(event.absoluteScore?.home);
     const away = Number(event.absoluteScore?.away);
     const clock = Number(event.matchClockSec);
@@ -1081,18 +1154,25 @@ export function createRoomRuntime({ eventStore = null, commitmentPublisher = nul
         ? "away"
         : previous?.resolution.condition?.targetSide === "home" ? "away" : "home";
     const team = targetSide === "home" ? room.match.homeTeam : room.match.awayTeam;
+    const previousFamily = previous?.resolution.condition?.kind ?? null;
+    const shotRounds = room.roundHistory.filter((item) => item.family === "team_shot_on_target").length;
+    const shotCoverage = room.matchStats.reliability.shots === "reliable";
+    const useShotOnTarget = shotCoverage && previousFamily !== "team_shot_on_target" && shotRounds < 2;
+    const condition = useShotOnTarget
+      ? { kind: "team_shot_on_target", targetSide, durationSec: 300, state: "awaiting_lock" }
+      : { kind: "team_scores", targetSide, durationSec: 600, state: "awaiting_lock" };
     const round = openedRound({
       id: `round-${(previous?.sequence ?? 0) + 1}`,
       matchId: room.match.id,
       sequence: (previous?.sequence ?? 0) + 1,
-      contextLabel: "Previsao de jogo · proximos 10 minutos",
+      contextLabel: useShotOnTarget ? "Momento de ataque · proximos 5 minutos" : "Previsao de jogo · proximos 10 minutos",
       options: [{ id: "yes", label: "Sim" }, { id: "no", label: "Nao" }],
-      title: `${team.name} marca nos proximos 10 minutos?`,
+      title: useShotOnTarget ? `${team.name} finaliza no alvo nos proximos 5 minutos?` : `${team.name} marca nos proximos 10 minutos?`,
       opensAtClockSec: clock,
       locksAtClockSec: clock + DEFAULT_ROUND_ANSWER_WINDOW_SEC,
       answerWindowSec: DEFAULT_ROUND_ANSWER_WINDOW_SEC,
       state: "open",
-      resolution: { domain: "football", mode: "football_condition", condition: { kind: "team_scores", targetSide, durationSec: 600, state: "awaiting_lock" } },
+      resolution: { domain: "football", mode: "football_condition", condition },
     }, eventServerTimeMs(event));
     room.currentRound = round;
     room.answersByRound[round.id] ??= {};
@@ -1193,11 +1273,20 @@ export function createRoomRuntime({ eventStore = null, commitmentPublisher = nul
     if (!round || round.state !== "locked") return null;
     const answersForRound = room.answersByRound[round.id] ?? {};
     const fallbackScore = room.lastAuthoritativeScoreObservation;
-    const resolutionEvent = round.resolution?.domain === "football"
+    let resolutionEvent = round.resolution?.domain === "football"
       && (!Number.isFinite(Number(event.absoluteScore?.home)) || !Number.isFinite(Number(event.absoluteScore?.away)))
       && Number(fallbackScore?.matchClockSec) >= Number(round.resolution.condition?.endsAtClockSec)
       ? fallbackScore
       : event;
+    const shotCondition = round.resolution?.condition?.kind === "team_shot_on_target" ? round.resolution.condition : null;
+    const shotSide = shotCondition?.targetSide === "away" ? "away" : "home";
+    const confirmedTargetShot = shotCondition && resolutionEvent.type === "shot" && resolutionEvent.participantSide === shotSide && resolutionEvent.confirmed !== false && String(resolutionEvent.outcome ?? "").toLowerCase().replaceAll("_", "") === "ontarget";
+    if (confirmedTargetShot) {
+      const openingShots = Number(shotCondition.openingObservation?.shotsOnTarget ?? 0);
+      const stats = cloneJson(resolutionEvent.authoritativeStats ?? room.matchStats);
+      stats[shotSide].shotsOnTarget = Math.max(Number(stats[shotSide].shotsOnTarget) || 0, openingShots + 1);
+      resolutionEvent = { ...resolutionEvent, authoritativeStats: stats };
+    }
     const footballEvaluation = round.resolution?.domain === "football" ? footballConditionEvaluation(round, resolutionEvent) : null;
     const winningOptionId = footballEvaluation?.winningOptionId ?? winningOptionFor(round, event);
     if (!winningOptionId) return null;
@@ -1232,6 +1321,7 @@ export function createRoomRuntime({ eventStore = null, commitmentPublisher = nul
     room.leaderboard = rankLeaderboard(room.leaderboard);
     const resolvedRound = { ...round, state: "resolved", version: (Number(round.version) || 1) + 1 };
     room.currentRound = resolvedRound;
+    room.roundHistory.push({ roundId: round.id, family: round.resolution?.condition?.kind ?? "market", targetSide: round.resolution?.condition?.targetSide ?? null, openedAtClockSec: round.opensAtClockSec });
     room.lastResolution = {
       roundId: round.id,
       roundVersion: resolvedRound.version,
@@ -1285,6 +1375,63 @@ export function createRoomRuntime({ eventStore = null, commitmentPublisher = nul
     if (event.type !== "goal") return;
     if (event.participantSide === "home" || event.teamId === room.match.homeTeam.id) room.match.homeScore += 1;
     if (event.participantSide === "away" || event.teamId === room.match.awayTeam.id) room.match.awayScore += 1;
+  }
+
+  function applyFootballEventStats(room, event, correlationId = null, emitEvents = true) {
+    const relevant = new Set(["shot", "corner", "penalty", "card", "possession", "var", "reliability", "action_amended", "action_discarded"]);
+    if (!relevant.has(event.type) && !event.cumulativeStats) return [];
+    const before = JSON.stringify(room.matchStats);
+    const side = event.participantSide === "away" ? "away" : "home";
+    const actionId = String(event.sourceActionId ?? event.id);
+    const normalizedOutcome = String(event.outcome ?? "").toLowerCase().replaceAll("_", "");
+    const countsOnTarget = (entry) => entry?.type === "shot" && entry.confirmed && String(entry.outcome ?? "").toLowerCase().replaceAll("_", "") === "ontarget";
+    const removeAction = (entry) => {
+      if (!entry) return;
+      if (entry.type === "shot" && entry.confirmed) room.matchStats[entry.side].shots = Math.max(0, room.matchStats[entry.side].shots - 1);
+      if (countsOnTarget(entry)) room.matchStats[entry.side].shotsOnTarget = Math.max(0, room.matchStats[entry.side].shotsOnTarget - 1);
+    };
+    if (event.type === "action_discarded") {
+      const discardedId = String(event.discardedActionId ?? event.sourceActionId ?? "");
+      const existing = room.footballActions.get(discardedId);
+      removeAction(existing);
+      room.footballActions.delete(discardedId);
+    } else if (event.type === "action_amended") {
+      const existing = room.footballActions.get(actionId);
+      removeAction(existing);
+      const amended = { type: event.amendedActionType ?? existing?.type, side: event.participantSide ?? existing?.side ?? side, outcome: event.outcome ?? existing?.outcome ?? null, confirmed: event.confirmed !== false };
+      room.footballActions.set(actionId, amended);
+      if (amended.type === "shot" && amended.confirmed) room.matchStats[amended.side].shots += 1;
+      if (countsOnTarget(amended)) room.matchStats[amended.side].shotsOnTarget += 1;
+    } else if (event.type === "shot") {
+      const existing = room.footballActions.get(actionId);
+      if (existing) removeAction(existing);
+      const next = { type: "shot", side, outcome: normalizedOutcome, confirmed: event.confirmed !== false };
+      room.footballActions.set(actionId, next);
+      if (next.confirmed) room.matchStats[side].shots += 1;
+      if (countsOnTarget(next)) room.matchStats[side].shotsOnTarget += 1;
+      room.matchStats.reliability.shots = "reliable";
+    }
+    if (event.type === "reliability") {
+      const action = String(event.payload?.Action ?? "").toLowerCase();
+      const unreliable = event.payload?.Data?.Unreliable !== false;
+      if (action.includes("corner")) room.matchStats.reliability.corners = unreliable ? "unreliable" : "reliable";
+      if (action.includes("card")) room.matchStats.reliability.cards = unreliable ? "unreliable" : "reliable";
+    }
+    for (const targetSide of ["home", "away"]) {
+      const stats = event.cumulativeStats?.[targetSide];
+      if (!stats) continue;
+      for (const field of ["shots", "shotsOnTarget", "corners", "yellowCards", "redCards"]) {
+        const value = Number(stats[field]);
+        if (Number.isFinite(value)) room.matchStats[targetSide][field] = Math.max(0, value);
+      }
+      if (Number.isFinite(Number(stats.shots)) || Number.isFinite(Number(stats.shotsOnTarget))) room.matchStats.reliability.shots = "reliable";
+    }
+    room.matchStats.updatedAtClockSec = Math.max(room.matchStats.updatedAtClockSec, Number(event.matchClockSec) || 0);
+    room.matchStats.sourceEventId = event.id;
+    const changed = before !== JSON.stringify(room.matchStats);
+    if (!emitEvents) return [];
+    const eventType = event.type === "action_amended" ? "football.event.amended" : event.type === "action_discarded" ? "football.event.discarded" : "football.event.accepted";
+    return [domainEvent(room, eventType, { event }, { idempotencyKey: `${eventType}:${room.roomId}:${event.id}`, causationId: event.id, correlationId }), ...(changed ? [domainEvent(room, "football.stats.updated", { stats: cloneJson(room.matchStats), causedByEventId: event.id }, { idempotencyKey: `football-stats:${room.roomId}:${event.id}`, causationId: event.id, correlationId })] : [])];
   }
 
   function withConsolidatedScore(room, event) {
@@ -1452,6 +1599,9 @@ export function createRoomRuntime({ eventStore = null, commitmentPublisher = nul
     room.source = undefined;
     room.lastNormalizedEvent = null;
     room.lastAuthoritativeScoreObservation = null;
+    room.matchStats = emptyMatchStats();
+    room.footballActions = new Map();
+    room.roundHistory = [];
     room.lastResolution = null;
     room.latestEvidence = null;
     room.evidenceHistory = [];
@@ -1567,6 +1717,7 @@ export function createRoomRuntime({ eventStore = null, commitmentPublisher = nul
           updateMarketDistribution(room, event);
         }
         applyAuthoritativeScore(room, event);
+        applyFootballEventStats(room, event, storedEvent.correlationId, false);
         if (event.type !== "match_end") {
           pushTimeline(room, {
             id: `timeline-${event.id}`,
@@ -1586,6 +1737,7 @@ export function createRoomRuntime({ eventStore = null, commitmentPublisher = nul
         const roundId = payload.roundId;
         const winningOptionId = payload.winningOptionId;
         const awards = Array.isArray(payload.awards) ? payload.awards : [];
+        if (!room.roundHistory.some((item) => item.roundId === roundId)) room.roundHistory.push({ roundId, family: payload.condition?.kind ?? payload.resolutionDomain ?? "market", targetSide: payload.condition?.targetSide ?? null, openedAtClockSec: room.currentRound?.opensAtClockSec ?? 0 });
         room.leaderboard = room.leaderboard.map((entry) => {
           const award = awards.find((item) => item.participantId === entry.participantId);
           if (!award) return { ...entry, delta: 0, streak: 0 };
@@ -2094,7 +2246,9 @@ export function createRoomRuntime({ eventStore = null, commitmentPublisher = nul
       updateMarketDistribution(room, event);
     }
     applyAuthoritativeScore(room, event);
-    const evaluationEvent = withConsolidatedScore(room, event);
+    const footballStatEvents = applyFootballEventStats(room, event, correlationId);
+    if (footballStatEvents.length) await appendDomainEvents(room, footballStatEvents);
+    const evaluationEvent = { ...withConsolidatedScore(room, event), authoritativeStats: cloneJson(room.matchStats) };
     const footballConditionEvents = advanceFootballCondition(room, evaluationEvent, correlationId);
     if (footballConditionEvents.length) await appendDomainEvents(room, footballConditionEvents);
     const timelineEntryId = event.type === "match_end" ? `timeline-match-finished-${event.id}` : `timeline-${event.id}`;
@@ -2149,7 +2303,7 @@ export function createRoomRuntime({ eventStore = null, commitmentPublisher = nul
             currentScore: output.currentScore,
             correct: output.delta > 0,
           })),
-          event,
+          event: resolution.event,
         }, {
           idempotencyKey: `round-resolved:${room.roomId}:${resolution.roundId}:${event.id}`,
           causationId: event.id,
