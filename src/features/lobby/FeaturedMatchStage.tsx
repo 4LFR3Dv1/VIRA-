@@ -98,7 +98,8 @@ function MobileMatchIdentity({ home, away }: { home: string; away: string }) {
 }
 
 function TeamCompact({ name, side }: { name: string; side: "home" | "away" }) {
-  return <div className={side === "away" ? "min-w-0 text-right" : "min-w-0"}><div className={side === "away" ? "flex justify-end" : ""}><TeamIcon name={name} side={side} size="md" /></div><h2 style={{ viewTransitionName: side === "home" ? "home-team" : "away-team" } as CSSProperties} className="mt-3 whitespace-nowrap font-['Chakra_Petch'] text-[clamp(1.65rem,8.5vw,3rem)] font-black uppercase leading-[.86]">{name}</h2></div>;
+  const scale = name.length >= 11 ? "text-[clamp(1rem,4.6vw,1.35rem)]" : name.length >= 9 ? "text-[clamp(1.15rem,5.2vw,1.55rem)]" : "text-[clamp(1.3rem,6vw,1.8rem)]";
+  return <div className={side === "away" ? "min-w-0 text-right" : "min-w-0"}><div className={side === "away" ? "flex justify-end" : ""}><TeamIcon name={name} side={side} size="md" /></div><h2 style={{ viewTransitionName: side === "home" ? "home-team" : "away-team" } as CSSProperties} className={`mt-3 whitespace-nowrap font-['Chakra_Petch'] font-black uppercase leading-[.86] ${scale}`}>{name}</h2></div>;
 }
 
 function MarketScoreboard({ signal, mobile = false }: { signal: FeaturedMatchModel["signal"]; mobile?: boolean }) {

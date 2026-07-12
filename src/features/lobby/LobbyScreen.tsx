@@ -18,8 +18,9 @@ import { fixtureAccent, useShellAtmosphere } from "../../app/shell/use-shell-atm
 function selectSuggestedMatch(matches: MatchSummary[]) {
   return (
     matches.find((match) => match.competitionLabel.toLowerCase().includes("world cup") && match.status.toLowerCase().includes("live"))
-    ?? matches.find((match) => match.competitionLabel.toLowerCase().includes("world cup"))
+    ?? matches.find((match) => match.competitionLabel.toLowerCase().includes("world cup") && match.status.toLowerCase() !== "finished")
     ?? matches.find((match) => match.status.toLowerCase().includes("live"))
+    ?? matches.find((match) => match.status.toLowerCase() !== "finished")
     ?? matches[0]
     ?? null
   );
