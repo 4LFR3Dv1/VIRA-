@@ -18,6 +18,9 @@
     "certify:match": "node scripts/ci/certify-match.mjs",
     "soak:match": "node scripts/ci/soak-match.mjs",
     "test:deployment:projection": "node scripts/ci/audit-consumer-projection.mjs",
+    "test:browser:smoke": "playwright test tests/e2e/deployment-readonly-smoke.spec.ts",
+    "test:browser:smoke:desktop": "playwright test tests/e2e/deployment-readonly-smoke.spec.ts --project=chromium-desktop",
+    "test:browser:smoke:mobile": "playwright test tests/e2e/deployment-readonly-smoke.spec.ts --project=chromium-mobile-viewport",
     "test:all": "npm run typecheck && node --test backend/event-sourcing.test.mjs backend/event-sourcing-adversarial.test.mjs backend/http-security.test.mjs backend/http-routing.test.mjs backend/txline-catalog-cache.test.mjs backend/verified-round-replay.test.mjs backend/verified-playback-seed.test.mjs backend/round-commitment.test.mjs backend/share-store.test.mjs backend/share-image-png.test.mjs backend/home-projection.test.mjs backend/editorial-domain.test.mjs backend/fixture-consumer-projection.test.mjs backend/competition-registry.test.mjs backend/canonical-market.test.mjs backend/consumer-cadence.test.mjs backend/football-events.test.mjs && npm run test:moments",
     "test:container": "node scripts/ci/container-smoke.mjs",
     "verify": "npm run test:all && npm run build",
@@ -94,6 +97,7 @@
     "vaul": "1.1.2"
   },
   "devDependencies": {
+    "@playwright/test": "^1.61.1",
     "@tailwindcss/vite": "4.1.12",
     "@vitejs/plugin-react": "4.7.0",
     "tailwindcss": "4.1.12",

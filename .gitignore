@@ -10,3 +10,5 @@ data/vira/
 *.log
 *.err
 artifacts/
+playwright-report/
+test-results/
