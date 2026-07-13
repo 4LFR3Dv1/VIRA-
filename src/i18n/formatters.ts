@@ -21,6 +21,16 @@ export function formatPercent(locale: SupportedLocale, value: number, options?: 
 
 export type ZonedDateTimeFormatOptions = Intl.DateTimeFormatOptions & { timeZone: string };
 
+export const DEFAULT_TIME_ZONE = "America/Sao_Paulo";
+
+export function resolveBrowserTimeZone(): string {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || DEFAULT_TIME_ZONE;
+  } catch {
+    return DEFAULT_TIME_ZONE;
+  }
+}
+
 export function formatDateTime(locale: SupportedLocale, value: string | Date, options: ZonedDateTimeFormatOptions): string {
   const date = value instanceof Date ? value : new Date(value);
   return new Intl.DateTimeFormat(locale, options).format(date);

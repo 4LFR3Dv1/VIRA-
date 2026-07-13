@@ -172,7 +172,7 @@ export function ShellStateProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo(() => ({
     mode: route.shellMode,
-    route: { id: route.id, title: route.title, context: route.context, backPath: route.backPath },
+    route: { id: route.id, titleKey: route.titleKey, contextKey: route.contextKey, backPath: route.backPath },
     connectivity,
     connection: deriveConnectionPresentation(connectivity),
     readiness,

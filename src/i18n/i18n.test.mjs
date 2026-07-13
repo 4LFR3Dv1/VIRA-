@@ -18,17 +18,13 @@ test("catalogs expose the same complete key set without raw-key fallbacks", () =
   const enKeys = Object.keys(catalogs.en).sort();
   const ptKeys = Object.keys(catalogs["pt-BR"]).sort();
   assert.deepEqual(enKeys, ptKeys);
-  assert.equal(enKeys.length, 13);
+  assert.ok(enKeys.length >= 100);
 
-  const params = {
-    "locale.currentLanguage": { language: "English" },
-    "room.playersWaiting": { count: 2 },
-    "share.userPicked": { name: "Ana", selection: "France" },
-  };
+  const params = { language: "English", count: 2, name: "Ana", selection: "France", homeTeam: "France", awayTeam: "Spain", dateTime: "14 Jul · 16:00" };
   for (const locale of ["en", "pt-BR"]) {
     for (const key of enKeys) {
       const message = catalogs[locale][key];
-      const rendered = typeof message === "function" ? message(params[key]) : message;
+      const rendered = typeof message === "function" ? message(params) : message;
       assert.notEqual(rendered, key);
       assert.ok(rendered.length > 0);
     }

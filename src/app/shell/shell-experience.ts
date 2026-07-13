@@ -1,4 +1,5 @@
 import type { ShellMode } from "../routing/route-manifest";
+import type { StaticTranslationKey } from "../../i18n/translate.ts";
 
 export type ShellConnectivity = {
   browser: "online" | "offline";
@@ -71,7 +72,7 @@ export type ShellAtmosphereIntent = Omit<ShellAtmosphereExperience, "fixtureFocu
 
 export type ShellExperience = {
   mode: ShellMode;
-  route: { id: string; title: string; context?: string; backPath?: string };
+  route: { id: string; titleKey: StaticTranslationKey; contextKey?: StaticTranslationKey; backPath?: string };
   connectivity: ShellConnectivity;
   connection: ShellConnectionPresentation;
   readiness: ShellReadiness;

@@ -1,4 +1,10 @@
+import { resolveBrowserTimeZone } from "../i18n/formatters.ts";
+import { resolveBrowserLocale, type SupportedLocale } from "../i18n/locale.ts";
+import type { FixtureConsumerProjection } from "../runtime/api.ts";
+
 const API_ORIGIN = import.meta.env.VITE_VIRA_API_ORIGIN ?? (import.meta.env.PROD ? window.location.origin : "http://127.0.0.1:8787");
+
+export type EditorialRequestContext = { locale: SupportedLocale; timeZone: string };
 
 export function getPublicToken() {
   const key = "vira:publicToken";
@@ -20,19 +26,22 @@ export function createRoomShare(input: { roomId: string; participantId: string; 
   return fetch(`${API_ORIGIN}/shares`, { method: "POST", headers: { "Content-Type": "application/json", "X-Vira-Public-Token": getPublicToken() }, body: JSON.stringify(input) }).then((response) => json<ShareResponse>(response));
 }
 
-export function createPredictionShare(input: { fixtureId: string; displayName: string; choice: "home" | "draw" | "away"; inviteCode?: string | null }) {
-  return fetch(`${API_ORIGIN}/predictions`, { method: "POST", headers: editorialHeaders(), body: JSON.stringify(input) }).then((response) => json<ShareResponse & { prediction: { id: string; choice: string } }>(response));
+export function createPredictionShare(input: { fixtureId: string; displayName: string; choice: "home" | "draw" | "away"; inviteCode?: string | null }, context?: EditorialRequestContext) {
+  return fetch(`${API_ORIGIN}/predictions`, { method: "POST", headers: editorialHeaders(context), body: JSON.stringify(input) }).then((response) => json<ShareResponse & { prediction: { id: string; choice: string } }>(response));
 }
 
 export function savePrediction(input: { fixtureId: string; displayName: string; choice: "home" | "draw" | "away"; inviteCode?: string | null }) {
   return fetch(`${API_ORIGIN}/predictions`, { method: "POST", headers: { "Content-Type": "application/json", "X-Vira-Public-Token": getPublicToken() }, body: JSON.stringify({ ...input, createShare: false }) }).then((response) => json<{ prediction: { id: string; choice: "home" | "draw" | "away"; status: "open" } }>(response));
 }
 
-export function shareSavedPrediction(fixtureId: string) {
-  return fetch(`${API_ORIGIN}/predictions/${encodeURIComponent(fixtureId)}/share`, { method: "POST", headers: editorialHeaders(), body: "{}" }).then((response) => json<ShareResponse>(response));
+export function shareSavedPrediction(fixtureId: string, context?: EditorialRequestContext) {
+  return fetch(`${API_ORIGIN}/predictions/${encodeURIComponent(fixtureId)}/share`, { method: "POST", headers: editorialHeaders(context), body: "{}" }).then((response) => json<ShareResponse>(response));
 }
 
-function editorialHeaders() { return { "Content-Type": "application/json", "X-Vira-Public-Token": getPublicToken(), "X-Vira-Locale": navigator.language || "pt-BR", "X-Vira-Time-Zone": Intl.DateTimeFormat().resolvedOptions().timeZone || "America/Sao_Paulo" }; }
+function editorialHeaders(context?: EditorialRequestContext) {
+  const resolved = context ?? { locale: resolveBrowserLocale().locale, timeZone: resolveBrowserTimeZone() };
+  return { "Content-Type": "application/json", "X-Vira-Public-Token": getPublicToken(), "X-Vira-Locale": resolved.locale, "X-Vira-Time-Zone": resolved.timeZone };
+}
 
 export type HomeProjection = {
   version: 2;
@@ -43,10 +52,10 @@ export type HomeProjection = {
 };
 
 export type PredictionProjection = { choice: "home" | "draw" | "away"; status: "open" | "resolved"; correct?: boolean; winningChoice?: string; finalScore?: { home: number; away: number } };
-export type HomeFixture = { fixtureId: string; competitionLabel: string; homeTeam: string; awayTeam: string; startTime: string | null; status: "scheduled" | "live" | "finished"; roomAvailable: boolean; temporal: { relation: "live" | "today" | "tomorrow" | "later_this_week" | "future" | "finished" | "unknown"; localKickoffDate: string | null; localKickoffTime: string | null; evaluatedAt: string; timeZone: string }; market: null | { authority: "txline_fixture_market"; type: "MATCH_RESULT_1X2"; selections: { home: number; draw: number; away: number }; leadingChoice: "home" | "draw" | "away"; freshness: { observedAt: string | null; staleAfter: string | null; usableForPrediction: boolean; currentForDisplay: boolean; currentForDirectionalClaim: boolean; reason: string } } };
+export type HomeFixture = { fixtureId: string; competitionLabel: string; homeTeam: string; awayTeam: string; startTime: string | null; status: "scheduled" | "live" | "finished"; roomAvailable: boolean; temporal: { relation: "live" | "today" | "tomorrow" | "later_this_week" | "future" | "finished" | "unknown"; localKickoffDate: string | null; localKickoffTime: string | null; evaluatedAt: string; timeZone: string }; market: null | { authority: "txline_fixture_market"; type: "MATCH_RESULT_1X2"; selections: { home: number; draw: number; away: number }; leadingChoice: "home" | "draw" | "away"; freshness: { observedAt: string | null; staleAfter: string | null; usableForPrediction: boolean; currentForDisplay: boolean; currentForDirectionalClaim: boolean; reason: string } }; consumerProjection: FixtureConsumerProjection };
 
-export function fetchHome() {
-  return fetch(`${API_ORIGIN}/home`, { headers: { "X-Vira-Public-Token": getPublicToken(), "X-Vira-Locale": navigator.language || "pt-BR", "X-Vira-Time-Zone": Intl.DateTimeFormat().resolvedOptions().timeZone || "America/Sao_Paulo" } }).then((response) => json<HomeProjection>(response));
+export function fetchHome(context?: EditorialRequestContext) {
+  return fetch(`${API_ORIGIN}/home`, { headers: editorialHeaders(context) }).then((response) => json<HomeProjection>(response));
 }
 
 export function trackHome(type: "home.editorial_viewed" | "home.primary_action_clicked", editorialKind: string, fixtureId?: string) {

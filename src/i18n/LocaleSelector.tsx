@@ -5,10 +5,11 @@ const options: Array<{ locale: SupportedLocale; shortLabel: string; nameKey: "lo
   { locale: "pt-BR", shortLabel: "PT", nameKey: "locale.option.ptBR" },
   { locale: "en", shortLabel: "EN", nameKey: "locale.option.en" },
 ];
+const localeNameKeys = { en: "locale.option.en", "pt-BR": "locale.option.ptBR" } as const;
 
 export function LocaleSelector() {
   const { locale, setLocale, t } = useLocale();
-  const currentLanguage = t(locale === "en" ? "locale.option.en" : "locale.option.ptBR");
+  const currentLanguage = t(localeNameKeys[locale]);
   return <div
     role="group"
     aria-label={t("locale.selectorLabel")}

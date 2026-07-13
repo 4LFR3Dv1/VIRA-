@@ -16,19 +16,121 @@ export type TranslationMessages = {
   "common.genericError": undefined;
   "room.playersWaiting": { count: number };
   "share.userPicked": { name: string; selection: string };
+  "navigation.home": undefined;
+  "navigation.matches": undefined;
+  "navigation.room": undefined;
+  "navigation.review": undefined;
+  "navigation.contextual": undefined;
+  "route.home.title": undefined;
+  "route.home.context": undefined;
+  "route.help.title": undefined;
+  "route.help.context": undefined;
+  "route.matches.title": undefined;
+  "route.matches.context": undefined;
+  "route.matchPreview.title": undefined;
+  "route.matchRoom.title": undefined;
+  "shell.connectionRestored.title": undefined;
+  "shell.connectionRestored.description": undefined;
+  "shell.returningToRoom": undefined;
+  "shell.signal.integrityFailed": undefined;
+  "shell.signal.systemConfirmed": undefined;
+  "shell.signal.reconnecting": undefined;
+  "shell.signal.unavailable": undefined;
+  "shell.back": undefined;
+  "shell.openReview": undefined;
+  "shell.reconnecting": undefined;
+  "shell.answerConfirmed": undefined;
+  "shell.roomPhase.waiting": undefined;
+  "shell.roomPhase.actionRequired": undefined;
+  "shell.roomPhase.answerConfirmed": undefined;
+  "shell.roomPhase.resultAvailable": undefined;
+  "shell.roomPhase.finished": undefined;
+  "shell.connection.offline.title": undefined;
+  "shell.connection.offline.description": undefined;
+  "shell.connection.backendUnavailable.title": undefined;
+  "shell.connection.backendUnavailable.description": undefined;
+  "shell.connection.txlineUnavailable.title": undefined;
+  "shell.connection.txlineUnavailable.description": undefined;
+  "shell.connection.txlineReconnecting.title": undefined;
+  "shell.connection.txlineReconnecting.description": undefined;
+  "shell.integrity.label": undefined;
+  "shell.integrity.title": undefined;
+  "shell.integrity.description": undefined;
+  "shell.readiness.booting": undefined;
+  "shell.readiness.hydratingRoom": undefined;
+  "shell.readiness.replayingLedger": undefined;
+  "shell.readiness.verifyingProjection": undefined;
+  "shell.step.browser": undefined;
+  "shell.step.backend": undefined;
+  "shell.step.session": undefined;
+  "fixture.headline.whoWinsToday": undefined;
+  "fixture.headline.whoWinsTomorrow": undefined;
+  "fixture.headline.whoWinsFixture": { homeTeam: string; awayTeam: string };
+  "fixture.headline.matchLive": { homeTeam: string; awayTeam: string };
+  "fixture.headline.matchFinished": { homeTeam: string; awayTeam: string };
+  "fixture.headline.unavailable": undefined;
+  "fixture.schedule.live": undefined;
+  "fixture.schedule.today": undefined;
+  "fixture.schedule.tomorrow": undefined;
+  "fixture.schedule.finished": undefined;
+  "fixture.schedule.toBeConfirmed": undefined;
+  "fixture.schedule.scheduledDate": { dateTime: string };
+  "fixture.market.directionalCurrent": { selection: string };
+  "fixture.market.lastObserved": undefined;
+  "fixture.market.unavailable": undefined;
+  "home.loading": undefined;
+  "home.retry": undefined;
+  "home.kicker": undefined;
+  "home.firstPick": undefined;
+  "home.playback": undefined;
+  "home.matches": undefined;
+  "home.timeToConfirm": undefined;
+  "home.scoreDecides": undefined;
+  "home.marketObservedAt": { dateTime: string };
+  "home.nameLabel": undefined;
+  "home.namePlaceholder": undefined;
+  "home.choice.home": undefined;
+  "home.choice.draw": undefined;
+  "home.choice.away": undefined;
+  "home.share.opening": undefined;
+  "home.share.selection": { selection: string };
+  "home.actionError": undefined;
+  "home.liveNow": undefined;
+  "home.enterMatch": undefined;
+  "home.result.official": undefined;
+  "home.result.correct": undefined;
+  "home.result.defined": undefined;
+  "home.result.yourPick": { selection: string };
+  "home.result.share": undefined;
+  "home.result.view": undefined;
+  "home.calendar.kicker": undefined;
+  "home.calendar.headline": undefined;
+  "home.calendar.open": undefined;
+  "home.footer.authority": undefined;
+  "home.footer.fixtureMarket": undefined;
+  "home.footer.officialState": undefined;
+  "home.footer.yourGroup": undefined;
+  "home.footer.miniLeagues": { count: number };
+  "home.footer.noGroup": undefined;
+  "home.footer.champion": undefined;
+  "home.footer.outrightUnavailable": undefined;
 };
 
 export type TranslationKey = keyof TranslationMessages;
+export type StaticTranslationKey = {
+  [Key in TranslationKey]: TranslationMessages[Key] extends undefined ? Key : never
+}[TranslationKey];
+export type ParameterizedTranslationKey = Exclude<TranslationKey, StaticTranslationKey>;
 export type MessageValue<Params> = Params extends undefined ? string : (params: Params) => string;
 export type TranslationCatalog = { [Key in TranslationKey]: MessageValue<TranslationMessages[Key]> };
-export type TranslateFunction = <Key extends TranslationKey>(
-  key: Key,
-  ...args: TranslationMessages[Key] extends undefined ? [] : [params: TranslationMessages[Key]]
-) => string;
+export type TranslateFunction = {
+  <Key extends StaticTranslationKey>(key: Key): string;
+  <Key extends ParameterizedTranslationKey>(key: Key, params: TranslationMessages[Key]): string;
+};
 
 export const catalogs: Record<SupportedLocale, TranslationCatalog> = { en, "pt-BR": ptBR };
 
-export const translate: (locale: SupportedLocale) => TranslateFunction = (locale) => (key, ...args) => {
+export const translate: (locale: SupportedLocale) => TranslateFunction = (locale) => ((key: TranslationKey, ...args: [unknown?]) => {
   const message = catalogs[locale][key] as string | ((params: unknown) => string);
   return typeof message === "function" ? message(args[0]) : message;
-};
+}) as TranslateFunction;
