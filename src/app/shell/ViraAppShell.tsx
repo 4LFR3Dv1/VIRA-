@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { Link, useLocation, useNavigate, useOutlet } from "react-router";
 
 import { ViraLoader } from "../../shared/brand/ViraLoader";
+import { LocaleSelector } from "../../i18n/LocaleSelector.tsx";
 import viraLogo from "../../shared/shell/logo.png";
 import { useShellExperience } from "./ShellContext";
 import { OfficialReviewPortal } from "./OfficialReviewPortal";
@@ -112,7 +113,8 @@ function ShellHeader({ onOpenReview }: { onOpenReview: () => void }) {
         <span className={`hidden h-10 items-center gap-2 border px-3 font-['DM_Mono'] text-[9px] uppercase sm:inline-flex ${connection.kind === "healthy" ? "border-primary/25 text-primary" : "border-amber-400/30 text-amber-300"}`}><Radio className="size-3" />{connection.kind === "healthy" ? "TxLINE" : "Reconectando"}</span>
         {confirmedRoom ? <Link to={`/match/${confirmedRoom.roomId}`} className="hidden h-10 items-center gap-2 border border-primary/25 px-3 md:flex"><span className="size-2 bg-primary" /><span className="max-w-36 truncate font-['DM_Mono'] text-[9px] uppercase">{confirmedRoom.phaseLabel}</span></Link> : null}
         {review.kind === "available" ? <button type="button" onClick={onOpenReview} aria-label="Abrir Revisao Oficial" className="hidden size-10 place-items-center border border-white/10 text-white/45 hover:border-primary hover:text-primary md:grid"><ShieldCheck className="size-4" /></button> : null}
-        <span className="grid size-10 place-items-center border border-white/10 text-white/50"><UserRound className="size-4" /></span>
+        <LocaleSelector />
+        <span className="hidden size-10 place-items-center border border-white/10 text-white/50 sm:grid"><UserRound className="size-4" /></span>
       </div>
     </div>
   </header>;
