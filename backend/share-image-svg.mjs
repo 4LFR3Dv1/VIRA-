@@ -1,9 +1,21 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 import { resolveShareLocaleContext } from "../shared/share-copy.mjs";
 
-const logoData = `data:image/png;base64,${readFileSync(fileURLToPath(new URL("../public/vira-icon.png", import.meta.url))).toString("base64")}`;
+const logoCandidates = [
+  new URL("../public/vira-icon.png", import.meta.url),
+  new URL("../dist/vira-icon.png", import.meta.url),
+];
+
+export function resolveShareLogoFile(candidates = logoCandidates, fileExists = existsSync) {
+  return candidates
+    .map((candidate) => candidate instanceof URL ? fileURLToPath(candidate) : candidate)
+    .find((candidate) => fileExists(candidate)) ?? null;
+}
+
+const logoFile = resolveShareLogoFile();
+const logoData = logoFile ? `data:image/png;base64,${readFileSync(logoFile).toString("base64")}` : null;
 const COLORS = { midnight: "#050A12", lime: "#C8FF00", white: "#F5F7F2", panel: "#0B1320", muted: "#9DA8B8" };
 
 function escapeXml(value) {
@@ -34,8 +46,14 @@ function dictionary(locale) {
   };
 }
 
+function brandLogo() {
+  return logoData
+    ? `<image href="${logoData}" x="54" y="42" width="224" height="70" preserveAspectRatio="xMinYMid meet"/>`
+    : `<text x="54" y="91" fill="${COLORS.white}" font-family="Arial,Helvetica,sans-serif" font-size="52" font-weight="900" letter-spacing="5">VIRA</text>`;
+}
+
 function base(kindLabel) {
-  return `<rect width="1200" height="630" fill="${COLORS.midnight}"/><path d="M0 0H1200V630H0Z" fill="url(#grid)" opacity=".18"/><image href="${logoData}" x="54" y="42" width="224" height="70" preserveAspectRatio="xMinYMid meet"/><text x="1146" y="76" text-anchor="end" fill="${COLORS.lime}" font-family="Arial,Helvetica,sans-serif" font-size="18" font-weight="700" letter-spacing="4">${kindLabel}</text>`;
+  return `<rect width="1200" height="630" fill="${COLORS.midnight}"/><path d="M0 0H1200V630H0Z" fill="url(#grid)" opacity=".18"/>${brandLogo()}<text x="1146" y="76" text-anchor="end" fill="${COLORS.lime}" font-family="Arial,Helvetica,sans-serif" font-size="18" font-weight="700" letter-spacing="4">${kindLabel}</text>`;
 }
 
 function defs() {
@@ -67,6 +85,6 @@ export function renderShareSvg(share) {
   const { locale } = resolveShareLocaleContext(share);
   const copy = dictionary(locale);
   const content = share.kind === "prediction" ? predictionCard(share, copy) : share.kind === "room" ? inviteCard(share, copy) : resultCard(share, copy);
-  const brandOverlay = share.kind === "room" ? `<image href="${logoData}" x="54" y="42" width="224" height="70" preserveAspectRatio="xMinYMid meet"/>` : "";
+  const brandOverlay = share.kind === "room" ? brandLogo() : "";
   return `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">${defs()}${content}${brandOverlay}</svg>`;
 }

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { renderSharePng } from "./share-image-png.mjs";
-import { renderShareSvg } from "./share-image-svg.mjs";
+import { renderShareSvg, resolveShareLogoFile } from "./share-image-svg.mjs";
 import { renderSharePage } from "./share-page.mjs";
 
 test("share renderer produces a real 1200x630 PNG", () => {
@@ -10,6 +10,13 @@ test("share renderer produces a real 1200x630 PNG", () => {
   assert.equal(png.readUInt32BE(16), 1200);
   assert.equal(png.readUInt32BE(20), 630);
   assert.ok(png.length > 5_000);
+});
+
+test("share renderer resolves the built asset when public is absent", () => {
+  const publicAsset = "/app/public/vira-icon.png";
+  const builtAsset = "/app/dist/vira-icon.png";
+  assert.equal(resolveShareLogoFile([publicAsset, builtAsset], (candidate) => candidate === builtAsset), builtAsset);
+  assert.equal(resolveShareLogoFile([publicAsset, builtAsset], () => false), null);
 });
 
 test("prediction, invite and result cards have distinct consumer compositions", () => {
