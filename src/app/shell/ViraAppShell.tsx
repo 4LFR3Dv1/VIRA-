@@ -7,7 +7,6 @@ import { ViraLoader } from "../../shared/brand/ViraLoader";
 import { LocaleSelector } from "../../i18n/LocaleSelector.tsx";
 import { useLocale } from "../../i18n/locale-context.tsx";
 import type { StaticTranslationKey } from "../../i18n/translate.ts";
-import viraLogo from "../../shared/shell/logo.png";
 import { useShellExperience } from "./ShellContext";
 import { OfficialReviewPortal } from "./OfficialReviewPortal";
 import { matchCurrentRoute } from "../routing/route-manifest";
@@ -114,7 +113,7 @@ function ShellHeader({ onOpenReview }: { onOpenReview: () => void }) {
   const confirmedRoom = activeRoom.kind === "confirmed" ? activeRoom.room : null;
   return <header style={{ top: "var(--shell-alert-height)" }} className="sticky z-40 border-b border-white/10 bg-[#050814]/92 backdrop-blur-xl">
     <div className="mx-auto flex h-[72px] max-w-[1720px] items-center px-4 lg:px-7">
-      {mode === "game" && route.backPath ? <Link to={localizedHref(route.backPath)} aria-label={t("shell.back")} className="grid size-10 place-items-center border border-white/15 hover:border-primary hover:text-primary"><ArrowLeft className="size-4" /></Link> : <Link to={localizedHref("/")} aria-label="VIRA"><img src={viraLogo} alt="VIRA" className="h-14 w-auto object-contain" /></Link>}
+      {mode === "game" && route.backPath ? <Link to={localizedHref(route.backPath)} aria-label={t("shell.back")} className="grid size-10 place-items-center border border-white/15 hover:border-primary hover:text-primary"><ArrowLeft className="size-4" /></Link> : <Link to={localizedHref("/")} aria-label="VIRA" className="flex h-12 items-center"><img src="/vira-icon.png" alt="VIRA" className="hidden h-9 w-auto object-contain sm:block" /><img src="/vira-symbol.png" alt="" className="h-10 w-10 object-contain sm:hidden" /></Link>}
       <div className="ml-4 min-w-0 border-l border-white/10 pl-4"><motion.p key={`${route.id}:${route.titleKey}`} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} className="truncate font-['DM_Mono'] text-[10px] font-black uppercase tracking-[.16em]">{t(route.titleKey)}</motion.p>{route.contextKey ? <p className="mt-1 truncate text-[10px] uppercase tracking-[.12em] text-white/40">{t(route.contextKey)}</p> : null}</div>
       <div className="ml-auto flex items-center gap-2">
         <span className={`hidden h-10 items-center gap-2 border px-3 font-['DM_Mono'] text-[9px] uppercase sm:inline-flex ${connection.kind === "healthy" ? "border-primary/25 text-primary" : "border-amber-400/30 text-amber-300"}`}><Radio className="size-3" />{connection.kind === "healthy" ? "TxLINE" : t("shell.reconnecting")}</span>

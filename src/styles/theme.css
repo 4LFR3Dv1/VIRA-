@@ -1,12 +1,12 @@
 :root {
   --font-size: 16px;
-  --background: #090b16;
-  --foreground: #f3f5ff;
-  --card: #121728;
-  --card-foreground: #f3f5ff;
+  --background: #050A12;
+  --foreground: #F5F7F2;
+  --card: #0b111b;
+  --card-foreground: #F5F7F2;
   --popover: #171d31;
   --popover-foreground: #f3f5ff;
-  --primary: #caff28;
+  --primary: #C8FF00;
   --primary-foreground: #0b1020;
   --secondary: #202940;
   --secondary-foreground: #f3f5ff;
@@ -22,8 +22,8 @@
   --switch-background: #475474;
   --font-weight-medium: 600;
   --font-weight-normal: 400;
-  --ring: #caff28;
-  --chart-1: #caff28;
+  --ring: #C8FF00;
+  --chart-1: #C8FF00;
   --chart-2: #53c877;
   --chart-3: #ff5a52;
   --chart-4: #6970e8;
@@ -180,11 +180,11 @@
 @layer base {
   body {
     font-family: "DM Sans", system-ui, sans-serif;
-    background-image: radial-gradient(circle at 50% -10%, rgba(101, 117, 255, .14), transparent 36%), linear-gradient(180deg, #0a0d18 0%, #090b16 62%);
+    background-image: linear-gradient(180deg, #050A12 0%, #07101a 62%, #050A12 100%);
     min-height: 100vh;
   }
 
-  ::selection { background: #caff28; color: #0b1020; }
+  ::selection { background: #C8FF00; color: #050A12; }
 }
 
 @layer utilities {
