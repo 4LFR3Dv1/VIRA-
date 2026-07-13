@@ -24,6 +24,7 @@
     "test:browser:consumer": "playwright test tests/e2e/consumer-happy-path.spec.ts --project=chromium-desktop",
     "test:browser:consumer:triple": "playwright test tests/e2e/consumer-happy-path.spec.ts --project=chromium-desktop --repeat-each=3",
     "test:browser:consumer:webkit": "playwright test tests/e2e/consumer-happy-path.spec.ts --project=mobile-webkit",
+    "demo:capture": "npm run build && node scripts/demo/capture-consumer-demo.mjs",
     "test:all": "npm run typecheck && node --test backend/e2e-mode.test.mjs backend/event-sourcing.test.mjs backend/event-sourcing-adversarial.test.mjs backend/http-security.test.mjs backend/http-routing.test.mjs backend/txline-catalog-cache.test.mjs backend/verified-round-replay.test.mjs backend/verified-playback-seed.test.mjs backend/round-commitment.test.mjs backend/share-store.test.mjs backend/share-image-png.test.mjs backend/home-projection.test.mjs backend/editorial-domain.test.mjs backend/fixture-consumer-projection.test.mjs backend/competition-registry.test.mjs backend/canonical-market.test.mjs backend/consumer-cadence.test.mjs backend/football-events.test.mjs && npm run test:moments",
     "test:container": "node scripts/ci/container-smoke.mjs",
     "verify": "npm run test:all && npm run build",
@@ -103,6 +104,7 @@
     "@playwright/test": "^1.61.1",
     "@tailwindcss/vite": "4.1.12",
     "@vitejs/plugin-react": "4.7.0",
+    "ffmpeg-static": "^5.3.0",
     "tailwindcss": "4.1.12",
     "typescript": "7.0.2",
     "vite": "6.3.5"
