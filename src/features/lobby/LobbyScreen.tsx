@@ -14,6 +14,8 @@ import { createFeaturedMatchModel } from "./featured-match-model";
 import { TxlineTechnicalInspector } from "./TxlineTechnicalInspector";
 import { TxlineVerificationRail } from "./TxlineVerificationRail";
 import { fixtureAccent, useShellAtmosphere } from "../../app/shell/use-shell-atmosphere";
+import { useLocale } from "../../i18n/locale-context.tsx";
+import { competitionDisplayName } from "../../i18n/semantic-copy.ts";
 
 function selectSuggestedMatch(matches: MatchSummary[]) {
   return [...matches].sort((left, right) => Number(right.consumerProjection?.editorial.priority ?? -Infinity) - Number(left.consumerProjection?.editorial.priority ?? -Infinity) || left.fixtureId.localeCompare(right.fixtureId))[0] ?? null;
@@ -21,6 +23,7 @@ function selectSuggestedMatch(matches: MatchSummary[]) {
 
 export function LobbyScreen() {
   const navigate = useNavigate();
+  const { t, localizedHref } = useLocale();
   const shell = useShellExperience();
   const [matches, setMatches] = useState<MatchCatalogEntry[]>([]);
   const [source, setSource] = useState<"txline">("txline");
@@ -66,7 +69,7 @@ export function LobbyScreen() {
     };
   }, []);
 
-  const competitionFilters = useMemo(() => Array.from(new Map(matches.map((match) => [match.competition?.canonicalCompetitionId ?? `label:${match.competitionLabel}`, { id: match.competition?.canonicalCompetitionId ?? `label:${match.competitionLabel}`, label: match.competitionLabel, kind: match.competition?.kind ?? "unknown" }])).values()), [matches]);
+  const competitionFilters = useMemo(() => Array.from(new Map(matches.map((match) => [match.competition?.canonicalCompetitionId ?? `label:${match.competitionLabel}`, { id: match.competition?.canonicalCompetitionId ?? `label:${match.competitionLabel}`, label: competitionDisplayName(t, match), kind: match.competition?.kind ?? "unknown" }])).values()), [matches, t]);
   const activeCompetitionId = competitionFilter === "world_cup" && !competitionFilters.some((item) => item.kind === "world_cup") ? "all" : competitionFilter;
   const visibleMatches = useMemo(() => activeCompetitionId === "all" ? matches : matches.filter((match) => activeCompetitionId === "world_cup" ? match.competition?.kind === "world_cup" : (match.competition?.canonicalCompetitionId ?? `label:${match.competitionLabel}`) === activeCompetitionId), [activeCompetitionId, matches]);
   const selectedMatch = useMemo(
@@ -113,7 +116,7 @@ export function LobbyScreen() {
   const openPreview = (fixtureId?: string) => {
     const targetId = fixtureId ?? selectedMatch?.fixtureId;
     if (!targetId) return;
-    const path = `/match/${targetId}/preview`;
+    const path = localizedHref(`/match/${targetId}/preview`);
     const transitionDocument = document as Document & {
       startViewTransition?: (callback: () => void) => void;
     };
@@ -133,30 +136,30 @@ export function LobbyScreen() {
           <div className="mb-7 flex items-center justify-between border-b border-border pb-4">
             <div className="flex items-center gap-3">
               <span className="size-2 rounded-full bg-primary shadow-[0_0_18px_rgba(202,255,40,.8)]" />
-              <span className="font-['DM_Mono'] text-[10px] uppercase text-primary">TxLINE live data</span>
+              <span className="font-['DM_Mono'] text-[10px] uppercase text-primary">{t("lobby.liveData")}</span>
             </div>
 
             <span className="inline-flex items-center gap-2 font-['DM_Mono'] text-[10px] uppercase text-muted-foreground">
               <Signal className={source === "txline" ? "size-4 text-primary" : "size-4"} />
-              {matches.length || "--"} fixtures
+              {matches.length ? t("lobby.fixtureCount", { count: matches.length }) : "--"}
             </span>
           </div>
 
           {loadState === "loading" ? (
             <div className="grid min-h-[60vh] place-items-center">
-              <ViraLoader label="Carregando partidas TxLINE" />
+              <ViraLoader label={t("lobby.loading")} />
             </div>
           ) : null}
 
           {loadState === "error" ? (
             <div className="grid min-h-[60vh] place-items-center text-sm text-destructive">
-              Nao foi possivel carregar partidas.
+              {t("lobby.error")}
             </div>
           ) : null}
 
           {loadState === "ready" && selectedMatch ? (
             <>
-              <nav aria-label="Filtrar competições" className="mb-7 flex gap-2 overflow-x-auto pb-2"><button type="button" onClick={() => setCompetitionFilter("all")} aria-pressed={activeCompetitionId === "all"} className={`min-h-10 shrink-0 border px-4 font-['DM_Mono'] text-[9px] font-black uppercase ${activeCompetitionId === "all" ? "border-primary bg-primary text-[#050814]" : "border-white/15 text-white/50"}`}>Todas</button>{competitionFilters.map((competition) => <button key={competition.id} type="button" onClick={() => { setCompetitionFilter(competition.kind === "world_cup" ? "world_cup" : competition.id); setSelectedMatchId(null); }} aria-pressed={activeCompetitionId === competition.id || (activeCompetitionId === "world_cup" && competition.kind === "world_cup")} className={`min-h-10 shrink-0 border px-4 font-['DM_Mono'] text-[9px] font-black uppercase ${(activeCompetitionId === competition.id || (activeCompetitionId === "world_cup" && competition.kind === "world_cup")) ? "border-primary bg-primary text-[#050814]" : "border-white/15 text-white/50"}`}>{competition.label}</button>)}</nav>
+              <nav aria-label={t("lobby.filterLabel")} className="mb-7 flex gap-2 overflow-x-auto pb-2"><button type="button" onClick={() => setCompetitionFilter("all")} aria-pressed={activeCompetitionId === "all"} className={`min-h-10 shrink-0 border px-4 font-['DM_Mono'] text-[9px] font-black uppercase ${activeCompetitionId === "all" ? "border-primary bg-primary text-[#050814]" : "border-white/15 text-white/50"}`}>{t("lobby.filterAll")}</button>{competitionFilters.map((competition) => <button key={competition.id} type="button" onClick={() => { setCompetitionFilter(competition.kind === "world_cup" ? "world_cup" : competition.id); setSelectedMatchId(null); }} aria-pressed={activeCompetitionId === competition.id || (activeCompetitionId === "world_cup" && competition.kind === "world_cup")} className={`min-h-10 shrink-0 border px-4 font-['DM_Mono'] text-[9px] font-black uppercase ${(activeCompetitionId === competition.id || (activeCompetitionId === "world_cup" && competition.kind === "world_cup")) ? "border-primary bg-primary text-[#050814]" : "border-white/15 text-white/50"}`}>{competition.label}</button>)}</nav>
               {featuredModel ? <FeaturedMatchStage model={featuredModel} onOpen={() => openPreview()} /> : null}
 
               <FixtureAgenda
