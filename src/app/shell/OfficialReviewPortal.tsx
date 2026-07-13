@@ -12,13 +12,14 @@ import { fetchPublicRoomEvents, fetchPublicRoomProjection, fetchRoomVerification
 import { deriveReviewConclusions } from "./review-summary.ts";
 
 interface Props { open: boolean; roomId: string | null; onClose: () => void }
-type Verdict = { kind: "verified" | "pending" | "failed"; title: string; reason: string };
+type Verdict = { kind: "verified" | "reproducible" | "pending" | "failed"; title: string; reason: string };
 
 function deriveVerdict(t: TranslateFunction, verification: RoomVerification | null, replay: VerifiedRoundReplayV1 | null, failed: boolean): Verdict {
   if (failed) return { kind: "failed", title: t("review.verdict.failed.title"), reason: t("review.verdict.failed.reason") };
   if (!verification || !replay) return { kind: "pending", title: t("review.verdict.pending.title"), reason: t("review.verdict.pending.noReplay") };
   const proof = replay.proof;
   if (proof.hashChainValid && proof.projectionMatches && proof.rankingMatches && proof.authorityValid && proof.temporalIntegrityValid && proof.eligibilityValid && proof.determinismValid) return { kind: "verified", title: t("review.verdict.verified.title"), reason: t("review.verdict.verified.reason") };
+  if (proof.hashChainValid && proof.projectionMatches && proof.rankingMatches && proof.temporalIntegrityValid && proof.eligibilityValid && proof.determinismValid) return { kind: "reproducible", title: t("review.verdict.reproducible.title"), reason: t("review.verdict.reproducible.reason") };
   return { kind: "pending", title: t("review.verdict.pending.title"), reason: t("review.verdict.pending.mismatch") };
 }
 
@@ -79,7 +80,7 @@ export function OfficialReviewPortal({ open, roomId, onClose }: Props) {
 
   if (!open || !roomId) return null;
   const verdict = deriveVerdict(t, verification, replay, state === "error");
-  const verified = verdict.kind === "verified";
+  const verified = verdict.kind === "verified" || verdict.kind === "reproducible";
   return createPortal(<AnimatePresence><motion.div className="fixed inset-0 z-[110] bg-[#050814]/80 backdrop-blur-md" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
     <motion.aside ref={dialogRef} role="dialog" aria-modal="true" aria-label={t("review.ariaLabel")} initial={{ x: "100%" }} animate={{ x: 0 }} exit={{ x: "100%" }} transition={{ type: "spring", stiffness: 320, damping: 34 }} className="ml-auto h-dvh w-full max-w-[760px] overflow-y-auto border-l border-white/10 bg-[#080d19] p-5 md:p-7">
       <header className="flex items-start justify-between gap-5 border-b border-white/15 pb-5"><div><p className="font-['DM_Mono'] text-[10px] font-black uppercase tracking-[.18em] text-primary">{t("review.kicker")} {replay?.schemaVersion ? `V${replay.schemaVersion}` : ""}</p><h2 className="mt-2 font-['Chakra_Petch'] text-3xl font-black uppercase">{t("review.title")}</h2><p className="mt-2 text-sm text-white/45">{t("review.subtitle")}</p></div><button ref={closeRef} onClick={onClose} aria-label={t("review.close")} className="grid size-10 shrink-0 place-items-center border border-white/15 hover:border-primary hover:text-primary"><ArrowLeft className="size-4" /></button></header>

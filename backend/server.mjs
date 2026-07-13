@@ -121,8 +121,10 @@ function publicToken(request, body = {}) {
 }
 
 function publicBaseUrl(request) {
-  const protocol = String(request.headers["x-forwarded-proto"] || "https").split(",")[0];
-  return `${protocol}://${request.headers.host}`;
+  const host = String(request.headers.host ?? "");
+  const loopback = /^(?:127\.0\.0\.1|localhost|\[::1\])(?::\d+)?$/i.test(host);
+  const protocol = String(request.headers["x-forwarded-proto"] || (loopback ? "http" : "https")).split(",")[0];
+  return `${protocol}://${host}`;
 }
 
 function requestEditorialLocale(request, source = "viewer") {

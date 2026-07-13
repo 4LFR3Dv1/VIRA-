@@ -14,12 +14,12 @@ interface LiveDecisionCapsuleProps {
   latestPresentationEvent?: PresentationEvent | null;
 }
 
-function remainingLabel(locksAt: string | undefined, now: number) {
-  const total = Math.max(0, Math.ceil((Date.parse(locksAt ?? "") - now) / 1_000));
+function remainingLabel(remainingMs: number | null) {
+  const total = Math.max(0, Math.ceil((remainingMs ?? 0) / 1_000));
   return `${String(Math.floor(total / 60)).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`;
 }
 
-function capsuleState(state: ReplayState, event: PresentationEvent | null | undefined, now: number, t: TranslateFunction) {
+function capsuleState(state: ReplayState, event: PresentationEvent | null | undefined, remainingMs: number | null, t: TranslateFunction) {
   const round = state.snapshot.currentRound;
   if (state.snapshot.match.status === "finished") {
     return {
@@ -50,7 +50,7 @@ function capsuleState(state: ReplayState, event: PresentationEvent | null | unde
       icon: CheckCircle2,
       label: closed ? t("round.answersClosed") : t("round.answerConfirmed"),
       title: closed ? football ? t("capsule.yourPickInPlay") : t("round.nextSignalDecides") : t("capsule.choiceProtected"),
-      detail: closed && football?.endsAtClockSec !== undefined ? t("round.untilClock", { clock: formatMatchClock(football.endsAtClockSec) }) : closed ? stableOptionLabel(t, state.snapshot.currentParticipantAnswer?.optionId) : remainingLabel(round?.locksAt, now),
+      detail: closed && football?.endsAtClockSec !== undefined ? t("round.untilClock", { clock: formatMatchClock(football.endsAtClockSec) }) : closed ? stableOptionLabel(t, state.snapshot.currentParticipantAnswer?.optionId) : remainingLabel(remainingMs),
       event,
     };
   }
@@ -60,7 +60,7 @@ function capsuleState(state: ReplayState, event: PresentationEvent | null | unde
     icon: CircleDot,
     label: round ? t("round.label", { number: String(round.sequence).padStart(2, "0") }) : t("capsule.room"),
     title: round?.state === "open" ? t("capsule.openPredictions") : t("capsule.preparingRound"),
-    detail: round ? formatMatchClock(Math.max(round.locksAtClockSec - state.snapshot.match.matchClockSec, 0)) : t("capsule.waiting"),
+    detail: round ? remainingLabel(remainingMs) : t("capsule.waiting"),
   };
 }
 
@@ -76,8 +76,8 @@ function toneClasses(tone: string) {
 export function LiveDecisionCapsule({ state, latestPresentationEvent }: LiveDecisionCapsuleProps) {
   const { locale, t } = useLocale();
   const reduceMotion = useReducedMotion();
-  const { now } = useServerClock(state.snapshot.serverTime, state.snapshot.currentRound?.locksAt);
-  const current = capsuleState(state, latestPresentationEvent, now, t);
+  const { remainingMs } = useServerClock(state.snapshot.serverTime, state.snapshot.currentRound?.locksAt);
+  const current = capsuleState(state, latestPresentationEvent, remainingMs, t);
   const Icon = current.icon;
   const event = "event" in current ? current.event : null;
 

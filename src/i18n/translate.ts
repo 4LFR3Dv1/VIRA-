@@ -532,6 +532,8 @@ export type TranslationMessages = {
   "review.verdict.pending.mismatch": undefined;
   "review.verdict.verified.title": undefined;
   "review.verdict.verified.reason": undefined;
+  "review.verdict.reproducible.title": undefined;
+  "review.verdict.reproducible.reason": undefined;
   "review.proof.replayed": undefined;
   "review.proof.resultMatches": undefined;
   "review.proof.rankingMatches": undefined;
