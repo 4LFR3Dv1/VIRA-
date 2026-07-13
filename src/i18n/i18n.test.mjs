@@ -13,6 +13,7 @@ import {
   withLocaleInUrl,
 } from "./locale.ts";
 import { catalogs, translate } from "./translate.ts";
+import { fixtureHeadline, fixtureMarketStatement, fixtureSchedule } from "./semantic-copy.ts";
 
 test("catalogs expose the same complete key set without raw-key fallbacks", () => {
   const enKeys = Object.keys(catalogs.en).sort();
@@ -88,4 +89,22 @@ test("formatters localize presentation while requiring an independent timezone",
   assert.match(formatDateTime("en", instant, options), /16:00/);
   assert.match(formatDateTime("pt-BR", instant, options), /16:00/);
   assert.doesNotMatch(formatDateTime("en", instant, { ...options, timeZone: "Asia/Tokyo" }), /16:00/);
+});
+
+test("fixture intents localize without mutating authoritative facts", () => {
+  const projection = {
+    fixture: { fixtureId: "fixture-7", kickoffAt: "2026-07-14T19:00:00.000Z", status: "scheduled" },
+    temporal: { relation: "tomorrow", timeZone: "America/Sao_Paulo" },
+    market: { freshness: { currentForDirectionalClaim: false } },
+    availability: { canPredict: true, canShowMarket: true, canMakeDirectionalClaim: false },
+    editorial: { headlineIntent: "who_wins_tomorrow", scheduleIntent: "tomorrow", marketStatementIntent: "last_observed" },
+  };
+  const before = JSON.stringify(projection);
+  assert.equal(fixtureHeadline(translate("en"), projection, { homeTeam: "France", awayTeam: "Spain" }), "Who wins tomorrow?");
+  assert.equal(fixtureHeadline(translate("pt-BR"), projection, { homeTeam: "France", awayTeam: "Spain" }), "Quem vence amanhã?");
+  assert.equal(fixtureSchedule(translate("en"), projection, "14 Jul · 16:00"), "Tomorrow");
+  assert.equal(fixtureSchedule(translate("pt-BR"), projection, "14 jul. · 16:00"), "Amanhã");
+  assert.equal(fixtureMarketStatement(translate("en"), projection, "France"), "Showing the last observed market.");
+  assert.equal(fixtureMarketStatement(translate("pt-BR"), projection, "France"), "Exibindo o último mercado observado.");
+  assert.equal(JSON.stringify(projection), before);
 });

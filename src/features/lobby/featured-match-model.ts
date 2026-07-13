@@ -6,14 +6,15 @@ import type {
 export type FeaturedSignal = {
   source: "suggested_prediction" | "available_market" | "match_result_draw";
   marketId: string;
-  label: string;
+  leadingChoice: "home" | "draw" | "away";
   value: number;
   updatedAt: string | null;
   previousValue?: number;
   delta?: number;
   playable: boolean;
-  prompt?: string;
-  distribution: Array<{ id: string; label: string; value: number }>;
+  directionalClaimAllowed: boolean;
+  ageSeconds: number | null;
+  distribution: Array<{ id: "home" | "draw" | "away"; value: number }>;
 };
 
 export type FeaturedMatchModel = {
@@ -34,16 +35,16 @@ export function createFeaturedMatchModel(
   if (contextState === "loading" || contextState === "idle") return { fixture, signal: { kind: "loading" }, signalCount };
   const projection = fixture.consumerProjection;
   const canonical = projection?.availability.canShowMarket ? projection.market.canonical1X2 : null;
-  const labels = { home: fixture.homeTeam, draw: "Empate", away: fixture.awayTeam };
   const signal = canonical ? {
     source: "available_market" as const,
     marketId: canonical.snapshotId ?? canonical.signature,
-    label: labels[canonical.leadingChoice],
+    leadingChoice: canonical.leadingChoice,
     value: canonical.selections[canonical.leadingChoice],
     updatedAt: canonical.observedAt,
     playable: projection?.availability.canPredict === true,
-    prompt: projection?.availability.canMakeDirectionalClaim ? `${labels[canonical.leadingChoice]} lidera o mercado atual.` : undefined,
-    distribution: (["home", "draw", "away"] as const).map((choice) => ({ id: choice, label: labels[choice], value: canonical.selections[choice] })),
+    directionalClaimAllowed: projection?.availability.canMakeDirectionalClaim === true,
+    ageSeconds: projection?.market.freshness.ageSeconds ?? null,
+    distribution: (["home", "draw", "away"] as const).map((choice) => ({ id: choice, value: canonical.selections[choice] })),
   } : null;
   return { fixture, signal: signal ? { kind: "available", value: signal } : { kind: "unavailable" }, signalCount };
 }

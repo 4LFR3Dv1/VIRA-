@@ -1,4 +1,4 @@
-import type { FixtureConsumerProjection } from "../runtime/api.ts";
+import type { FixtureConsumerProjection, MatchSummary } from "../runtime/api.ts";
 import type { TranslateFunction } from "./translate.ts";
 
 type FixtureNames = { homeTeam: string; awayTeam: string };
@@ -55,4 +55,8 @@ export function fixtureMarketStatement(
   }
   if (intent === "last_observed") return t("fixture.market.lastObserved");
   return t("fixture.market.unavailable");
+}
+
+export function competitionDisplayName(t: TranslateFunction, fixture: Pick<MatchSummary, "competition" | "competitionLabel">): string {
+  return fixture.competition?.kind === "world_cup" ? t("competition.worldCup") : fixture.competitionLabel;
 }
