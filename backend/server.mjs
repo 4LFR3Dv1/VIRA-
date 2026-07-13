@@ -511,6 +511,10 @@ async function handleRequest(request, response) {
       if (!scenarioRoute) { sendJson(response, 404, { error: "not_found" }); return; }
       const roomId = `e2e-${scenarioRoute[1]}`;
       if (scenarioRoute[2] === "start") {
+        // Both configurations are live. This is not a scheduled -> live domain
+        // transition: the first registers the dynamic seed, snapshot materializes
+        // the room, and the second uses the existing-room path to schedule the
+        // normal authoritative deadline.
         runtime.configureMatch({ fixtureId: roomId, title: "France vs Spain", competitionLabel: "World Cup", status: "live", homeTeam: "France", awayTeam: "Spain" }, { suggestedPrediction: { priceName: "part1", probability: 51 } });
         runtime.snapshot(roomId, null);
         runtime.configureMatch({ fixtureId: roomId, title: "France vs Spain", competitionLabel: "World Cup", status: "live", homeTeam: "France", awayTeam: "Spain" }, { suggestedPrediction: { priceName: "part1", probability: 51 } });

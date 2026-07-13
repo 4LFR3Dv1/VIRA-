@@ -1,7 +1,7 @@
-import { expect, test, type BrowserContext, type Page } from "@playwright/test";
+import { devices, expect, test, type BrowserContext, type Page, type TestInfo } from "@playwright/test";
 import { spawn, type ChildProcess } from "node:child_process";
 import crypto from "node:crypto";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import http from "node:http";
 import os from "node:os";
 import path from "node:path";
@@ -33,6 +33,13 @@ async function answerYes(page: Page) {
   await expect(page.getByText(/Palpite confirmado/i).first()).toBeVisible();
 }
 async function close(context: BrowserContext) { await context.close().catch(() => undefined); }
+async function writeEvidence(testInfo: TestInfo, evidence: object) {
+  const output = path.resolve("artifacts", `consumer-browser-e2e-${testInfo.project.name}.json`);
+  const serialized = `${JSON.stringify(evidence, null, 2)}\n`;
+  await mkdir(path.dirname(output), { recursive: true });
+  await writeFile(output, serialized, "utf8");
+  await testInfo.attach(path.basename(output), { body: Buffer.from(serialized), contentType: "application/json" });
+}
 
 test.beforeAll(async () => {
   dataDir = await mkdtemp(path.join(os.tmpdir(), "vira-consumer-browser-e2e-"));
@@ -47,8 +54,10 @@ test("two isolated guests share, answer, resolve and receive the same ranking", 
   const started = await scenario(runId, "start"); expect(started.status).toBe(200);
   const { roomId, inputAuthority } = await started.json() as { roomId: string; inputAuthority: string };
   expect(inputAuthority).toBe("captured_txline_test_fixture");
-  const playerA = await browser.newContext({ baseURL: origin, reducedMotion: "reduce" });
-  const playerB = await browser.newContext({ baseURL: origin, reducedMotion: "reduce" });
+  const { defaultBrowserType: _defaultBrowserType, ...mobileDevice } = devices["iPhone 13"];
+  const contextOptions = testInfo.project.name === "mobile-webkit" ? { ...mobileDevice, baseURL: origin, reducedMotion: "reduce" as const } : { baseURL: origin, reducedMotion: "reduce" as const };
+  const playerA = await browser.newContext(contextOptions);
+  const playerB = await browser.newContext(contextOptions);
   try {
     const pageA = await playerA.newPage(); await pageA.goto(`/match/${roomId}`); await join(pageA, "Ana");
     const shareResponse = pageA.waitForResponse((response) => response.url() === `${origin}/shares` && response.request().method() === "POST" && response.status() === 201);
@@ -111,7 +120,10 @@ test("two isolated guests share, answer, resolve and receive the same ranking", 
     expect(replay.proof.rankingMatches).toBe(true);
     expect(replay.scoring.leaderboardAfterHash).toMatch(/^sha256:/);
     await pageB.goto("/matches");
-    await pageB.getByRole("button", { name: "Abrir Revisao Oficial", exact: true }).click();
+    const reviewButton = testInfo.project.name === "mobile-webkit"
+      ? pageB.getByRole("button", { name: "Revisao", exact: true })
+      : pageB.getByRole("button", { name: "Abrir Revisao Oficial", exact: true });
+    await reviewButton.click();
     const review = pageB.getByRole("dialog").filter({ hasText: "Revisão Oficial VIRA" });
     await expect(review.getByText("Verificação pendente", { exact: true })).toBeVisible();
     await expect(review.getByText("O resultado foi o mesmo", { exact: true })).toBeVisible();
@@ -127,5 +139,21 @@ test("two isolated guests share, answer, resolve and receive the same ranking", 
     await expect.poll(async () => (await metrics()).sseClients).toBe(2);
     await Promise.all([close(playerA), close(playerB)]);
     await expect.poll(async () => (await metrics()).sseClients, { timeout: 10_000 }).toBe(0);
+    await writeEvidence(testInfo, {
+      schemaVersion: 1,
+      kind: "VIRA_CONSUMER_BROWSER_E2E",
+      runId,
+      project: testInfo.project.name,
+      emulation: testInfo.project.name === "mobile-webkit" ? "Playwright WebKit with iPhone 13 emulation; not real-device Safari evidence" : "Chromium desktop",
+      passed: true,
+      inputAuthority,
+      configurationTransition: "harness_materialization_not_scheduled_to_live",
+      lock: { authority: "authoritative_room_runtime", state: lockedState.currentRound.state, reason: lockedState.currentRound.lockReason, persisted: true },
+      identities: { playerAPreservedAfterRefresh: JSON.stringify(aAfterRefresh) === JSON.stringify(aBeforeRefresh), roomPreserved: stateAfterRefresh.roomId === roomId, participantCount: publicState.participants.length, uniqueParticipants: new Set(publicState.participants.map((participant: { id: string }) => participant.id)).size, confirmedAnswers: publicState.answerSummary.total },
+      versions: { beforeRefresh: versionBeforeRefresh, afterRefresh: stateAfterRefresh.ledger.streamVersion, finalA: aFinal.ledger.streamVersion, finalB: bFinal.ledger.streamVersion },
+      sse: { beforeOffline: 2, whileDisconnected: 1, afterReconnect: 2, afterClose: 0, orphanListeners: 0 },
+      hashes: { liveProjectionHash: verification.liveProjectionHash, replayedProjectionHash: verification.replayedProjectionHash, projectionMatches: verification.projectionMatches, rankingMatches: verification.rankingMatches, leaderboardAfterHash: replay.scoring.leaderboardAfterHash },
+      security: { tokensArchived: false, participantIdsArchived: false, requestHeadersArchived: false, traceDisabled: true },
+    });
   } finally { await Promise.all([close(playerA), close(playerB)]); }
 });

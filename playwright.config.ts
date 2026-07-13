@@ -1,4 +1,4 @@
-import { defineConfig } from "@playwright/test";
+import { defineConfig, devices } from "@playwright/test";
 
 const baseURL = process.env.VIRA_BROWSER_SMOKE_TARGET ?? "https://vira.snelabs.space";
 
@@ -31,6 +31,10 @@ export default defineConfig({
     {
       name: "chromium-mobile-viewport",
       use: { browserName: "chromium", viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true },
+    },
+    {
+      name: "mobile-webkit",
+      use: { ...devices["iPhone 13"], browserName: "webkit" },
     },
   ],
 });
