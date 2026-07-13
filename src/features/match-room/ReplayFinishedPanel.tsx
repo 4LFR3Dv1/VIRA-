@@ -3,6 +3,7 @@ import { RotateCcw, Trophy } from "lucide-react";
 import type { ScoreEntry } from "../../domain/types";
 import { AnimatedNumber } from "../../shared/number/AnimatedNumber";
 import { participantAccent } from "./participant-accent";
+import { useLocale } from "../../i18n/locale-context.tsx";
 
 interface ReplayFinishedPanelProps {
   open: boolean;
@@ -11,6 +12,7 @@ interface ReplayFinishedPanelProps {
 }
 
 export function ReplayFinishedPanel({ open, leaderboard, onRestart }: ReplayFinishedPanelProps) {
+  const { locale, t } = useLocale();
   if (!open) {
     return null;
   }
@@ -26,18 +28,13 @@ export function ReplayFinishedPanel({ open, leaderboard, onRestart }: ReplayFini
             <Trophy className="size-5" />
           </div>
           <div>
-            <p className="font-['DM_Mono'] text-[10px] uppercase tracking-[.16em] text-primary">Partida encerrada</p>
-            <h2 className="font-['Chakra_Petch'] text-2xl font-bold">Ranking final da sala</h2>
+            <p className="font-['DM_Mono'] text-[10px] uppercase tracking-[.16em] text-primary">{t("leaderboard.matchFinished")}</p>
+            <h2 className="font-['Chakra_Petch'] text-2xl font-bold">{t("leaderboard.finalTitle")}</h2>
           </div>
         </div>
         <p className="mt-3 text-sm leading-6 text-muted-foreground">
-          {winner ? `${winner.displayName} terminou em primeiro. ` : ""}
-          {currentUser ? (
-            <>
-              {currentUser.displayName} fechou em <AnimatedNumber value={currentUser.rank} suffix="o" /> com{" "}
-              <AnimatedNumber value={currentUser.points} /> pontos.
-            </>
-          ) : ""}
+          {winner ? `${t("leaderboard.winner", { name: winner.displayName })} ` : ""}
+          {currentUser ? t("leaderboard.finalCurrentUser", { name: currentUser.displayName, rank: currentUser.rank, points: currentUser.points }) : ""}
         </p>
       </div>
 
@@ -48,14 +45,14 @@ export function ReplayFinishedPanel({ open, leaderboard, onRestart }: ReplayFini
             className={`flex items-center gap-3 rounded-xl px-3 py-2.5 ${entry.isCurrentUser ? "bg-primary text-primary-foreground" : "bg-background/80"}`}
           >
             <span className="w-5 font-['DM_Mono'] text-xs">
-              <AnimatedNumber value={entry.rank} />
+              <AnimatedNumber value={entry.rank} locales={locale} />
             </span>
             <span className={`grid size-7 place-items-center rounded-full text-[10px] font-bold text-[#11120f] ${participantAccent(entry.participantId)}`}>
               {entry.displayName.slice(0, 1)}
             </span>
             <span className="flex-1 text-sm font-semibold">{entry.displayName}</span>
             <span className="font-['DM_Mono'] text-xs">
-              <AnimatedNumber value={entry.points} />
+              <AnimatedNumber value={entry.points} locales={locale} />
             </span>
           </li>
         ))}
@@ -67,7 +64,7 @@ export function ReplayFinishedPanel({ open, leaderboard, onRestart }: ReplayFini
           className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-primary py-3 text-sm font-bold text-primary-foreground"
         >
           <RotateCcw className="size-4" />
-          Atualizar sala
+          {t("leaderboard.refreshRoom")}
         </button>
       </div>
     </section>

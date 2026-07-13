@@ -14,6 +14,7 @@ import {
 } from "./locale.ts";
 import { catalogs, translate } from "./translate.ts";
 import { fixtureHeadline, fixtureMarketStatement, fixtureSchedule } from "./semantic-copy.ts";
+import { resolutionReasonLabel, roundOptionCopy, roundQuestion, stableOptionLabel } from "./round-copy.ts";
 
 test("catalogs expose the same complete key set without raw-key fallbacks", () => {
   const enKeys = Object.keys(catalogs.en).sort();
@@ -107,4 +108,22 @@ test("fixture intents localize without mutating authoritative facts", () => {
   assert.equal(fixtureMarketStatement(translate("en"), projection, "France"), "Showing the last observed market.");
   assert.equal(fixtureMarketStatement(translate("pt-BR"), projection, "France"), "Exibindo o último mercado observado.");
   assert.equal(JSON.stringify(projection), before);
+});
+
+test("round copy derives only from stable domain fields and never from persisted Portuguese copy", () => {
+  const match = { homeTeam: { name: "France" }, awayTeam: { name: "Spain" } };
+  const round = {
+    title: "Nova previsao aberta em portugues",
+    options: [{ id: "yes", label: "Opcao historica sim" }, { id: "no", label: "Opcao historica nao" }],
+    resolution: { domain: "football", condition: { kind: "team_scores", targetSide: "away", durationSec: 600 } },
+  };
+  const before = JSON.stringify({ match, round });
+  assert.equal(roundQuestion(translate("en"), round, match), "Will Spain score in the next 10 minutes?");
+  assert.equal(roundQuestion(translate("pt-BR"), round, match), "Spain marca nos próximos 10 minutos?");
+  assert.equal(roundOptionCopy(translate("en"), round, round.options[0]).label, "Yes, they score");
+  assert.equal(roundOptionCopy(translate("pt-BR"), round, round.options[1]).label, "Não marca");
+  assert.equal(stableOptionLabel(translate("en"), "yes"), "Yes");
+  assert.equal(stableOptionLabel(translate("pt-BR"), "no"), "Não");
+  assert.equal(resolutionReasonLabel(translate("en"), { resolutionReason: "window_expired", condition: round.resolution.condition }), "Window closed");
+  assert.equal(JSON.stringify({ match, round }), before);
 });

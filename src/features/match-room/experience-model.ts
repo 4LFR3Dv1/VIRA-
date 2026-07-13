@@ -1,4 +1,6 @@
 import type { PresentationEvent, ReplayState, RoomVerification } from "../../domain/types";
+import { roundOptionCopy, roundQuestion } from "../../i18n/round-copy.ts";
+import type { TranslateFunction } from "../../i18n/translate.ts";
 import { deriveRoomExperience, type MatchExperienceState } from "./derive-room-experience";
 
 export type ExperienceScene = MatchExperienceState | "signal_received" | "round_resolved" | "verified_final";
@@ -31,14 +33,7 @@ export interface ViraExperienceModel {
   verification: { status: "pending" | "verified" | "failed" };
 }
 
-function marketLabel(title?: string) {
-  if (!title) return "Mercado";
-  const lower = title.toLowerCase();
-  const index = lower.includes(" chega a") ? lower.indexOf(" chega a") : lower.indexOf(" ultrapassa");
-  return index > 0 ? title.slice(0, index) : "Mercado";
-}
-
-export function createExperienceModel(state: ReplayState, event: PresentationEvent | null, verification: RoomVerification | null): ViraExperienceModel {
+export function createExperienceModel(state: ReplayState, event: PresentationEvent | null, verification: RoomVerification | null, t: TranslateFunction): ViraExperienceModel {
   const snapshot = state.snapshot;
   const round = snapshot.currentRound;
   const predicate = round?.resolution.predicate ?? {};
@@ -71,7 +66,7 @@ export function createExperienceModel(state: ReplayState, event: PresentationEve
     },
     room: { participantCount: snapshot.roomPopulation, connected: snapshot.connectionState === "live" },
     market: !football && (openingValue !== null || currentValue !== null || targetValue !== null) ? {
-      label: marketLabel(round?.title),
+      label: t("round.monitoredMarket"),
       openingValue,
       currentValue,
       targetValue,
@@ -80,18 +75,9 @@ export function createExperienceModel(state: ReplayState, event: PresentationEve
     round: round ? {
       id: round.id,
       number: round.sequence,
-      question: round.title,
+      question: roundQuestion(t, round, snapshot.match),
       status: round.state,
-      options: round.options.map((option) => ({
-        id: option.id,
-        shortLabel: option.shortLabel ?? option.label,
-        label: football
-          ? option.id === "yes" ? "Sim, marca" : option.id === "no" ? "Nao marca" : option.label
-          : option.id === "yes" ? "Sim, chega ao alvo" : option.id === "no" ? "Nao, fica abaixo" : option.label,
-        explanation: football
-          ? option.id === "yes" ? "O time marca dentro da janela acompanhada." : "A janela termina sem gol do time."
-          : option.id === "yes" ? "O valor chega ao alvo ou o supera no proximo sinal." : "O valor permanece abaixo do alvo.",
-      })),
+      options: round.options.map((option) => ({ id: option.id, ...roundOptionCopy(t, round, option) })),
     } : null,
     leaderboard: snapshot.leaderboard,
     journey: resolvedEvidence.map((item, index) => ({ id: item.id, number: index + 1, correct: Boolean(item.resolution?.answersCorrect), points: item.resolution?.totalPointsApplied ?? 0 })),

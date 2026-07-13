@@ -5,6 +5,20 @@ import { formatMatchClock } from "../../domain/contracts";
 import type { ReplayState } from "../../domain/types";
 import { AnimatedNumber } from "../../shared/number/AnimatedNumber";
 import { TeamIcon } from "../../shared/team/team-icons";
+import { useLocale } from "../../i18n/locale-context.tsx";
+import { LocaleSelector } from "../../i18n/LocaleSelector.tsx";
+import type { MatchState } from "../../domain/types";
+import type { StaticTranslationKey } from "../../i18n/translate.ts";
+
+const matchStatusKeys: Record<MatchState, StaticTranslationKey> = {
+  scheduled: "state.match.scheduled",
+  live: "state.match.live",
+  paused: "state.match.paused",
+  postponed: "state.match.postponed",
+  cancelled: "state.match.cancelled",
+  finished: "state.match.finished",
+  unknown: "state.match.unavailable",
+};
 
 interface MatchHeaderProps {
   state: ReplayState;
@@ -12,6 +26,7 @@ interface MatchHeaderProps {
 }
 
 export function MatchHeader({ state, onBack }: MatchHeaderProps) {
+  const { locale, t } = useLocale();
   const match = state.snapshot.match;
   const finished = match.status === "finished";
   const scheduled = match.status === "scheduled" || match.status === "paused" || match.status === "postponed";
@@ -24,7 +39,7 @@ export function MatchHeader({ state, onBack }: MatchHeaderProps) {
         <button
           onClick={onBack}
           className="grid size-9 shrink-0 place-items-center rounded-full border border-border bg-card transition hover:border-primary hover:text-primary"
-          aria-label="Voltar ao lobby"
+          aria-label={t("room.backToLobby")}
         >
           <ArrowLeft className="size-4" />
         </button>
@@ -41,26 +56,29 @@ export function MatchHeader({ state, onBack }: MatchHeaderProps) {
           <div className="mt-1 flex justify-center gap-2 overflow-hidden font-['DM_Mono'] text-[8px] uppercase text-white/45 sm:text-[10px]">
             <span className="inline-flex shrink-0 items-center gap-1">
               <span className={`size-1.5 rounded-full ${finished || scheduled ? "bg-muted-foreground" : "bg-amber-400"}`} />
-              {finished ? "ENCERRADO" : scheduled ? "PRE-JOGO" : "AO VIVO"}
+              {t(matchStatusKeys[match.status])}
             </span>
             <span className="inline-flex shrink-0 items-center gap-1">
               <Users className="size-3 text-primary" />
-              <AnimatedNumber value={state.snapshot.roomPopulation} /> na sala
+              {t("room.inRoom", { count: state.snapshot.roomPopulation })}
             </span>
             <span className="inline-flex shrink-0 items-center gap-1">
               <span className={`size-1.5 rounded-full ${connected ? "bg-emerald-400" : "bg-amber-400"}`} />
-              {connected ? "conectado" : "reconectando"}
+              {connected ? t("room.connection.connected") : t("room.connection.reconnecting")}
             </span>
           </div>
         </motion.div>
-        <div className="shrink-0 text-right">
+        <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
+          <LocaleSelector />
+          <div className="text-right">
           <div className="font-['Chakra_Petch'] text-[22px] font-bold leading-none">
-            <AnimatedNumber value={match.homeScore} />
+            <AnimatedNumber value={match.homeScore} locales={locale} />
             <span>-</span>
-            <AnimatedNumber value={match.awayScore} />
+            <AnimatedNumber value={match.awayScore} locales={locale} />
           </div>
           <div className="mt-1 font-['DM_Mono'] text-[10px] text-muted-foreground">
             {formatMatchClock(match.matchClockSec)}
+          </div>
           </div>
         </div>
       </div>

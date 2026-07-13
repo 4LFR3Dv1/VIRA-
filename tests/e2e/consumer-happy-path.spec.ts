@@ -20,17 +20,17 @@ async function authenticatedState(roomId: string, identity: { participantId: str
   const response = await fetch(`${origin}/rooms/${roomId}/state?participantId=${encodeURIComponent(identity.participantId ?? "")}`, { headers: { Authorization: `Bearer ${identity.sessionToken ?? ""}` } });
   expect(response.status).toBe(200); return response.json();
 }
-async function installTakeoverCounter(page: Page) { await page.evaluate(() => { (window as any).__viraResolutionTakeovers = 0; const observer = new MutationObserver(() => { const dialog = [...document.querySelectorAll('[role="dialog"]')].find((node) => node.textContent?.match(/Ranking atualizado/i)); if (dialog && !(dialog as HTMLElement).dataset.e2eCounted) { (dialog as HTMLElement).dataset.e2eCounted = "true"; (window as any).__viraResolutionTakeovers += 1; } }); observer.observe(document.body, { childList: true, subtree: true }); (window as any).__viraTakeoverObserver = observer; }); }
+async function installTakeoverCounter(page: Page) { await page.evaluate(() => { (window as any).__viraResolutionTakeovers = 0; const observer = new MutationObserver(() => { const dialog = [...document.querySelectorAll('[role="dialog"]')].find((node) => node.textContent?.match(/Ranking (atualizado|updated)/i)); if (dialog && !(dialog as HTMLElement).dataset.e2eCounted) { (dialog as HTMLElement).dataset.e2eCounted = "true"; (window as any).__viraResolutionTakeovers += 1; } }); observer.observe(document.body, { childList: true, subtree: true }); (window as any).__viraTakeoverObserver = observer; }); }
 async function join(page: Page, name: string) {
-  const dialog = page.getByRole("dialog", { name: "Entrar na sala" });
-  await dialog.getByPlaceholder("Nome na sala").fill(name);
-  await dialog.getByRole("button", { name: "Entrar na sala" }).click();
+  const dialog = page.getByRole("dialog", { name: /Entrar na sala|Join room/i });
+  await dialog.getByPlaceholder(/Nome na sala|Name in the room/i).fill(name);
+  await dialog.getByRole("button", { name: /Entrar na sala|Join room/i }).click();
   await expect(page.getByText(name, { exact: true }).first()).toBeVisible();
 }
 async function answerYes(page: Page) {
-  await page.getByRole("button", { name: /SIM/i }).first().click();
-  await page.getByRole("button", { name: /Confirmar palpite/i }).click();
-  await expect(page.getByText(/Palpite confirmado/i).first()).toBeVisible();
+  await page.getByRole("button", { name: /SIM|YES/i }).first().click();
+  await page.getByRole("button", { name: /Confirmar palpite|Confirm prediction/i }).click();
+  await expect(page.getByText(/Palpite confirmado|Prediction confirmed/i).first()).toBeVisible();
 }
 async function close(context: BrowserContext) { await context.close().catch(() => undefined); }
 async function writeEvidence(testInfo: TestInfo, evidence: object) {
@@ -59,9 +59,9 @@ test("two isolated guests share, answer, resolve and receive the same ranking", 
   const playerA = await browser.newContext(contextOptions);
   const playerB = await browser.newContext(contextOptions);
   try {
-    const pageA = await playerA.newPage(); await pageA.goto(`/match/${roomId}`); await join(pageA, "Ana");
+    const pageA = await playerA.newPage(); await pageA.goto(`/match/${roomId}?lang=en`); await join(pageA, "Ana");
     const shareResponse = pageA.waitForResponse((response) => response.url() === `${origin}/shares` && response.request().method() === "POST" && response.status() === 201);
-    await pageA.getByRole("button", { name: /Convidar para a sala/i }).click();
+    await pageA.getByRole("button", { name: /Convidar para a sala|Invite to the room/i }).click();
     const share = await (await shareResponse).json() as { url: string };
     const pageB = await playerB.newPage(); await pageB.goto(new URL(new URL(share.url).pathname, origin).toString());
     await pageB.locator("[data-share-cta]").click(); await join(pageB, "Bruno");
@@ -71,8 +71,23 @@ test("two isolated guests share, answer, resolve and receive the same ranking", 
     const aBeforeRefresh = await session(pageA, roomId);
     const stateBeforeRefresh = await authenticatedState(roomId, aBeforeRefresh);
     const versionBeforeRefresh = stateBeforeRefresh.ledger.streamVersion;
-    await pageA.reload();
+    await pageA.getByRole("button", { name: "Portuguese" }).click();
+    await expect(pageA.locator("html")).toHaveAttribute("lang", "pt-BR");
     await expect(pageA.getByText(/Palpite confirmado/i).first()).toBeVisible();
+    expect(await session(pageA, roomId)).toEqual(aBeforeRefresh);
+    await pageA.getByRole("button", { name: "Inglês" }).click();
+    await expect(pageA.locator("html")).toHaveAttribute("lang", "en");
+    await expect(pageA.getByText(/Prediction confirmed/i).first()).toBeVisible();
+    const aAfterLocaleSwitch = await session(pageA, roomId);
+    expect(aAfterLocaleSwitch).toEqual(aBeforeRefresh);
+    const stateAfterLocaleSwitch = await authenticatedState(roomId, aAfterLocaleSwitch);
+    expect(stateAfterLocaleSwitch.roomId).toBe(roomId);
+    expect(stateAfterLocaleSwitch.currentParticipantAnswer?.state).toBe("submitted");
+    expect(stateAfterLocaleSwitch.ledger.streamVersion).toBe(versionBeforeRefresh);
+    expect(stateAfterLocaleSwitch.participants.filter((participant: { id: string }) => participant.id === aAfterLocaleSwitch.participantId)).toHaveLength(1);
+    await pageA.reload();
+    await expect(pageA.locator("html")).toHaveAttribute("lang", "en");
+    await expect(pageA.getByText(/Prediction confirmed/i).first()).toBeVisible();
     const aAfterRefresh = await session(pageA, roomId);
     expect(aAfterRefresh).toEqual(aBeforeRefresh);
     const stateAfterRefresh = await authenticatedState(roomId, aAfterRefresh);
@@ -93,11 +108,11 @@ test("two isolated guests share, answer, resolve and receive the same ranking", 
     expect(lateResponse.ok).toBe(false);
     const resolved = await scenario(runId, "resolve"); expect(resolved.status).toBe(200);
     await expect.poll(async () => (await (await fetch(`${origin}/public/rooms/${roomId}`)).json()).currentRound?.state, { timeout: 10_000 }).toBe("resolved");
-    await expect(pageA.getByText(/Ranking atualizado/i).first()).toBeVisible();
+    await expect(pageA.getByText(/Ranking (atualizado|updated)/i).first()).toBeVisible();
     await playerB.setOffline(false);
     await pageB.goto(`/match/${roomId}`);
-    await expect(pageB.getByText(/2 na sala/i).first()).toBeVisible();
-    await expect(pageB.getByText(/conectado/i).first()).toBeVisible();
+    await expect(pageB.getByText(/2 (na sala|in the room)/i).first()).toBeVisible();
+    await expect(pageB.getByText(/conectado|connected/i).first()).toBeVisible();
     const publicState = await (await fetch(`${origin}/public/rooms/${roomId}`)).json();
     expect(publicState.leaderboard).toHaveLength(2);
     expect(publicState.leaderboard.map((entry: { points: number }) => entry.points)).toEqual([100, 100]);
@@ -121,17 +136,17 @@ test("two isolated guests share, answer, resolve and receive the same ranking", 
     expect(replay.scoring.leaderboardAfterHash).toMatch(/^sha256:/);
     await pageB.goto("/matches");
     const reviewButton = testInfo.project.name === "mobile-webkit"
-      ? pageB.getByRole("button", { name: "Revisao", exact: true })
-      : pageB.getByRole("button", { name: "Abrir Revisao Oficial", exact: true });
+      ? pageB.getByRole("button", { name: /Revisão|Review/i })
+      : pageB.getByRole("button", { name: /Abrir Revisão Oficial|Open Official Review/i });
     await reviewButton.click();
-    const review = pageB.getByRole("dialog").filter({ hasText: "Revisão Oficial VIRA" });
-    await expect(review.getByText("Verificação pendente", { exact: true })).toBeVisible();
-    await expect(review.getByText("O resultado foi o mesmo", { exact: true })).toBeVisible();
-    await expect(review.getByText("A classificação foi a mesma", { exact: true })).toBeVisible();
-    await expect(review.locator("article").filter({ hasText: "Autoridade" }).getByText("PENDING", { exact: true })).toBeVisible();
-    await expect(review.locator("article").filter({ hasText: "Reprodutibilidade" }).getByText("VALID", { exact: true })).toBeVisible();
+    const review = pageB.getByRole("dialog").filter({ hasText: /Revisão Oficial VIRA|VIRA Official Review/i });
+    await expect(review.getByText(/Verificação pendente|Verification pending/i, { exact: true })).toBeVisible();
+    await expect(review.getByText(/O resultado foi o mesmo|The result was the same/i, { exact: true })).toBeVisible();
+    await expect(review.getByText(/A classificação foi a mesma|The ranking was the same/i, { exact: true })).toBeVisible();
+    await expect(review.locator("article").filter({ hasText: /Autoridade|Authority/i }).getByText(/PENDING|PENDENTE/i, { exact: true })).toBeVisible();
+    await expect(review.locator("article").filter({ hasText: /Reprodutibilidade|Reproducibility/i }).getByText(/VALID|VÁLIDO/i, { exact: true })).toBeVisible();
     await pageB.goto(`/match/${roomId}`);
-    await expect(pageB.getByText(/conectado/i).first()).toBeVisible();
+    await expect(pageB.getByText(/conectado|connected/i).first()).toBeVisible();
     expect(await pageA.evaluate(() => (window as any).__viraResolutionTakeovers)).toBe(1);
     const bPresentedResolutionIds = await pageB.evaluate((id) => { try { return (JSON.parse(localStorage.getItem(`vira:${id}:presentedEvents`) || "[]") as string[]).filter((value) => value.startsWith("round-resolved:")); } catch { return []; } }, roomId);
     expect(new Set(bPresentedResolutionIds).size).toBe(bPresentedResolutionIds.length);

@@ -4,12 +4,14 @@ import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import type { ScoreEntry } from "../../domain/types";
 import { AnimatedNumber } from "../../shared/number/AnimatedNumber";
 import { participantAccent } from "../match-room/participant-accent";
+import { useLocale } from "../../i18n/locale-context.tsx";
 
 interface LeaderboardProps {
   entries: ScoreEntry[];
 }
 
 export function Leaderboard({ entries }: LeaderboardProps) {
+  const { locale, t } = useLocale();
   const reduceMotion = useReducedMotion();
   const topThree = entries.slice(0, 3);
   const currentUser = entries.find((entry) => entry.isCurrentUser);
@@ -22,9 +24,9 @@ export function Leaderboard({ entries }: LeaderboardProps) {
       <div className="mb-3 flex items-center justify-between border-b border-border pb-3">
         <h2 className="flex items-center gap-2 font-['Chakra_Petch'] text-xl font-black uppercase leading-none">
           <Trophy className="size-4 text-primary" />
-          Ranking
+          {t("leaderboard.title")}
         </h2>
-        <span className="font-['DM_Mono'] text-[10px] text-muted-foreground">TOP 3</span>
+        <span className="font-['DM_Mono'] text-[10px] text-muted-foreground">{t("leaderboard.topThree")}</span>
       </div>
       <ol>
         <AnimatePresence initial={false} mode="popLayout">
@@ -58,7 +60,7 @@ export function Leaderboard({ entries }: LeaderboardProps) {
               }`}
             >
               <span className="w-7 font-['Chakra_Petch'] text-2xl font-black text-white/25">
-                <AnimatedNumber value={entry.rank} format={{ minimumIntegerDigits: 2 }} />
+                <AnimatedNumber value={entry.rank} locales={locale} format={{ minimumIntegerDigits: 2 }} />
               </span>
               <span className={`grid size-7 place-items-center rounded-full text-[10px] font-bold text-[#11120f] ${participantAccent(entry.participantId)}`}>
                 {entry.displayName.slice(0, 1)}
@@ -73,11 +75,11 @@ export function Leaderboard({ entries }: LeaderboardProps) {
                   className="inline-flex items-center gap-1 rounded-full bg-emerald-400/10 px-2 py-1 font-['DM_Mono'] text-[10px] text-emerald-300"
                 >
                   <ArrowUp className="size-3" />
-                  <AnimatedNumber value={entry.delta} prefix="+" />
+                  <AnimatedNumber value={entry.delta} locales={locale} prefix="+" />
                 </motion.span>
               ) : null}
               <span className="font-['DM_Mono'] text-xs">
-                <AnimatedNumber value={entry.points} suffix=" pts" />
+                <AnimatedNumber value={entry.points} locales={locale} suffix={t("leaderboard.pointsShort")} />
               </span>
             </motion.li>
           ))}
@@ -85,9 +87,7 @@ export function Leaderboard({ entries }: LeaderboardProps) {
       </ol>
       {currentUser && currentUser.rank > 3 ? (
         <div className="mt-3 rounded-xl border border-primary/20 bg-primary/10 px-3 py-2 text-sm text-primary">
-          Voce agora aparece em{" "}
-          <AnimatedNumber value={currentUser.rank} suffix="o" /> lugar com{" "}
-          <AnimatedNumber value={currentUser.points} suffix=" pts" />.
+          {t("leaderboard.currentPosition", { rank: currentUser.rank, points: currentUser.points })}
         </div>
       ) : null}
     </section>

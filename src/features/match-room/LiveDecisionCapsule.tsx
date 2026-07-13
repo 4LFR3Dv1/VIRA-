@@ -5,16 +5,13 @@ import { formatMatchClock } from "../../domain/contracts";
 import type { PresentationEvent, ReplayState } from "../../domain/types";
 import { AnimatedNumber } from "../../shared/number/AnimatedNumber";
 import { useServerClock } from "../../runtime/use-server-clock";
+import { useLocale } from "../../i18n/locale-context.tsx";
+import { stableOptionLabel } from "../../i18n/round-copy.ts";
+import type { TranslateFunction } from "../../i18n/translate.ts";
 
 interface LiveDecisionCapsuleProps {
   state: ReplayState;
   latestPresentationEvent?: PresentationEvent | null;
-}
-
-function optionLabel(optionId: string | null | undefined) {
-  if (optionId === "yes") return "Sim";
-  if (optionId === "no") return "Nao";
-  return optionId ?? "--";
 }
 
 function remainingLabel(locksAt: string | undefined, now: number) {
@@ -22,15 +19,15 @@ function remainingLabel(locksAt: string | undefined, now: number) {
   return `${String(Math.floor(total / 60)).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`;
 }
 
-function capsuleState(state: ReplayState, event: PresentationEvent | null | undefined, now: number) {
+function capsuleState(state: ReplayState, event: PresentationEvent | null | undefined, now: number, t: TranslateFunction) {
   const round = state.snapshot.currentRound;
   if (state.snapshot.match.status === "finished") {
     return {
       tone: "verified",
       icon: Trophy,
-      label: "Partida encerrada",
-      title: "Ranking final bloqueado",
-      detail: `${state.snapshot.leaderboard.length} participantes`,
+      label: t("leaderboard.matchFinished"),
+      title: t("capsule.finalLocked"),
+      detail: t("room.participants", { count: state.snapshot.leaderboard.length }),
     };
   }
 
@@ -38,9 +35,9 @@ function capsuleState(state: ReplayState, event: PresentationEvent | null | unde
     return {
       tone: event.correct ? "success" : "danger",
       icon: Trophy,
-      label: "Rodada resolvida",
-      title: event.correct ? "Voce acertou" : "Resultado recebido",
-      detail: event.currentRank ? `#${event.currentRank}` : optionLabel(event.winningOptionId),
+      label: t("result.roundResolved"),
+      title: event.correct ? t("result.youWereCorrect") : t("result.received"),
+      detail: event.currentRank ? `#${event.currentRank}` : stableOptionLabel(t, event.winningOptionId),
       event,
     };
   }
@@ -51,9 +48,9 @@ function capsuleState(state: ReplayState, event: PresentationEvent | null | unde
     return {
       tone: "registered",
       icon: CheckCircle2,
-      label: closed ? "Respostas encerradas" : "Palpite confirmado",
-      title: closed ? football ? "Seu palpite esta em jogo" : "O proximo sinal decide" : "Sua escolha esta protegida",
-      detail: closed && football?.endsAtClockSec !== undefined ? `ate ${formatMatchClock(football.endsAtClockSec)}` : closed ? optionLabel(state.snapshot.currentParticipantAnswer?.optionId) : remainingLabel(round?.locksAt, now),
+      label: closed ? t("round.answersClosed") : t("round.answerConfirmed"),
+      title: closed ? football ? t("capsule.yourPickInPlay") : t("round.nextSignalDecides") : t("capsule.choiceProtected"),
+      detail: closed && football?.endsAtClockSec !== undefined ? t("round.untilClock", { clock: formatMatchClock(football.endsAtClockSec) }) : closed ? stableOptionLabel(t, state.snapshot.currentParticipantAnswer?.optionId) : remainingLabel(round?.locksAt, now),
       event,
     };
   }
@@ -61,9 +58,9 @@ function capsuleState(state: ReplayState, event: PresentationEvent | null | unde
   return {
     tone: "open",
     icon: CircleDot,
-    label: round ? `Rodada ${String(round.sequence).padStart(2, "0")}` : "Sala",
-    title: round?.state === "open" ? "Palpites abertos" : "Preparando rodada",
-    detail: round ? formatMatchClock(Math.max(round.locksAtClockSec - state.snapshot.match.matchClockSec, 0)) : "aguardando",
+    label: round ? t("round.label", { number: String(round.sequence).padStart(2, "0") }) : t("capsule.room"),
+    title: round?.state === "open" ? t("capsule.openPredictions") : t("capsule.preparingRound"),
+    detail: round ? formatMatchClock(Math.max(round.locksAtClockSec - state.snapshot.match.matchClockSec, 0)) : t("capsule.waiting"),
   };
 }
 
@@ -77,9 +74,10 @@ function toneClasses(tone: string) {
 }
 
 export function LiveDecisionCapsule({ state, latestPresentationEvent }: LiveDecisionCapsuleProps) {
+  const { locale, t } = useLocale();
   const reduceMotion = useReducedMotion();
   const { now } = useServerClock(state.snapshot.serverTime, state.snapshot.currentRound?.locksAt);
-  const current = capsuleState(state, latestPresentationEvent, now);
+  const current = capsuleState(state, latestPresentationEvent, now, t);
   const Icon = current.icon;
   const event = "event" in current ? current.event : null;
 
@@ -106,7 +104,7 @@ export function LiveDecisionCapsule({ state, latestPresentationEvent }: LiveDeci
           </div>
           <div className="shrink-0 rounded-full bg-background/80 px-3 py-1.5 text-right font-['DM_Mono'] text-[10px] text-primary">
             {event?.kind === "round_resolved" ? (
-              <AnimatedNumber value={event.pointsAwarded} prefix={event.pointsAwarded > 0 ? "+" : ""} suffix=" pts" />
+              <AnimatedNumber value={event.pointsAwarded} locales={locale} prefix={event.pointsAwarded > 0 ? "+" : ""} suffix={t("leaderboard.pointsShort")} />
             ) : (
               current.detail
             )}

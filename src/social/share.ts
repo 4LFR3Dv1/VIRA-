@@ -22,8 +22,8 @@ async function json<T>(response: Response): Promise<T> {
 
 export type ShareResponse = { share: { publicCode: string; miniLeagueId?: string; metadata: { title: string; description: string } }; url: string };
 
-export function createRoomShare(input: { roomId: string; participantId: string; sessionToken: string; displayName: string; kind: "room" | "result" }) {
-  return fetch(`${API_ORIGIN}/shares`, { method: "POST", headers: { "Content-Type": "application/json", "X-Vira-Public-Token": getPublicToken() }, body: JSON.stringify(input) }).then((response) => json<ShareResponse>(response));
+export function createRoomShare(input: { roomId: string; participantId: string; sessionToken: string; displayName: string; kind: "room" | "result" }, context?: EditorialRequestContext) {
+  return fetch(`${API_ORIGIN}/shares`, { method: "POST", headers: editorialHeaders(context), body: JSON.stringify(input) }).then((response) => json<ShareResponse>(response));
 }
 
 export function createPredictionShare(input: { fixtureId: string; displayName: string; choice: "home" | "draw" | "away"; inviteCode?: string | null }, context?: EditorialRequestContext) {

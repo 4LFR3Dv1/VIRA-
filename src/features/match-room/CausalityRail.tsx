@@ -4,6 +4,9 @@ import { useMemo, useState } from "react";
 
 import type { PresentationEvent, ReplayState, RoomVerification } from "../../domain/types";
 import { AnimatedNumber } from "../../shared/number/AnimatedNumber";
+import { useLocale } from "../../i18n/locale-context.tsx";
+import { stableOptionLabel } from "../../i18n/round-copy.ts";
+import type { TranslateFunction } from "../../i18n/translate.ts";
 
 interface CausalityRailProps {
   state: ReplayState;
@@ -23,15 +26,9 @@ interface StepModel {
   detail: React.ReactNode;
 }
 
-function compactHash(hash?: string | null) {
-  if (!hash) return "sem hash";
+function compactHash(hash: string | null | undefined, t: TranslateFunction) {
+  if (!hash) return t("causality.noHash");
   return `${hash.slice(0, 10)}...${hash.slice(-6)}`;
-}
-
-function optionLabel(optionId?: string | null) {
-  if (optionId === "yes") return "Sim";
-  if (optionId === "no") return "Nao";
-  return optionId ?? "--";
 }
 
 function pct(value: unknown) {
@@ -40,7 +37,7 @@ function pct(value: unknown) {
   ) : "--";
 }
 
-function buildSteps(state: ReplayState, latestPresentationEvent?: PresentationEvent | null, verification?: RoomVerification | null): StepModel[] {
+function buildSteps(t: TranslateFunction, state: ReplayState, latestPresentationEvent?: PresentationEvent | null, verification?: RoomVerification | null): StepModel[] {
   const evidence = state.snapshot.latestEvidence ?? null;
   const currentParticipant = state.snapshot.currentParticipant;
   const currentAnswer = state.snapshot.currentParticipantAnswer ?? (currentParticipant ? state.snapshot.answers[currentParticipant.id] : null);
@@ -52,16 +49,16 @@ function buildSteps(state: ReplayState, latestPresentationEvent?: PresentationEv
   return [
     {
       id: "answer",
-      title: "Palpite",
+      title: t("causality.answer"),
       complete: Boolean(currentAnswer || latestPresentationEvent?.kind === "answer_registered" || resolved),
       active: state.currentAnswerState === "submitted",
       icon: UserCheck,
-      summary: currentAnswer ? `Voce respondeu ${optionLabel(currentAnswer.optionId)}` : "Aguardando sua escolha",
+      summary: currentAnswer ? t("causality.answerSummary", { option: stableOptionLabel(t, currentAnswer.optionId) }) : t("causality.awaitingChoice"),
       detail: currentAnswer ? (
         <span>
-          Seu palpite em <b>{optionLabel(currentAnswer.optionId)}</b> foi registrado para esta rodada.
+          {t("causality.answerDetail", { option: stableOptionLabel(t, currentAnswer.optionId) })}
         </span>
-      ) : "Escolha uma opcao para entrar na cadeia causal.",
+      ) : t("causality.chooseOption"),
     },
     {
       id: "txline",
@@ -69,10 +66,10 @@ function buildSteps(state: ReplayState, latestPresentationEvent?: PresentationEv
       complete: Boolean(evidence?.input || txlineEvent || resolutionEvent),
       active: latestPresentationEvent?.kind === "txline_update",
       icon: Database,
-      summary: evidence?.normalization.type === "odds_shift" ? "Atualizacao de mercado recebida" : "Aguardando sinal",
+      summary: evidence?.normalization.type === "odds_shift" ? t("causality.marketUpdate") : t("causality.awaitingSignal"),
       detail: (
         <div className="space-y-1">
-          <p>{evidence?.input.excerpt.market ?? "Mercado elegivel ainda nao recebido."}</p>
+          <p>{evidence?.input.excerpt.market ?? t("causality.marketPending")}</p>
           {txlineEvent ? (
             <p className="font-['DM_Mono'] text-primary">
               {pct(txlineEvent.previousValue)} <span className="text-muted-foreground">→</span> {pct(txlineEvent.currentValue)}
@@ -83,60 +80,61 @@ function buildSteps(state: ReplayState, latestPresentationEvent?: PresentationEv
     },
     {
       id: "rule",
-      title: "Regra",
+      title: t("causality.rule"),
       complete: Boolean(evidence?.ruleEvaluation && (evidence.status === "resolved" || evidence.status === "matched" || evidence.status === "ignored")),
       active: Boolean(evidence?.ruleEvaluation && !resolved),
       icon: Gauge,
-      summary: evidence?.ruleEvaluation?.predicateResult ? "Condição satisfeita" : evidence?.ruleEvaluation?.ignoredReason ? "Evento ignorado" : "Regra aguardando",
+      summary: evidence?.ruleEvaluation?.predicateResult ? t("causality.conditionMet") : evidence?.ruleEvaluation?.ignoredReason ? t("causality.eventIgnored") : t("causality.ruleWaiting"),
       detail: evidence?.ruleEvaluation ? (
         <span>
           {evidence.ruleEvaluation.expression}{" "}
           <b className={evidence.ruleEvaluation.predicateResult ? "text-primary" : "text-muted-foreground"}>
-            {evidence.ruleEvaluation.predicateResult ? "verdadeiro" : "falso"}
+            {evidence.ruleEvaluation.predicateResult ? t("causality.true") : t("causality.false")}
           </b>
         </span>
-      ) : "A regra aparece quando uma atualizacao da TxLINE e avaliada.",
+      ) : t("causality.ruleDetailPending"),
     },
     {
       id: "ranking",
-      title: "Ranking",
+      title: t("causality.ranking"),
       complete: resolved,
       active: latestPresentationEvent?.kind === "round_resolved",
       icon: Trophy,
-      summary: resolved ? "Pontuacao aplicada" : "Ainda sem resolucao",
+      summary: resolved ? t("causality.pointsApplied") : t("causality.unresolved"),
       detail: resolutionEvent ? (
         <span>
-          {resolutionEvent.correct ? "Voce pontuou " : "Ranking sincronizado "}
+          {resolutionEvent.correct ? t("causality.youScored") : t("causality.rankingSynced")}
           <b><AnimatedNumber value={resolutionEvent.pointsAwarded} prefix={resolutionEvent.pointsAwarded > 0 ? "+" : ""} suffix=" pts" /></b>
-          {resolutionEvent.currentRank ? <> · posicao #<AnimatedNumber value={resolutionEvent.currentRank} /></> : null}
+          {resolutionEvent.currentRank ? <> · {t("causality.position", { rank: resolutionEvent.currentRank })}</> : null}
         </span>
-      ) : "O ranking muda quando a rodada e resolvida pelo backend.",
+      ) : t("causality.rankingPending"),
     },
     {
       id: "proof",
-      title: "Prova",
+      title: t("causality.proof"),
       complete: verified,
       active: Boolean(verification && !verified),
       icon: ShieldCheck,
-      summary: verified ? "Replay verificado" : "Verificacao pendente",
+      summary: verified ? t("causality.replayVerified") : t("causality.verificationPending"),
       detail: verification ? (
         <div className="space-y-1">
-          <p>Hash chain: <b className={verification.hashChainValid ? "text-primary" : "text-destructive"}>{verification.hashChainValid ? "VALID" : "INVALID"}</b></p>
-          <p>Projection replay: <b className={verification.projectionMatches ? "text-primary" : "text-destructive"}>{verification.projectionMatches ? "MATCH" : "DIVERGED"}</b></p>
-          <p className="truncate">Head: {compactHash(verification.ledgerHeadHash)}</p>
+          <p>{t("causality.hashChain")}: <b className={verification.hashChainValid ? "text-primary" : "text-destructive"}>{verification.hashChainValid ? "VALID" : "INVALID"}</b></p>
+          <p>{t("causality.projectionReplay")}: <b className={verification.projectionMatches ? "text-primary" : "text-destructive"}>{verification.projectionMatches ? "MATCH" : "DIVERGED"}</b></p>
+          <p className="truncate">{t("causality.head")}: {compactHash(verification.ledgerHeadHash, t)}</p>
         </div>
       ) : state.snapshot.ledger ? (
         <span>
-          Ledger v<AnimatedNumber value={state.snapshot.ledger.streamVersion} /> · {compactHash(state.snapshot.ledger.headHash)}
+          Ledger v<AnimatedNumber value={state.snapshot.ledger.streamVersion} /> · {compactHash(state.snapshot.ledger.headHash, t)}
         </span>
-      ) : "A revisao oficial aparece depois que o ledger pode ser verificado.",
+      ) : t("causality.reviewPending"),
     },
   ];
 }
 
 export function CausalityRail({ state, latestPresentationEvent, verification }: CausalityRailProps) {
+  const { t } = useLocale();
   const reduceMotion = useReducedMotion();
-  const steps = useMemo(() => buildSteps(state, latestPresentationEvent, verification), [latestPresentationEvent, state, verification]);
+  const steps = useMemo(() => buildSteps(t, state, latestPresentationEvent, verification), [latestPresentationEvent, state, t, verification]);
   const defaultStep = steps.find((step) => step.active)?.id ?? steps.findLast((step) => step.complete)?.id ?? "answer";
   const [selectedStepId, setSelectedStepId] = useState<StepId>(defaultStep);
   const selectedStep = steps.find((step) => step.id === selectedStepId) ?? steps[0];
@@ -144,9 +142,9 @@ export function CausalityRail({ state, latestPresentationEvent, verification }: 
   return (
     <section className="mt-8 overflow-hidden border-y border-white/15 bg-card px-4 py-6">
       <div className="mb-3 flex items-center justify-between gap-3">
-        <h2 className="font-['Chakra_Petch'] text-xl font-black uppercase">Jornada da rodada</h2>
+        <h2 className="font-['Chakra_Petch'] text-xl font-black uppercase">{t("causality.title")}</h2>
         <span className="font-['DM_Mono'] text-[10px] uppercase tracking-[.14em] text-muted-foreground">
-          Ao vivo
+          {t("causality.live")}
         </span>
       </div>
 

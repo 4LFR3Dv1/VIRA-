@@ -31,7 +31,8 @@ import {
 import { createTxlineStreamManager } from "./txline-stream.mjs";
 import { createTxlineCatalogCache } from "./txline-catalog-cache.mjs";
 import { ensureVerifiedPlayback, verifiedPlaybackIds } from "./verified-playback-seed.mjs";
-import { deriveFixtureTemporalContext, fixturePredictionCopy, resolveEditorialLocaleContext } from "../shared/editorial-domain.mjs";
+import { deriveFixtureTemporalContext, resolveEditorialLocaleContext } from "../shared/editorial-domain.mjs";
+import { predictionShareCopy, resolveShareLocaleContext, roomShareCopy, shareChoiceLabel, shareKindLabel } from "../shared/share-copy.mjs";
 import { authorizeE2eRequest, e2eModeFromEnv } from "./e2e-mode.mjs";
 
 loadLocalEnv();
@@ -145,26 +146,29 @@ function predictionEditorialContext(fixture, request) {
   };
 }
 
-function predictionShareMetadata(fixture, displayName, choiceLabel, editorialContext) {
-  const copy = fixturePredictionCopy({ temporalRelation: editorialContext.temporalRelationAtCreation, homeTeam: fixture.homeTeam, awayTeam: fixture.awayTeam });
-  const schedule = editorialContext.localKickoffDate ? `${editorialContext.localKickoffDate} às ${editorialContext.localKickoffTime}` : "horário a confirmar";
-  return { title: `${displayName} escolheu ${choiceLabel}`, description: `${copy.headline} · ${schedule}. Faça o seu palpite.`, imagePath: "dynamic" };
-}
-
-function sharePageHtml(share, request) {
+function localizedSharePageHtml(share, request) {
   const base = publicBaseUrl(request);
+  const localeContext = resolveShareLocaleContext(share);
   const title = escapeHtml(share.metadata.title);
   const description = escapeHtml(share.metadata.description);
   const image = `${base}/share-images/${encodeURIComponent(share.publicCode)}.png`;
-  const url = `${base}/s/${encodeURIComponent(share.publicCode)}`;
-  const destination = `${share.destination.path}${share.destination.path.includes("?") ? "&" : "?"}invite=${encodeURIComponent(share.publicCode)}`;
-  return `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${title}</title><meta name="description" content="${description}"><meta property="og:type" content="website"><meta property="og:site_name" content="VIRA"><meta property="og:title" content="${title}"><meta property="og:description" content="${description}"><meta property="og:image" content="${image}"><meta property="og:image:secure_url" content="${image}"><meta property="og:image:type" content="image/png"><meta property="og:image:width" content="1200"><meta property="og:image:height" content="630"><meta property="og:url" content="${url}"><meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="${title}"><meta name="twitter:description" content="${description}"><meta name="twitter:image" content="${image}"><meta name="theme-color" content="#050814"><link rel="icon" href="/favicon.png"></head><body style="margin:0;background:#050814;color:#f7f8f4;font-family:Arial,sans-serif"><main style="min-height:100vh;display:grid;place-items:center;padding:24px;box-sizing:border-box"><section style="width:min(760px,100%);border-block:1px solid #ffffff26;padding:48px 0"><p style="color:#c7ff18;font:700 11px monospace;letter-spacing:.16em;text-transform:uppercase">VIRA · ${escapeHtml(share.kind)}</p><h1 style="font-size:clamp(42px,9vw,92px);line-height:.88;text-transform:uppercase;margin:24px 0">${title}</h1><p style="max-width:600px;color:#ffffff99;font-size:18px;line-height:1.6">${description}</p><a href="${escapeHtml(destination)}" data-share-cta style="display:inline-block;margin-top:32px;background:#c7ff18;color:#050814;padding:18px 26px;font-weight:900;text-transform:uppercase;text-decoration:none">${escapeHtml(share.destination.ctaLabel)} →</a></section></main><script>document.querySelector('[data-share-cta]').addEventListener('click',()=>{navigator.sendBeacon('/shares/${encodeURIComponent(share.publicCode)}/click')})</script></body></html>`;
+  const canonicalUrl = `${base}/s/${encodeURIComponent(share.publicCode)}`;
+  const destinationUrl = new URL(share.destination.path, base);
+  destinationUrl.searchParams.set("invite", share.publicCode);
+  destinationUrl.searchParams.set("lang", localeContext.locale);
+  const destination = escapeHtml(`${destinationUrl.pathname}${destinationUrl.search}${destinationUrl.hash}`);
+  const kind = escapeHtml(shareKindLabel(share.kind, localeContext.locale));
+  const cta = escapeHtml(share.destination.ctaLabel);
+  return `<!doctype html><html lang="${localeContext.locale}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${title}</title><meta name="description" content="${description}"><meta property="og:type" content="website"><meta property="og:site_name" content="VIRA"><meta property="og:title" content="${title}"><meta property="og:description" content="${description}"><meta property="og:image" content="${image}"><meta property="og:image:secure_url" content="${image}"><meta property="og:image:type" content="image/png"><meta property="og:image:width" content="1200"><meta property="og:image:height" content="630"><meta property="og:url" content="${canonicalUrl}"><meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="${title}"><meta name="twitter:description" content="${description}"><meta name="twitter:image" content="${image}"><meta name="theme-color" content="#050814"><link rel="icon" href="/favicon.png"></head><body style="margin:0;background:#050814;color:#f7f8f4;font-family:Arial,sans-serif"><main style="min-height:100vh;display:grid;place-items:center;padding:24px;box-sizing:border-box"><section style="width:min(760px,100%);border-block:1px solid #ffffff26;padding:48px 0"><p style="color:#c7ff18;font:700 11px monospace;letter-spacing:.16em;text-transform:uppercase">VIRA · ${kind}</p><h1 style="font-size:clamp(42px,9vw,92px);line-height:.88;text-transform:uppercase;margin:24px 0">${title}</h1><p style="max-width:600px;color:#ffffff99;font-size:18px;line-height:1.6">${description}</p><a href="${destination}" data-share-cta style="display:inline-block;margin-top:32px;background:#c7ff18;color:#050814;padding:18px 26px;font-weight:900;text-transform:uppercase;text-decoration:none">${cta} →</a></section></main><script>document.querySelector('[data-share-cta]').addEventListener('click',()=>{navigator.sendBeacon('/shares/${encodeURIComponent(share.publicCode)}/click')})</script></body></html>`;
 }
 
-function shareImageSvg(share) {
+function localizedShareImageSvg(share) {
+  const localeContext = resolveShareLocaleContext(share);
   const title = escapeHtml(share.metadata.title).slice(0, 72);
   const description = escapeHtml(share.metadata.description).slice(0, 110);
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630"><rect width="1200" height="630" fill="#050814"/><rect x="0" y="0" width="18" height="630" fill="#c7ff18"/><path d="M760 0H1200V630H620Z" fill="#101a24"/><text x="72" y="86" fill="#c7ff18" font-family="Arial" font-size="24" font-weight="700" letter-spacing="4">VIRA · ${escapeHtml(share.kind).toUpperCase()}</text><text x="72" y="190" fill="#f7f8f4" font-family="Arial" font-size="62" font-weight="900">${title}</text><foreignObject x="72" y="235" width="900" height="190"><div xmlns="http://www.w3.org/1999/xhtml" style="color:#f7f8f4;font:900 62px/1 Arial;text-transform:uppercase">${title}</div></foreignObject><foreignObject x="72" y="455" width="780" height="90"><div xmlns="http://www.w3.org/1999/xhtml" style="color:#ffffff99;font:24px/1.35 Arial">${description}</div></foreignObject><text x="72" y="585" fill="#c7ff18" font-family="Arial" font-size="22" font-weight="700">JOGUE O PRÓXIMO MOMENTO</text></svg>`;
+  const kind = escapeHtml(shareKindLabel(share.kind, localeContext.locale));
+  const cta = escapeHtml(share.destination.ctaLabel).toUpperCase();
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630"><rect width="1200" height="630" fill="#050814"/><rect x="0" y="0" width="18" height="630" fill="#c7ff18"/><path d="M760 0H1200V630H620Z" fill="#101a24"/><text x="72" y="86" fill="#c7ff18" font-family="Arial" font-size="24" font-weight="700" letter-spacing="4">VIRA · ${kind}</text><foreignObject x="72" y="150" width="1000" height="230"><div xmlns="http://www.w3.org/1999/xhtml" style="color:#f7f8f4;font:900 62px/1 Arial;text-transform:uppercase">${title}</div></foreignObject><foreignObject x="72" y="430" width="900" height="100"><div xmlns="http://www.w3.org/1999/xhtml" style="color:#ffffff99;font:24px/1.35 Arial">${description}</div></foreignObject><text x="72" y="585" fill="#c7ff18" font-family="Arial" font-size="22" font-weight="700">${cta}</text></svg>`;
 }
 
 function safeTokenEqual(received, expected) {
@@ -627,18 +631,20 @@ async function handleRequest(request, response) {
       const token = publicToken(request, body);
       const identity = await shareStore.ensureIdentity(token, body.displayName);
       if (body.kind === "room" || body.kind === "result") {
+        const editorialContext = requestEditorialLocale(request, "share_creator");
         const validation = runtime.validateSession(String(body.roomId), body.participantId, body.sessionToken ?? request.headers.authorization?.replace(/^Bearer\s+/i, ""));
         if (!validation.valid) throw Object.assign(new Error("share_session_required"), { status: 401 });
         const snapshot = runtime.authenticatedSnapshot(String(body.roomId), body.participantId, body.sessionToken ?? request.headers.authorization?.replace(/^Bearer\s+/i, ""));
         const participant = validation.participant;
         await shareStore.linkParticipant({ publicToken: token, displayName: participant.displayName, roomId: String(body.roomId), participantId: body.participantId, inviteCode: null });
         if (body.kind === "room") {
+          const copy = roomShareCopy({ snapshot, participant, locale: editorialContext.locale, kind: "room" });
           const share = await shareStore.createShare({
             kind: "room", createdByPublicId: identity.publicId, expiresAt: snapshot.match.status === "finished" ? null : new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
-            metadata: { title: `${participant.displayName} está em ${snapshot.match.homeTeam.name} x ${snapshot.match.awayTeam.name}`, description: `${snapshot.match.status === "live" ? "Partida ao vivo" : "Sala aberta"} · ${snapshot.roomPopulation} na sala. Entre para jogar junto.`, imagePath: "dynamic" },
-            destination: { path: `/match/${encodeURIComponent(snapshot.match.id)}`, ctaLabel: snapshot.match.status === "finished" ? "Ver resultado do grupo" : "Entrar na sala" },
+            metadata: copy.metadata,
+            destination: { path: `/match/${encodeURIComponent(snapshot.match.id)}`, ctaLabel: copy.ctaLabel },
             attribution: { source: "room", campaign: "room_invite" },
-            payload: { fixtureId: snapshot.match.id, roomId: snapshot.roomId, homeTeam: snapshot.match.homeTeam.name, awayTeam: snapshot.match.awayTeam.name, fixtureStatus: snapshot.match.status, participantCount: snapshot.roomPopulation },
+            payload: { fixtureId: snapshot.match.id, roomId: snapshot.roomId, homeTeam: snapshot.match.homeTeam.name, awayTeam: snapshot.match.awayTeam.name, fixtureStatus: snapshot.match.status, participantCount: snapshot.roomPopulation }, editorialContext,
           });
           sendJson(response, 201, { share, url: `${publicBaseUrl(request)}/s/${share.publicCode}` });
           return;
@@ -646,12 +652,13 @@ async function handleRequest(request, response) {
         const result = snapshot.lastResolution;
         if (!result) throw Object.assign(new Error("resolved_result_required"), { status: 409 });
         const correct = result.wasCurrentUserCorrect;
+        const copy = roomShareCopy({ snapshot, participant, locale: editorialContext.locale, kind: "result" });
         const share = await shareStore.createShare({
           kind: "result", createdByPublicId: identity.publicId,
-          metadata: { title: `${participant.displayName} ${correct ? "acertou" : "jogou"} no VIRA`, description: `${result.winningOptionId === "yes" ? "SIM" : "NÃO"} venceu · ${result.pointsAwarded > 0 ? `+${result.pointsAwarded} pontos` : "resultado registrado"}.`, imagePath: "dynamic" },
-          destination: { path: `/match/${encodeURIComponent(snapshot.match.id)}`, ctaLabel: snapshot.match.status === "finished" ? "Ver partida" : "Jogar a próxima" },
+          metadata: copy.metadata,
+          destination: { path: `/match/${encodeURIComponent(snapshot.match.id)}`, ctaLabel: copy.ctaLabel },
           attribution: { source: "result", campaign: "round_result" },
-          payload: { fixtureId: snapshot.match.id, roomId: snapshot.roomId, roundId: result.roundId, correct, points: result.pointsAwarded, rank: snapshot.leaderboard.find((entry) => entry.participantId === body.participantId)?.rank ?? null, winningOptionId: result.winningOptionId, verified: Boolean(snapshot.ledger?.headHash) },
+          payload: { fixtureId: snapshot.match.id, roomId: snapshot.roomId, roundId: result.roundId, correct, points: result.pointsAwarded, rank: snapshot.leaderboard.find((entry) => entry.participantId === body.participantId)?.rank ?? null, winningOptionId: result.winningOptionId, verified: Boolean(snapshot.ledger?.headHash) }, editorialContext,
         });
         sendJson(response, 201, { share, url: `${publicBaseUrl(request)}/s/${share.publicCode}` });
         return;
@@ -673,12 +680,13 @@ async function handleRequest(request, response) {
         return;
       }
       const identity = shareStore.identity(token, body.displayName);
-      const choiceLabel = body.choice === "home" ? fixture.homeTeam : body.choice === "away" ? fixture.awayTeam : "Empate";
       const editorialContext = predictionEditorialContext(fixture, request);
+      const choiceLabel = shareChoiceLabel(body.choice, fixture, editorialContext.locale);
+      const copy = predictionShareCopy({ fixture, displayName: prediction.displayName, choiceLabel, editorialContext });
       const share = await shareStore.createShare({
         kind: "prediction", createdByPublicId: identity.publicId, expiresAt: fixture.startTime,
-        metadata: predictionShareMetadata(fixture, prediction.displayName, choiceLabel, editorialContext),
-        destination: { path: `/match/${encodeURIComponent(fixture.fixtureId)}/preview`, ctaLabel: "Fazer meu palpite" },
+        metadata: copy.metadata,
+        destination: { path: `/match/${encodeURIComponent(fixture.fixtureId)}/preview`, ctaLabel: copy.ctaLabel },
         attribution: { source: "prediction", campaign: "pre_match_1x2" },
         payload: { fixtureId: fixture.fixtureId, predictionId: prediction.id, choice: body.choice, choiceLabel, homeTeam: fixture.homeTeam, awayTeam: fixture.awayTeam, kickoffAt: fixture.startTime }, editorialContext,
       });
@@ -769,17 +777,16 @@ async function handleRequest(request, response) {
       const catalog = await txlineCatalogCache.get();
       const fixture = catalog.matches.find((item) => String(item.fixtureId) === String(fixtureId));
       if (!fixture) throw Object.assign(new Error("fixture_not_found"), { status: 404 });
-      const label = prediction.choice === "home" ? fixture.homeTeam : prediction.choice === "away" ? fixture.awayTeam : "Empate";
       const resolved = prediction.status === "resolved";
       const editorialContext = predictionEditorialContext(fixture, request);
+      const label = shareChoiceLabel(prediction.choice, fixture, editorialContext.locale);
+      const copy = predictionShareCopy({ fixture, displayName: prediction.displayName, choiceLabel: label, editorialContext, resolvedPrediction: resolved ? prediction : null });
       const share = await shareStore.createShare({
         kind: resolved ? "result" : "prediction",
         createdByPublicId: identity.publicId,
         expiresAt: resolved ? null : fixture.startTime,
-        metadata: resolved
-          ? { title: `${prediction.displayName} ${prediction.correct ? "acertou" : "fez seu palpite"}`, description: `${fixture.homeTeam} ${prediction.finalScore?.home ?? ""} x ${prediction.finalScore?.away ?? ""} ${fixture.awayTeam} · escolha: ${label}.`, imagePath: "dynamic" }
-          : predictionShareMetadata(fixture, prediction.displayName, label, editorialContext),
-        destination: { path: `/match/${encodeURIComponent(fixtureId)}/preview`, ctaLabel: resolved ? "Ver resultado" : "Fazer meu palpite" },
+        metadata: copy.metadata,
+        destination: { path: `/match/${encodeURIComponent(fixtureId)}/preview`, ctaLabel: copy.ctaLabel },
         attribution: { source: resolved ? "result" : "prediction", campaign: resolved ? "fixture_prediction_result" : "pre_match_1x2" },
         payload: { fixtureId, predictionId: prediction.id, choice: prediction.choice, choiceLabel: label, correct: prediction.correct ?? null, finalScore: prediction.finalScore ?? null, homeTeam: fixture.homeTeam, awayTeam: fixture.awayTeam, kickoffAt: fixture.startTime }, editorialContext,
       });
@@ -807,7 +814,7 @@ async function handleRequest(request, response) {
       const share = shareStore.getShare(publicCode);
       if (!share) { sendHtml(response, 404, "<!doctype html><title>Convite indisponível | VIRA</title><body style='background:#050814;color:white;font-family:Arial;padding:40px'><h1>Convite indisponível</h1><a href='/' style='color:#c7ff18'>Abrir VIRA</a></body>"); return; }
       await shareStore.track("share_opened", publicCode, { userAgent: String(request.headers["user-agent"] ?? "").slice(0, 160) });
-      sendHtml(response, 200, sharePageHtml(share, request), "public, max-age=30, stale-while-revalidate=300");
+      sendHtml(response, 200, localizedSharePageHtml(share, request), "public, max-age=30, stale-while-revalidate=300");
       return;
     }
 
@@ -815,7 +822,7 @@ async function handleRequest(request, response) {
     if (request.method === "GET" && shareImageRoute) {
       const share = shareStore.getShare(decodeURIComponent(shareImageRoute[1]));
       if (!share) throw Object.assign(new Error("share_not_found"), { status: 404 });
-      sendSvg(response, shareImageSvg(share));
+      sendSvg(response, localizedShareImageSvg(share));
       return;
     }
 

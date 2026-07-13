@@ -30,8 +30,10 @@ import { MatchMomentDirector } from "../match-moments/MatchMomentDirector";
 import { useMatchMomentDirector } from "../match-moments/use-match-moment-director";
 import { useShellAtmosphere } from "../../app/shell/use-shell-atmosphere";
 import { setShellOverlayState } from "../../app/shell/shell-events";
+import { useLocale } from "../../i18n/locale-context.tsx";
 
 export function MatchRoomScreen() {
+  const { locale, localizedHref, t, timeZone } = useLocale();
   const { matchId = DEFAULT_MATCH_ID } = useParams();
   const [searchParams, setSearchParams] = useSearchParams();
   const inspect = searchParams.get("inspect") === "true";
@@ -82,7 +84,7 @@ export function MatchRoomScreen() {
     }
     return state.snapshot.answerSummary?.byOption ?? {};
   }, [currentRound, state.snapshot.answerSummary]);
-  const experienceModel = useMemo(() => createExperienceModel(state, latestPresentationEvent, verification), [latestPresentationEvent, state, verification]);
+  const experienceModel = useMemo(() => createExperienceModel(state, latestPresentationEvent, verification, t), [latestPresentationEvent, state, t, verification]);
 
   useEffect(() => {
     setShellOverlayState("match-inspector", inspect);
@@ -118,8 +120,8 @@ export function MatchRoomScreen() {
     presentationEvents.forEach((event) => {
       setLatestPresentationEvent(event);
       if (event.kind === "answer_registered") {
-        toast.success("Palpite registrado", {
-          description: currentRound?.resolution.domain === "football" ? "A janela futebolistica começa quando as respostas fecharem." : "Aguardando o proximo sinal elegivel da TxLINE.",
+        toast.success(t("room.toast.answerRegistered"), {
+          description: currentRound?.resolution.domain === "football" ? t("room.toast.footballWindow") : t("room.toast.waitingTxline"),
         });
       }
       if (event.kind === "round_resolved") {
@@ -127,7 +129,7 @@ export function MatchRoomScreen() {
       }
       acknowledgePresentationEvent(event.id);
     });
-  }, [acknowledgePresentationEvent, currentRound?.resolution.domain, presentationEvents]);
+  }, [acknowledgePresentationEvent, currentRound?.resolution.domain, presentationEvents, t]);
 
   useEffect(() => {
     if (!resolutionRequested || matchDirection.takeoverActive) return;
@@ -168,10 +170,10 @@ export function MatchRoomScreen() {
 
   return (
     <div className="min-h-screen bg-background/55 text-foreground">
-      <MatchHeader state={state} onBack={() => navigate("/matches")} />
+      <MatchHeader state={state} onBack={() => navigate(localizedHref("/matches"))} />
       <TournamentLifecycleRail model={experienceModel} />
       <main className="mx-auto w-full max-w-[1440px] px-4 pb-24 pt-5 md:px-7 lg:px-10 lg:pb-12">
-        {participantId && sessionToken ? <div className="flex justify-end"><ViraShareButton label="Convidar para a sala" create={() => createRoomShare({ kind: "room", roomId: matchId, participantId, sessionToken, displayName: state.snapshot.currentParticipant?.displayName ?? playerName })} /></div> : null}
+        {participantId && sessionToken ? <div className="flex justify-end"><ViraShareButton label={t("room.invite")} create={() => createRoomShare({ kind: "room", roomId: matchId, participantId, sessionToken, displayName: state.snapshot.currentParticipant?.displayName ?? playerName }, { locale, timeZone })} /></div> : null}
         {competitiveStage ? <LiveDecisionCapsule state={state} latestPresentationEvent={latestPresentationEvent} /> : null}
 
         <section className={`mt-5 grid gap-5 lg:items-start ${competitiveStage ? "lg:grid-cols-[minmax(0,1fr)_19rem] xl:grid-cols-[minmax(0,1fr)_22rem]" : "grid-cols-1"}`}>
@@ -220,7 +222,7 @@ export function MatchRoomScreen() {
         result={state.lastResolution}
         presentationEvent={latestPresentationEvent}
         onClose={() => setResolutionOpen(false)}
-        shareAction={participantId && sessionToken ? <ViraShareButton label="Compartilhar resultado" create={() => createRoomShare({ kind: "result", roomId: matchId, participantId, sessionToken, displayName: state.snapshot.currentParticipant?.displayName ?? playerName })} /> : null}
+        shareAction={participantId && sessionToken ? <ViraShareButton label={t("room.shareResult")} create={() => createRoomShare({ kind: "result", roomId: matchId, participantId, sessionToken, displayName: state.snapshot.currentParticipant?.displayName ?? playerName }, { locale, timeZone })} /> : null}
       />
 
       <InspectorPanel
@@ -229,7 +231,11 @@ export function MatchRoomScreen() {
         currentRound={currentRound}
         txlineFetchState={txlineFetchState}
         txlineStreamStatus={txlineStreamStatus}
-        onClose={() => setSearchParams({})}
+        onClose={() => {
+          const nextParams = new URLSearchParams(searchParams);
+          nextParams.delete("inspect");
+          setSearchParams(nextParams);
+        }}
         onFetchLatestTxlineOdds={controls.fetchLatestTxlineOdds}
         onConnectOddsStream={controls.connectOddsStream}
         onDisconnectOddsStream={controls.disconnectOddsStream}
@@ -239,7 +245,7 @@ export function MatchRoomScreen() {
         name={playerName}
         subtitle={state.snapshot.match.title}
         open={joinDialogOpen}
-        onClose={() => navigate("/matches")}
+        onClose={() => navigate(localizedHref("/matches"))}
         onChangeName={setPlayerName}
         onConfirm={confirmPlayerName}
       />
@@ -249,7 +255,7 @@ export function MatchRoomScreen() {
       <button
         onClick={openOfficialReview}
         className="fixed bottom-4 right-4 hidden size-10 place-items-center rounded-full border border-border bg-card text-muted-foreground shadow-xl hover:text-primary lg:grid"
-        aria-label="Abrir revisao oficial VIRA"
+        aria-label={t("room.openReview")}
       >
         <Info className="size-4" />
       </button>
