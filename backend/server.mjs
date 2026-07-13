@@ -32,8 +32,10 @@ import { createTxlineStreamManager } from "./txline-stream.mjs";
 import { createTxlineCatalogCache } from "./txline-catalog-cache.mjs";
 import { ensureVerifiedPlayback, verifiedPlaybackIds } from "./verified-playback-seed.mjs";
 import { deriveFixtureTemporalContext, fixturePredictionCopy, resolveEditorialLocaleContext } from "../shared/editorial-domain.mjs";
+import { authorizeE2eRequest, e2eModeFromEnv } from "./e2e-mode.mjs";
 
 loadLocalEnv();
+const e2eMode = e2eModeFromEnv();
 
 const eventStore = await createFileEventStore();
 const shareStore = await createShareStore();
@@ -475,7 +477,7 @@ const txlineCatalogCache = createTxlineCatalogCache({
     runtime.configureMatch(match, context);
     configuredRoomIds.add(String(match.fixtureId));
   },
-  snapshotPath: path.resolve(process.env.VIRA_CATALOG_SNAPSHOT_PATH || fileURLToPath(new URL("./.cache/txline-catalog.json", import.meta.url))),
+  snapshotPath: e2eMode.enabled ? e2eMode.catalogSnapshotPath : path.resolve(process.env.VIRA_CATALOG_SNAPSHOT_PATH || fileURLToPath(new URL("./.cache/txline-catalog.json", import.meta.url))),
   freshMs: TXLINE_CATALOG_FRESH_MS,
   refreshMs: TXLINE_CATALOG_REFRESH_MS,
   concurrency: Number(process.env.TXLINE_CATALOG_CONCURRENCY || 3),
@@ -501,6 +503,43 @@ async function handleRequest(request, response) {
   }
 
   try {
+    if (url.pathname.startsWith("/__e2e/")) {
+      const authorization = authorizeE2eRequest(e2eMode, request);
+      if (!authorization.ok) { sendJson(response, authorization.status, { error: authorization.error }); return; }
+      if (request.method !== "POST" || Number(request.headers["content-length"] ?? 0) > 0) { sendJson(response, 405, { error: "fixed_scenario_actions_only" }); return; }
+      const scenarioRoute = url.pathname.match(/^\/__e2e\/scenario\/([a-z0-9-]{8,64})\/(start|lock|resolve)$/);
+      if (!scenarioRoute) { sendJson(response, 404, { error: "not_found" }); return; }
+      const roomId = `e2e-${scenarioRoute[1]}`;
+      if (scenarioRoute[2] === "start") {
+        runtime.configureMatch({ fixtureId: roomId, title: "France vs Spain", competitionLabel: "World Cup", status: "live", homeTeam: "France", awayTeam: "Spain" }, { suggestedPrediction: { priceName: "part1", probability: 51 } });
+        configuredRoomIds.add(roomId);
+        const snapshot = await runtime.applyNormalizedEvent(roomId, { id: `captured-e2e-period-${scenarioRoute[1]}`, matchId: roomId, sequence: 1, occurredAt: new Date().toISOString(), matchClockSec: 300, type: "period", source: "verified-playback", payload: { FixtureId: roomId, Seq: 1, StatusId: 2, Clock: { Running: true } } }, { acquisitionOrigin: "captured_txline_test_fixture" });
+        sendJson(response, 200, { inputAuthority: e2eMode.inputAuthority, roomId, state: snapshot.currentRound?.state, roundId: snapshot.currentRound?.id, streamVersion: snapshot.ledger.streamVersion });
+        return;
+      }
+      if (scenarioRoute[2] === "resolve") {
+        const before = runtime.snapshot(roomId, null);
+        if (before.currentRound?.state !== "locked") { sendJson(response, 409, { error: "round_not_locked", state: before.currentRound?.state ?? null }); return; }
+        const sequence = Number(before.ledger.streamVersion) + 100;
+        const scoreEvent = (suffix, seq, clock) => ({ id: `captured-e2e-score-${suffix}-${seq}`, matchId: roomId, sequence: seq, occurredAt: new Date().toISOString(), matchClockSec: clock, type: "period", source: "verified-playback", absoluteScore: { home: 1, away: 0 }, payload: { FixtureId: roomId, Seq: seq, Action: "score_adjustment", Clock: { Running: true, Seconds: clock }, Score: { Participant1: { Total: { Goals: 1 } }, Participant2: { Total: { Goals: 0 } } } } });
+        await runtime.applyNormalizedEvent(roomId, scoreEvent("candidate", sequence, 600), { acquisitionOrigin: "captured_txline_test_fixture" });
+        const snapshot = await runtime.applyNormalizedEvent(roomId, scoreEvent("confirmed", sequence + 1, 601), { acquisitionOrigin: "captured_txline_test_fixture" });
+        sendJson(response, 200, { inputAuthority: e2eMode.inputAuthority, roomId, state: snapshot.currentRound?.state, streamVersion: snapshot.ledger.streamVersion });
+        return;
+      }
+      if (scenarioRoute[2] === "lock") {
+        const room = runtime.getRoom(roomId);
+        if (room.currentRound?.state !== "open") { sendJson(response, 409, { error: "round_not_open", state: room.currentRound?.state ?? null }); return; }
+        room.currentRound.locksAt = new Date(Date.now() - 1).toISOString();
+        const sequence = Number(room.streamVersion) + 50;
+        const snapshot = await runtime.applyNormalizedEvent(roomId, { id: `captured-e2e-lock-${sequence}`, matchId: roomId, sequence, occurredAt: new Date().toISOString(), matchClockSec: 301, type: "period", source: "verified-playback", payload: { FixtureId: roomId, Seq: sequence, StatusId: 2, Clock: { Running: true } } }, { acquisitionOrigin: "captured_txline_test_fixture" });
+        sendJson(response, 200, { inputAuthority: e2eMode.inputAuthority, roomId, state: snapshot.currentRound?.state, streamVersion: snapshot.ledger.streamVersion });
+        return;
+      }
+      sendJson(response, 404, { error: "not_found" });
+      return;
+    }
+
     if (request.method === "GET" && url.pathname === "/health") {
       sendJson(response, 200, {
         ok: true,
@@ -948,8 +987,11 @@ async function handleRequest(request, response) {
       const { roomId, rest } = route;
       const internalMutation = request.method === "POST" && ["txline-event", "txline/ingest-odds", "txline/connect", "txline/connect-odds", "txline/connect-scores", "txline/disconnect"].includes(rest);
       if (internalMutation) requireInternalAdmin(request);
-      await ensureRoomConfiguredFromTxline(roomId);
-      startRoomLiveFeed(roomId);
+      const isolatedE2eRoom = e2eMode.enabled && roomId.startsWith("e2e-");
+      if (!isolatedE2eRoom) {
+        await ensureRoomConfiguredFromTxline(roomId);
+        startRoomLiveFeed(roomId);
+      }
 
       if (request.method === "POST" && rest === "join") {
         const body = await readJson(request);

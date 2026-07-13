@@ -4,7 +4,7 @@ const baseURL = process.env.VIRA_BROWSER_SMOKE_TARGET ?? "https://vira.snelabs.s
 
 export default defineConfig({
   testDir: "./tests/e2e",
-  testMatch: /deployment-readonly-smoke\.spec\.ts/,
+  testMatch: /(?:deployment-readonly-smoke|consumer-happy-path)\.spec\.ts/,
   fullyParallel: false,
   workers: 1,
   retries: process.env.CI ? 1 : 0,
