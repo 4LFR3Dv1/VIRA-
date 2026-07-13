@@ -28,8 +28,8 @@ export function ActiveRoundScene({ model, state, answerSummary, onSelect, onSubm
   return (
     <motion.section initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} className="overflow-hidden border-y border-white/15 bg-[#090d18] px-5 py-8 md:px-8 md:py-11">
       <div className="flex items-end justify-between gap-5 border-b border-white/15 pb-5">
-        <div><p className="font-['DM_Mono'] text-[10px] font-black uppercase tracking-[.2em] text-primary">{t("round.label", { number: String(model.round.number).padStart(2, "0") })}</p><p className="mt-1 text-xs text-white/40">{t("round.oneAnswer")}</p></div>
-        <span className="font-['DM_Mono'] text-[10px] uppercase text-white/55">{model.round.status === "open" ? t("round.secondsToAnswer", { count: remainingSec }) : t("round.answersClosed")}</span>
+        <div><p className="font-['DM_Mono'] text-[10px] font-black uppercase tracking-[.2em] text-primary">{t("round.chooseNow")} · {t("round.label", { number: String(model.round.number).padStart(2, "0") })}</p><p className="mt-1 text-xs text-white/40">{t("round.oneAnswer")} · {t("round.privateUntilLock")}</p></div>
+        <div className="shrink-0 text-right"><span className="block font-['DM_Mono'] text-[9px] uppercase text-white/40">{model.round.status === "open" ? t("round.answerWindow") : t("round.answersClosed")}</span><strong aria-live="polite" className="font-['Chakra_Petch'] text-4xl font-black tabular-nums text-primary">{model.round.status === "open" ? `${remainingSec}s` : "00s"}</strong></div>
       </div>
 
       <h1 className="mt-8 max-w-5xl font-['Chakra_Petch'] text-[clamp(2.6rem,5.8vw,6rem)] font-black uppercase leading-[.8]">{model.round.question}</h1>
@@ -57,7 +57,7 @@ export function ActiveRoundScene({ model, state, answerSummary, onSelect, onSubm
         })}
       </div>
 
-      {!locked ? <button type="button" disabled={!selected} onClick={onSubmit} className="mt-5 flex min-h-14 w-full items-center justify-center gap-2 bg-primary px-7 font-['Chakra_Petch'] text-sm font-black uppercase text-[#070a13] disabled:cursor-not-allowed disabled:opacity-25"><Send className="size-4" /> {t("round.confirmAnswer")}</button> : null}
+      {!locked ? <><button type="button" disabled={!selected} onClick={onSubmit} className="mt-5 flex min-h-14 w-full items-center justify-center gap-2 bg-primary px-7 font-['Chakra_Petch'] text-sm font-black uppercase text-[#070a13] disabled:cursor-not-allowed disabled:opacity-25"><Send className="size-4" /> {t("round.confirmAnswer")}</button><p className="mt-3 text-center text-xs text-white/35">{t("round.nextAfterConfirm")}</p></> : null}
     </motion.section>
   );
 }
