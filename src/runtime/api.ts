@@ -67,12 +67,6 @@ export interface FixtureConsumerProjection {
 export interface CompetitionClassification { providerCompetitionId: string | null; canonicalCompetitionId: string | null; name: string; displayName: string; kind: "world_cup" | "continental_cup" | "domestic_league" | "domestic_cup" | "friendly" | "qualifier" | "youth" | "other" | "unknown"; authority: "provider" | "registry" | "unmapped"; mapped: boolean; }
 export interface CanonicalFixture1X2 { authority: "txline_fixture_market"; scope: "fixture"; type: "MATCH_RESULT_1X2"; fixtureId: string; marketSignature: string; snapshotId: string; observedAt: string | null; providerSequence: number | null; bookmakerId: string | number | null; selections: { home: number; draw: number; away: number }; leadingChoice: "home" | "draw" | "away"; }
 
-export interface MatchesResponse {
-  source: "txline";
-  reason?: string;
-  matches: MatchSummary[];
-}
-
 export interface MatchCatalogEntry extends MatchSummary {
   consumerProjection: FixtureConsumerProjection;
   context: MatchTxlineContext | null;
@@ -362,12 +356,6 @@ export async function submitRoomAnswer(input: {
 export function roomEventsUrl(roomId: string, participantId?: string | null) {
   const suffix = participantId ? `?participantId=${encodeURIComponent(participantId)}` : "";
   return `${API_ORIGIN}/rooms/${encodeURIComponent(roomId)}/events${suffix}`;
-}
-
-export async function fetchMatches(): Promise<MatchesResponse> {
-  const response = await fetch(`${API_ORIGIN}/matches`);
-  if (!response.ok) throw new Error(`matches_failed:${response.status}`);
-  return response.json();
 }
 
 export async function fetchMatchCatalog(): Promise<MatchCatalogResponse> {

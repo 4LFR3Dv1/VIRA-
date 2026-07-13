@@ -75,7 +75,7 @@ const internalIngestEnabled = String(process.env.VIRA_INTERNAL_INGEST_ENABLED ||
 const requireTxlineCredentials = String(process.env.VIRA_REQUIRE_TXLINE_CREDENTIALS || "false").toLowerCase() === "true";
 const adminToken = String(process.env.VIRA_ADMIN_TOKEN || "");
 const allowedOrigins = new Set(String(process.env.VIRA_ALLOWED_ORIGINS || "http://localhost:5173,http://127.0.0.1:5173").split(",").map((value) => value.trim()).filter(Boolean));
-const distDirectory = fileURLToPath(new URL("../dist/", import.meta.url));
+const distDirectory = path.resolve(process.env.VIRA_DIST_DIR || fileURLToPath(new URL("../dist/", import.meta.url)));
 const staticMimeTypes = new Map([[".css", "text/css; charset=utf-8"], [".html", "text/html; charset=utf-8"], [".ico", "image/x-icon"], [".js", "text/javascript; charset=utf-8"], [".json", "application/json; charset=utf-8"], [".png", "image/png"], [".svg", "image/svg+xml"], [".webp", "image/webp"], [".woff2", "font/woff2"]]);
 let eventLoopLagMs = 0;
 let lagProbeAt = Date.now();
@@ -475,7 +475,7 @@ const txlineCatalogCache = createTxlineCatalogCache({
     runtime.configureMatch(match, context);
     configuredRoomIds.add(String(match.fixtureId));
   },
-  snapshotPath: fileURLToPath(new URL("./.cache/txline-catalog.json", import.meta.url)),
+  snapshotPath: path.resolve(process.env.VIRA_CATALOG_SNAPSHOT_PATH || fileURLToPath(new URL("./.cache/txline-catalog.json", import.meta.url))),
   freshMs: TXLINE_CATALOG_FRESH_MS,
   refreshMs: TXLINE_CATALOG_REFRESH_MS,
   concurrency: Number(process.env.TXLINE_CATALOG_CONCURRENCY || 3),
@@ -822,18 +822,6 @@ async function handleRequest(request, response) {
 
     if (request.method === "POST" && url.pathname === "/txline/auth/guest/start") {
       sendJson(response, 200, await startGuestSession(txlineConfig));
-      return;
-    }
-
-    if (request.method === "GET" && url.pathname === "/matches") {
-      ensureReady();
-      const catalog = filterCatalog(await txlineCatalogCache.get(), url.searchParams.get("q") || "");
-      sendJson(response, 200, {
-        source: catalog.source,
-        cache: catalog.cache,
-        generatedAt: catalog.generatedAt,
-        matches: catalog.matches.map(({ context, availability, contextError, ...match }) => ({ ...match, availability })),
-      });
       return;
     }
 

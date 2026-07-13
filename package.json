@@ -18,7 +18,7 @@
     "certify:match": "node scripts/ci/certify-match.mjs",
     "soak:match": "node scripts/ci/soak-match.mjs",
     "test:deployment:projection": "node scripts/ci/audit-consumer-projection.mjs",
-    "test:all": "npm run typecheck && node --test backend/event-sourcing.test.mjs backend/event-sourcing-adversarial.test.mjs backend/http-security.test.mjs backend/txline-catalog-cache.test.mjs backend/verified-round-replay.test.mjs backend/verified-playback-seed.test.mjs backend/round-commitment.test.mjs backend/share-store.test.mjs backend/share-image-png.test.mjs backend/home-projection.test.mjs backend/editorial-domain.test.mjs backend/fixture-consumer-projection.test.mjs backend/competition-registry.test.mjs backend/canonical-market.test.mjs backend/consumer-cadence.test.mjs backend/football-events.test.mjs && npm run test:moments",
+    "test:all": "npm run typecheck && node --test backend/event-sourcing.test.mjs backend/event-sourcing-adversarial.test.mjs backend/http-security.test.mjs backend/http-routing.test.mjs backend/txline-catalog-cache.test.mjs backend/verified-round-replay.test.mjs backend/verified-playback-seed.test.mjs backend/round-commitment.test.mjs backend/share-store.test.mjs backend/share-image-png.test.mjs backend/home-projection.test.mjs backend/editorial-domain.test.mjs backend/fixture-consumer-projection.test.mjs backend/competition-registry.test.mjs backend/canonical-market.test.mjs backend/consumer-cadence.test.mjs backend/football-events.test.mjs && npm run test:moments",
     "test:container": "node scripts/ci/container-smoke.mjs",
     "verify": "npm run test:all && npm run build",
     "dev": "vite",

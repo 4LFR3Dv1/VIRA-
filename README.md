@@ -159,7 +159,7 @@ Mainnet free tier options:
 
 ```http
 GET  /health
-GET  /matches
+GET  /matches/catalog
 GET  /txline/discovery?limit=20&save=1
 POST /txline/auth/guest/start
 GET  /txline/fixtures
