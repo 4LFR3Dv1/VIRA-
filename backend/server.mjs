@@ -11,6 +11,8 @@ import { createRoomRuntime } from "./runtime.mjs";
 import { createSolanaCommitmentPublisherFromEnv } from "./solana-commitment-publisher.mjs";
 import { createShareStore } from "./share-store.mjs";
 import { renderSharePng } from "./share-image-png.mjs";
+import { renderShareSvg } from "./share-image-svg.mjs";
+import { renderSharePage } from "./share-page.mjs";
 import { txlineCapabilities } from "./txline-endpoints.mjs";
 import { buildTxlineContext } from "./txline-context.mjs";
 import { discoverTxlineFixtures } from "./txline-discovery.mjs";
@@ -32,7 +34,7 @@ import { createTxlineStreamManager } from "./txline-stream.mjs";
 import { createTxlineCatalogCache } from "./txline-catalog-cache.mjs";
 import { ensureVerifiedPlayback, verifiedPlaybackIds } from "./verified-playback-seed.mjs";
 import { deriveFixtureTemporalContext, resolveEditorialLocaleContext } from "../shared/editorial-domain.mjs";
-import { predictionShareCopy, resolveShareLocaleContext, roomShareCopy, shareChoiceLabel, shareKindLabel } from "../shared/share-copy.mjs";
+import { predictionShareCopy, roomShareCopy, shareChoiceLabel } from "../shared/share-copy.mjs";
 import { authorizeE2eRequest, e2eModeFromEnv } from "./e2e-mode.mjs";
 
 loadLocalEnv();
@@ -114,10 +116,6 @@ function sendPng(response, body) {
   response.end(body);
 }
 
-function escapeHtml(value) {
-  return String(value ?? "").replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character]);
-}
-
 function publicToken(request, body = {}) {
   return String(request.headers["x-vira-public-token"] ?? body.publicToken ?? "");
 }
@@ -146,30 +144,6 @@ function predictionEditorialContext(fixture, request) {
   };
 }
 
-function localizedSharePageHtml(share, request) {
-  const base = publicBaseUrl(request);
-  const localeContext = resolveShareLocaleContext(share);
-  const title = escapeHtml(share.metadata.title);
-  const description = escapeHtml(share.metadata.description);
-  const image = `${base}/share-images/${encodeURIComponent(share.publicCode)}.png`;
-  const canonicalUrl = `${base}/s/${encodeURIComponent(share.publicCode)}`;
-  const destinationUrl = new URL(share.destination.path, base);
-  destinationUrl.searchParams.set("invite", share.publicCode);
-  destinationUrl.searchParams.set("lang", localeContext.locale);
-  const destination = escapeHtml(`${destinationUrl.pathname}${destinationUrl.search}${destinationUrl.hash}`);
-  const kind = escapeHtml(shareKindLabel(share.kind, localeContext.locale));
-  const cta = escapeHtml(share.destination.ctaLabel);
-  return `<!doctype html><html lang="${localeContext.locale}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${title}</title><meta name="description" content="${description}"><meta property="og:type" content="website"><meta property="og:site_name" content="VIRA"><meta property="og:title" content="${title}"><meta property="og:description" content="${description}"><meta property="og:image" content="${image}"><meta property="og:image:secure_url" content="${image}"><meta property="og:image:type" content="image/png"><meta property="og:image:width" content="1200"><meta property="og:image:height" content="630"><meta property="og:url" content="${canonicalUrl}"><meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="${title}"><meta name="twitter:description" content="${description}"><meta name="twitter:image" content="${image}"><meta name="theme-color" content="#050814"><link rel="icon" href="/favicon.png"></head><body style="margin:0;background:#050814;color:#f7f8f4;font-family:Arial,sans-serif"><main style="min-height:100vh;display:grid;place-items:center;padding:24px;box-sizing:border-box"><section style="width:min(760px,100%);border-block:1px solid #ffffff26;padding:48px 0"><p style="color:#c7ff18;font:700 11px monospace;letter-spacing:.16em;text-transform:uppercase">VIRA · ${kind}</p><h1 style="font-size:clamp(42px,9vw,92px);line-height:.88;text-transform:uppercase;margin:24px 0">${title}</h1><p style="max-width:600px;color:#ffffff99;font-size:18px;line-height:1.6">${description}</p><a href="${destination}" data-share-cta style="display:inline-block;margin-top:32px;background:#c7ff18;color:#050814;padding:18px 26px;font-weight:900;text-transform:uppercase;text-decoration:none">${cta} →</a></section></main><script>document.querySelector('[data-share-cta]').addEventListener('click',()=>{navigator.sendBeacon('/shares/${encodeURIComponent(share.publicCode)}/click')})</script></body></html>`;
-}
-
-function localizedShareImageSvg(share) {
-  const localeContext = resolveShareLocaleContext(share);
-  const title = escapeHtml(share.metadata.title).slice(0, 72);
-  const description = escapeHtml(share.metadata.description).slice(0, 110);
-  const kind = escapeHtml(shareKindLabel(share.kind, localeContext.locale));
-  const cta = escapeHtml(share.destination.ctaLabel).toUpperCase();
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630"><rect width="1200" height="630" fill="#050814"/><rect x="0" y="0" width="18" height="630" fill="#c7ff18"/><path d="M760 0H1200V630H620Z" fill="#101a24"/><text x="72" y="86" fill="#c7ff18" font-family="Arial" font-size="24" font-weight="700" letter-spacing="4">VIRA · ${kind}</text><foreignObject x="72" y="150" width="1000" height="230"><div xmlns="http://www.w3.org/1999/xhtml" style="color:#f7f8f4;font:900 62px/1 Arial;text-transform:uppercase">${title}</div></foreignObject><foreignObject x="72" y="430" width="900" height="100"><div xmlns="http://www.w3.org/1999/xhtml" style="color:#ffffff99;font:24px/1.35 Arial">${description}</div></foreignObject><text x="72" y="585" fill="#c7ff18" font-family="Arial" font-size="22" font-weight="700">${cta}</text></svg>`;
-}
 
 function safeTokenEqual(received, expected) {
   const left = Buffer.from(String(received || ""));
@@ -658,7 +632,7 @@ async function handleRequest(request, response) {
           metadata: copy.metadata,
           destination: { path: `/match/${encodeURIComponent(snapshot.match.id)}`, ctaLabel: copy.ctaLabel },
           attribution: { source: "result", campaign: "round_result" },
-          payload: { fixtureId: snapshot.match.id, roomId: snapshot.roomId, roundId: result.roundId, correct, points: result.pointsAwarded, rank: snapshot.leaderboard.find((entry) => entry.participantId === body.participantId)?.rank ?? null, winningOptionId: result.winningOptionId, verified: Boolean(snapshot.ledger?.headHash) }, editorialContext,
+          payload: { fixtureId: snapshot.match.id, roomId: snapshot.roomId, roundId: result.roundId, correct, points: result.pointsAwarded, rank: snapshot.leaderboard.find((entry) => entry.participantId === body.participantId)?.rank ?? null, winningOptionId: result.winningOptionId, verified: Boolean(snapshot.ledger?.headHash), homeTeam: snapshot.match.homeTeam.name, awayTeam: snapshot.match.awayTeam.name, homeScore: snapshot.match.homeScore, awayScore: snapshot.match.awayScore }, editorialContext,
         });
         sendJson(response, 201, { share, url: `${publicBaseUrl(request)}/s/${share.publicCode}` });
         return;
@@ -814,7 +788,7 @@ async function handleRequest(request, response) {
       const share = shareStore.getShare(publicCode);
       if (!share) { sendHtml(response, 404, "<!doctype html><title>Convite indisponível | VIRA</title><body style='background:#050814;color:white;font-family:Arial;padding:40px'><h1>Convite indisponível</h1><a href='/' style='color:#c7ff18'>Abrir VIRA</a></body>"); return; }
       await shareStore.track("share_opened", publicCode, { userAgent: String(request.headers["user-agent"] ?? "").slice(0, 160) });
-      sendHtml(response, 200, localizedSharePageHtml(share, request), "public, max-age=30, stale-while-revalidate=300");
+      sendHtml(response, 200, renderSharePage({ share, base: publicBaseUrl(request) }), "public, max-age=30, stale-while-revalidate=300");
       return;
     }
 
@@ -822,7 +796,7 @@ async function handleRequest(request, response) {
     if (request.method === "GET" && shareImageRoute) {
       const share = shareStore.getShare(decodeURIComponent(shareImageRoute[1]));
       if (!share) throw Object.assign(new Error("share_not_found"), { status: 404 });
-      sendSvg(response, localizedShareImageSvg(share));
+      sendSvg(response, renderShareSvg(share));
       return;
     }
 
