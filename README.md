@@ -2,17 +2,24 @@
 
 [![Verify](https://github.com/4LFR3Dv1/VIRA-/actions/workflows/verify.yml/badge.svg)](https://github.com/4LFR3Dv1/VIRA-/actions/workflows/verify.yml)
 
-> VIRA turns real TxLINE market updates into synchronized, verifiable multiplayer rounds for football fans.
+> Play the match live with your friends. VIRA turns authoritative football moments into synchronized multiplayer challenges.
 
 ```text
-Live app: https://vira.snelabs.space
-Judge walkthrough: https://vira.snelabs.space/help
-Verified playback: https://vira.snelabs.space/help
+Live app (English): https://vira.snelabs.space/?lang=en
+Live app (PT-BR): https://vira.snelabs.space/?lang=pt-BR
+Judge walkthrough: https://vira.snelabs.space/help?lang=en
+Verified playback: https://vira.snelabs.space/help?lang=en
 
 No wallet, OAuth, purchase or installation required.
 ```
 
 Test the core in under three minutes: make the 1X2 pick on `/`, open its share in an anonymous window, enter the same fixture from both windows, then use `/help` to inspect a resolved round reconstructed from the public ledger.
+
+```text
+Pick → Share → Join → Play → Resolve → Rank → Verify
+```
+
+The first minute is intentionally Consumer-first: guest entry, private picks until lock, one server deadline and a simultaneous result for everyone. Technical evidence remains available in Official Review without becoming the headline.
 
 VIRA is a second-screen match room for live football. Fans join a shared room, answer micro-predictions during the match, and TxLINE score events resolve each round through the runtime engine.
 
@@ -240,6 +247,23 @@ The file event store is intentionally single-writer. Do not scale this image hor
 ## Commercial Path
 
 VIRA is designed as a B2B2C fan-engagement layer for broadcasters, tournament organizers, sponsors and sports communities. A partner can run branded rooms around its licensed feed while the same deterministic round and verification contracts remain intact. No money, shares, payout or betting position is part of the Consumer experience.
+
+Fans participate free. Brands, broadcasters, clubs and creators pay to distribute branded match rooms, sponsored live moments, creator Mini Leagues, competition packages and white-label second-screen experiences. The measurable journey is share created → share opened → guest joined → live participation → return → result shared.
+
+## Deterministic Demo Capture
+
+The official demo runner uses the same normalizer, runtime, reducer, ledger, replay and Consumer UI as the product. Its controlled input is always disclosed as `captured_txline_test_fixture`; it must never be described as live delivery during recording.
+
+```powershell
+npm run demo:capture -- --locale en --time-zone America/Sao_Paulo --input captured_txline_test_fixture --capture-mode desktop
+npm run demo:capture -- --locale pt-BR --time-zone America/Sao_Paulo --input captured_txline_test_fixture --capture-mode desktop
+```
+
+The normal product path uses the TxLINE snapshot and live-stream adapters documented above. E2E administrative routes do not exist unless the explicit isolated E2E mode, ephemeral token and loopback allowlist are all enabled.
+
+## TxLINE Feedback
+
+The normalized competition model and consistent fixture identifiers make it practical to reuse one Consumer runtime across competitions. The most useful fields for VIRA are provider sequence, observation time, score actions and canonical full-match 1X2 selections. The main friction was distinguishing observation time from response-generation time, identifying canonical full-match markets among related periods, and degrading safely when a live feed becomes stale. VIRA keeps those distinctions explicit instead of substituting `generatedAt` or inferring freshness in the browser.
 
 ## Known Limits
 
