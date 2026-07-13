@@ -40,11 +40,17 @@ async function writeEvidence(testInfo: TestInfo, evidence: object) {
   await writeFile(output, serialized, "utf8");
   await testInfo.attach(path.basename(output), { body: Buffer.from(serialized), contentType: "application/json" });
 }
+async function captureVisual(page: Page, testInfo: TestInfo, name: string) {
+  if (testInfo.repeatEachIndex !== 0) return;
+  const directory = path.resolve("artifacts", "release-visual", testInfo.project.name);
+  await mkdir(directory, { recursive: true });
+  await page.screenshot({ path: path.join(directory, `${name}.png`), fullPage: false });
+}
 
 test.beforeAll(async () => {
   dataDir = await mkdtemp(path.join(os.tmpdir(), "vira-consumer-browser-e2e-"));
   const port = await freePort(); origin = `http://127.0.0.1:${port}`;
-  backend = spawn(process.execPath, ["backend/server.mjs"], { cwd: process.cwd(), env: { ...process.env, PORT: String(port), NODE_ENV: "production", VIRA_DATA_DIR: dataDir, VIRA_E2E_ENABLED: "true", VIRA_E2E_TOKEN: e2eToken, VIRA_E2E_ALLOWED_HOSTS: "127.0.0.1", VIRA_VERIFIED_PLAYBACK_ENABLED: "false", VIRA_MARKET_ROUNDS_ENABLED: "false", VIRA_ROUND_ANSWER_WINDOW_SEC: "10", TXLINE_JWT: "", TXLINE_API_TOKEN: "" }, stdio: ["ignore", "pipe", "pipe"] });
+  backend = spawn(process.execPath, ["backend/server.mjs"], { cwd: process.cwd(), env: { ...process.env, PORT: String(port), NODE_ENV: "production", VIRA_DATA_DIR: dataDir, VIRA_E2E_ENABLED: "true", VIRA_E2E_TOKEN: e2eToken, VIRA_E2E_ALLOWED_HOSTS: "127.0.0.1", VIRA_VERIFIED_PLAYBACK_ENABLED: "false", VIRA_MARKET_ROUNDS_ENABLED: "false", VIRA_ROUND_ANSWER_WINDOW_SEC: "30", TXLINE_JWT: "", TXLINE_API_TOKEN: "" }, stdio: ["ignore", "pipe", "pipe"] });
   await waitForHealth();
 });
 test.afterAll(async () => { backend?.kill("SIGTERM"); if (backend) await new Promise((resolve) => backend.once("exit", resolve)); await rm(dataDir, { recursive: true, force: true }); });
@@ -63,21 +69,27 @@ test("two isolated guests share, answer, resolve and receive the same ranking", 
     const shareResponse = pageA.waitForResponse((response) => response.url() === `${origin}/shares` && response.request().method() === "POST" && response.status() === 201);
     await pageA.getByRole("button", { name: /Convidar para a sala|Invite to the room/i }).click();
     const share = await (await shareResponse).json() as { url: string };
+    await expect(pageA.getByRole("dialog", { name: /Compartilhe este momento|Share this moment/i })).toBeVisible();
+    await expect.poll(() => pageA.getByAltText(/Prévia do card|Preview of the VIRA share card/i).evaluate((image: HTMLImageElement) => image.naturalWidth)).toBe(1200);
+    await captureVisual(pageA, testInfo, "share-sheet-en");
+    await pageA.getByRole("button", { name: /Fechar compartilhamento|Close share sheet/i }).click();
     const pageB = await playerB.newPage(); await pageB.goto(new URL(new URL(share.url).pathname, origin).toString());
     await pageB.locator("[data-share-cta]").click(); await join(pageB, "Bruno");
     await expect(pageA.getByText("Bruno", { exact: true }).first()).toBeVisible();
     await expect(pageB.getByText("Ana", { exact: true }).first()).toBeVisible();
+    await captureVisual(pageA, testInfo, "shared-room-en");
     await answerYes(pageA);
     const aBeforeRefresh = await session(pageA, roomId);
     const stateBeforeRefresh = await authenticatedState(roomId, aBeforeRefresh);
     const versionBeforeRefresh = stateBeforeRefresh.ledger.streamVersion;
     await pageA.getByRole("button", { name: "Portuguese" }).click();
     await expect(pageA.locator("html")).toHaveAttribute("lang", "pt-BR");
-    await expect(pageA.getByText(/Palpite confirmado/i).first()).toBeVisible();
+    await expect(pageA.getByText(/Palpite confirmado|Seu palpite está em jogo/i).first()).toBeVisible();
+    await captureVisual(pageA, testInfo, "answer-preserved-pt-BR");
     expect(await session(pageA, roomId)).toEqual(aBeforeRefresh);
     await pageA.getByRole("button", { name: "Inglês" }).click();
     await expect(pageA.locator("html")).toHaveAttribute("lang", "en");
-    await expect(pageA.getByText(/Prediction confirmed/i).first()).toBeVisible();
+    await expect(pageA.getByText(/Prediction confirmed|Your prediction is in play/i).first()).toBeVisible();
     const aAfterLocaleSwitch = await session(pageA, roomId);
     expect(aAfterLocaleSwitch).toEqual(aBeforeRefresh);
     const stateAfterLocaleSwitch = await authenticatedState(roomId, aAfterLocaleSwitch);
@@ -87,7 +99,7 @@ test("two isolated guests share, answer, resolve and receive the same ranking", 
     expect(stateAfterLocaleSwitch.participants.filter((participant: { id: string }) => participant.id === aAfterLocaleSwitch.participantId)).toHaveLength(1);
     await pageA.reload();
     await expect(pageA.locator("html")).toHaveAttribute("lang", "en");
-    await expect(pageA.getByText(/Prediction confirmed/i).first()).toBeVisible();
+    await expect(pageA.getByText(/Prediction confirmed|Your prediction is in play/i).first()).toBeVisible();
     const aAfterRefresh = await session(pageA, roomId);
     expect(aAfterRefresh).toEqual(aBeforeRefresh);
     const stateAfterRefresh = await authenticatedState(roomId, aAfterRefresh);
@@ -102,7 +114,7 @@ test("two isolated guests share, answer, resolve and receive the same ranking", 
     await playerB.setOffline(true);
     await pageB.goto("about:blank");
     await expect.poll(async () => (await metrics()).sseClients, { timeout: 10_000 }).toBe(1);
-    await expect.poll(async () => (await (await fetch(`${origin}/public/rooms/${roomId}`)).json()).currentRound?.state, { timeout: 20_000 }).toBe("locked");
+    await expect.poll(async () => (await (await fetch(`${origin}/public/rooms/${roomId}`)).json()).currentRound?.state, { timeout: 40_000 }).toBe("locked");
     const lockedState = await authenticatedState(roomId, aAfterRefresh);
     const lateResponse = await fetch(`${origin}/rooms/${roomId}/rounds/${lockedState.currentRound.id}/answer`, { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${aAfterRefresh.sessionToken}` }, body: JSON.stringify({ participantId: aAfterRefresh.participantId, optionId: "yes", clientAnswerId: crypto.randomUUID(), roundVersion: lockedState.currentRound.version, sessionToken: aAfterRefresh.sessionToken }) });
     expect(lateResponse.ok).toBe(false);
@@ -140,11 +152,12 @@ test("two isolated guests share, answer, resolve and receive the same ranking", 
       : pageB.getByRole("button", { name: /Abrir Revisão Oficial|Open Official Review/i });
     await reviewButton.click();
     const review = pageB.getByRole("dialog").filter({ hasText: /Revisão Oficial VIRA|VIRA Official Review/i });
-    await expect(review.getByText(/Verificação pendente|Verification pending/i, { exact: true })).toBeVisible();
-    await expect(review.getByText(/O resultado foi o mesmo|The result was the same/i, { exact: true })).toBeVisible();
-    await expect(review.getByText(/A classificação foi a mesma|The ranking was the same/i, { exact: true })).toBeVisible();
-    await expect(review.locator("article").filter({ hasText: /Autoridade|Authority/i }).getByText(/PENDING|PENDENTE/i, { exact: true })).toBeVisible();
-    await expect(review.locator("article").filter({ hasText: /Reprodutibilidade|Reproducibility/i }).getByText(/VALID|VÁLIDO/i, { exact: true })).toBeVisible();
+    await expect(review.getByText(/Reprodutibilidade válida|Reproducibility valid/i, { exact: true })).toBeVisible();
+    await expect(review.getByText(/Fixture de teste TxLINE capturada|Captured TxLINE test fixture/i)).toBeVisible();
+    await expect(review.getByText(/O replay produziu o mesmo resultado e ranking|Replay produced the same result and ranking/i)).toBeVisible();
+    await expect(review.getByText(/Janela autoritativa, regra e cadeia do ledger são válidas|authoritative window, rule and ledger chain are valid/i)).toBeVisible();
+    await expect.poll(async () => (await review.boundingBox())?.x ?? Number.POSITIVE_INFINITY).toBeLessThan(800);
+    await captureVisual(pageB, testInfo, "official-review");
     await pageB.goto(`/match/${roomId}`);
     await expect(pageB.getByText(/conectado|connected/i).first()).toBeVisible();
     expect(await pageA.evaluate(() => (window as any).__viraResolutionTakeovers)).toBe(1);
