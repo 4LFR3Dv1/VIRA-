@@ -40,8 +40,9 @@ function enrichFixture(
   contextState: "loading" | "ready" | "error",
 ): FixtureExperience {
   const marketCount = context?.marketTaxonomy?.observed ?? context?.availableMarkets.length ?? 0;
-  const hasMarket = marketCount > 0 || Boolean(context?.suggestedPrediction);
-  const canonical = deriveCanonicalExperienceState({ matchStatus: fixture.status, roomExists: hasMarket, hasSignal: hasMarket, connectionState: contextState === "error" ? "reconnecting" : "live" });
+  const projection = fixture.consumerProjection;
+  const hasMarket = projection?.availability.canShowMarket === true;
+  const canonical = deriveCanonicalExperienceState({ matchStatus: projection?.fixture.status ?? fixture.status, roomExists: projection?.availability.canEnterRoom ?? false, hasSignal: hasMarket, connectionState: contextState === "error" ? "reconnecting" : "live" });
   if (canonical.match === "finished") return { fixture, context, contextState, group: "finished", label: experienceCopy.match.finished, detail: marketCount ? `${marketCount} mercados observados` : "Resultado disponível", marketCount, active: false };
   if (canonical.match === "live") return { fixture, context, contextState, group: "live", label: experienceCopy.match.live, detail: contextState === "loading" ? "Verificando mercado" : hasMarket ? `${marketCount} mercados observados` : experienceCopy.signal.unavailable, marketCount, active: hasMarket };
   if (hasMarket) return { fixture, context, contextState, group: "open", label: experienceCopy.room.open, detail: `${marketCount} mercados observados`, marketCount, active: true };
@@ -53,10 +54,10 @@ function timestamp(fixture: MatchSummary) {
   return Number.isFinite(value) ? value : Number.POSITIVE_INFINITY;
 }
 
-function time(value: string | null) {
-  if (!value) return { day: "A confirmar", hour: "--:--" };
-  const date = new Date(value);
-  return { day: new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "short" }).format(date), hour: new Intl.DateTimeFormat("pt-BR", { hour: "2-digit", minute: "2-digit" }).format(date) };
+function projectedTime(fixture: MatchSummary) {
+  const temporal = fixture.consumerProjection?.temporal;
+  if (!temporal?.localKickoffDate || !temporal.localKickoffTime) return { day: "A confirmar", hour: "--:--" };
+  return { day: temporal.localKickoffDate, hour: temporal.localKickoffTime };
 }
 
 export function FixtureAgenda({ matches, selectedId, selectedContext, contexts, contextStates, onSelect, onOpen }: Props) {
@@ -82,9 +83,9 @@ export function FixtureAgenda({ matches, selectedId, selectedContext, contexts, 
 
 function FixtureRow({ experience, selected, selectedContext, reduceMotion, onSelect, onOpen }: { experience: FixtureExperience; selected: boolean; selectedContext: MatchTxlineContext | null; reduceMotion: boolean; onSelect: (fixtureId: string) => void; onOpen: (fixtureId: string) => void }) {
   const fixture = experience.fixture;
-  const fixtureTime = time(fixture.startTime);
-  const market = selectedContext?.canonical1X2;
-  const canOpen = experience.active || experience.group === "finished";
+  const fixtureTime = projectedTime(fixture);
+  const market = fixture.consumerProjection?.availability.canShowMarket ? fixture.consumerProjection.market.canonical1X2 : null;
+  const canOpen = fixture.consumerProjection?.availability.canEnterRoom === true;
   return <motion.div layout className={`group relative block w-full overflow-hidden border-b border-white/12 text-left ${selected ? "text-[#050814]" : "text-white hover:bg-white/[.025]"}`}>
     {selected ? <motion.div layoutId="fixture-selection" className="absolute inset-0 bg-primary" transition={reduceMotion ? { duration: 0 } : { type: "spring", stiffness: 320, damping: 34 }} /> : null}
     <button type="button" onClick={() => onSelect(fixture.fixtureId)} aria-pressed={selected} className="relative z-10 grid min-h-24 w-full grid-cols-[6rem_minmax(0,1fr)_7.5rem] items-center gap-3 px-3 py-4 text-left sm:grid-cols-[8rem_minmax(0,1fr)_11rem] sm:px-4 lg:grid-cols-[9rem_minmax(0,1fr)_14rem]">

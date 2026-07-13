@@ -2,7 +2,7 @@ import { Signal } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router";
 
-import type { MatchSummary, MatchTxlineContext, TxlineProbeKind, TxlineProbeResult } from "../../runtime/api";
+import type { MatchCatalogEntry, MatchSummary, MatchTxlineContext, TxlineProbeKind, TxlineProbeResult } from "../../runtime/api";
 import { fetchMatchCatalog, fetchTxlineProbe } from "../../runtime/api";
 import { AppShell } from "../../shared/shell/AppShell";
 import { ViraLoader } from "../../shared/brand/ViraLoader";
@@ -16,20 +16,13 @@ import { TxlineVerificationRail } from "./TxlineVerificationRail";
 import { fixtureAccent, useShellAtmosphere } from "../../app/shell/use-shell-atmosphere";
 
 function selectSuggestedMatch(matches: MatchSummary[]) {
-  return (
-    matches.find((match) => match.competition?.kind === "world_cup" && match.status.toLowerCase().includes("live"))
-    ?? matches.find((match) => match.competition?.kind === "world_cup" && match.status.toLowerCase() !== "finished")
-    ?? matches.find((match) => match.status.toLowerCase().includes("live"))
-    ?? matches.find((match) => match.status.toLowerCase() !== "finished")
-    ?? matches[0]
-    ?? null
-  );
+  return [...matches].sort((left, right) => Number(right.consumerProjection?.editorial.priority ?? -Infinity) - Number(left.consumerProjection?.editorial.priority ?? -Infinity) || left.fixtureId.localeCompare(right.fixtureId))[0] ?? null;
 }
 
 export function LobbyScreen() {
   const navigate = useNavigate();
   const shell = useShellExperience();
-  const [matches, setMatches] = useState<MatchSummary[]>([]);
+  const [matches, setMatches] = useState<MatchCatalogEntry[]>([]);
   const [source, setSource] = useState<"txline">("txline");
   const [loadState, setLoadState] = useState<"loading" | "ready" | "error">("loading");
   const [selectedMatchId, setSelectedMatchId] = useState<string | null>(null);
@@ -45,10 +38,10 @@ export function LobbyScreen() {
     let cancelled = false;
     const applyCatalog = (response: Awaited<ReturnType<typeof fetchMatchCatalog>>) => {
         if (cancelled) return;
-        const nextMatches: MatchSummary[] = response.matches.map(({ context: _context, availability: _availability, contextError: _contextError, ...match }) => match);
+        const nextMatches = response.matches;
         setMatches(nextMatches);
         setSource(response.source);
-        setSelectedMatchId((current) => nextMatches.some((match) => match.fixtureId === current) ? current : selectSuggestedMatch(nextMatches)?.fixtureId ?? null);
+        setSelectedMatchId((current) => nextMatches.some((match) => match.fixtureId === current) ? current : response.featuredFixtureId ?? selectSuggestedMatch(nextMatches)?.fixtureId ?? null);
         setFixtureContexts(Object.fromEntries(response.matches.map((match) => [match.fixtureId, match.context])));
         setFixtureContextStates(Object.fromEntries(response.matches.map((match) => [match.fixtureId, match.availability.contextStatus === "unavailable" ? "error" : "ready"])));
         setLoadState("ready");

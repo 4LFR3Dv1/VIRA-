@@ -25,6 +25,43 @@ export interface MatchSummary {
   homeTeam: string;
   awayTeam: string;
   source: string;
+  consumerProjection?: FixtureConsumerProjection;
+}
+
+export type FixtureStatus = "scheduled" | "live" | "paused" | "postponed" | "cancelled" | "finished" | "unknown";
+export interface FixtureConsumerProjection {
+  schemaVersion: 1;
+  generatedAt: string;
+  fixture: {
+    fixtureId: string;
+    homeTeam: { providerId: string | null; name: string; shortName: string | null };
+    awayTeam: { providerId: string | null; name: string; shortName: string | null };
+    competition: CompetitionClassification;
+    status: FixtureStatus;
+    kickoffAt: string | null;
+  };
+  temporal: {
+    evaluatedAt: string;
+    timeZone: string;
+    relation: "live" | "today" | "tomorrow" | "later_this_week" | "future" | "finished" | "unknown";
+    localKickoffDate: string | null;
+    localKickoffTime: string | null;
+  };
+  market: {
+    canonical1X2: null | {
+      authority: "txline_fixture_market";
+      signature: string;
+      snapshotId: string | null;
+      providerSequence: number | null;
+      observedAt: string | null;
+      receivedAt: string | null;
+      selections: { home: number; draw: number; away: number };
+      leadingChoice: "home" | "draw" | "away";
+    };
+    freshness: { evaluatedAt: string; ageSeconds: number | null; usableForPrediction: boolean; currentForDisplay: boolean; currentForDirectionalClaim: boolean; reason: string };
+  };
+  availability: { canPredict: boolean; canEnterRoom: boolean; roomMode: "pre_match" | "live" | "read_only" | "unavailable"; canShowMarket: boolean; canMakeDirectionalClaim: boolean; reason: string };
+  editorial: { priority: number; priorityReasons: string[]; headlineIntent: string; scheduleIntent: string; marketStatementIntent: "directional_current" | "last_observed" | "market_unavailable" };
 }
 
 export interface CompetitionClassification { providerCompetitionId: string | null; canonicalCompetitionId: string | null; name: string; displayName: string; kind: "world_cup" | "continental_cup" | "domestic_league" | "domestic_cup" | "friendly" | "qualifier" | "youth" | "other" | "unknown"; authority: "provider" | "registry" | "unmapped"; mapped: boolean; }
@@ -37,6 +74,7 @@ export interface MatchesResponse {
 }
 
 export interface MatchCatalogEntry extends MatchSummary {
+  consumerProjection: FixtureConsumerProjection;
   context: MatchTxlineContext | null;
   availability: {
     marketCount: number;
@@ -45,6 +83,11 @@ export interface MatchCatalogEntry extends MatchSummary {
     canonical1X2Available: boolean;
     hasMarket: boolean;
     hasPlayablePrediction: boolean;
+    canPredict: boolean;
+    canEnterRoom: boolean;
+    canShowMarket: boolean;
+    canMakeDirectionalClaim: boolean;
+    reason: string;
     contextStatus: "ready" | "stale" | "unavailable";
   };
   contextError?: string;
@@ -55,6 +98,7 @@ export interface MatchCatalogResponse {
   source: "txline";
   cacheSource: "server";
   generatedAt: string;
+  featuredFixtureId: string | null;
   materialization?: {
     contextsRefreshed: number;
     contextsReused: number;
@@ -161,6 +205,7 @@ export interface TxlineLatestRecord {
 }
 
 export interface MatchTxlineContext {
+  consumerProjection?: FixtureConsumerProjection;
   fixtureId: string;
   provider: "TxLINE";
   generatedAt: string;

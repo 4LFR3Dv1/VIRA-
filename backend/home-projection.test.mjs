@@ -11,6 +11,9 @@ test("publishes a fresh fixture market with explicit authority", () => {
   assert.equal(projection.editorial.kind, "predict_fixture");
   assert.equal(projection.editorial.authority, "txline_fixture_market");
   assert.equal(projection.editorial.fixture.market.type, "MATCH_RESULT_1X2");
+  assert.equal(projection.editorial.fixture.consumerProjection.fixture.fixtureId, "fx-1");
+  assert.deepEqual(projection.editorial.fixture.consumerProjection.market.canonical1X2.selections, projection.editorial.fixture.market.selections);
+  assert.equal(projection.editorial.fixture.consumerProjection.temporal.relation, projection.editorial.fixture.temporal.relation);
   assert.equal(projection.tournament.outrightMarket, null);
 });
 

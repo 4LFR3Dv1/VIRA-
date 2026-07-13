@@ -870,7 +870,7 @@ async function handleRequest(request, response) {
         sendJson(response, 503, { error: "txline_context_unavailable", fixtureId, availability: entry.availability });
         return;
       }
-      sendJson(response, 200, entry.context);
+      sendJson(response, 200, { ...entry.context, consumerProjection: entry.consumerProjection });
       return;
     }
 

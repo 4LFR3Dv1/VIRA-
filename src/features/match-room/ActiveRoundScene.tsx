@@ -1,9 +1,9 @@
 import { Check, Send } from "lucide-react";
 import { motion } from "motion/react";
-import { useEffect, useState } from "react";
 
 import type { ReplayState } from "../../domain/types";
 import { AnimatedNumber } from "../../shared/number/AnimatedNumber";
+import { useServerClock } from "../../runtime/use-server-clock";
 import type { ViraExperienceModel } from "./experience-model";
 
 interface ActiveRoundSceneProps {
@@ -18,12 +18,8 @@ export function ActiveRoundScene({ model, state, answerSummary, onSelect, onSubm
   if (!model.round) return null;
   const selected = state.selectedOptionId;
   const locked = state.currentAnswerState === "submitted" || state.snapshot.currentRound?.state !== "open";
-  const [now, setNow] = useState(() => Date.now());
-  useEffect(() => {
-    const timer = window.setInterval(() => setNow(Date.now()), 500);
-    return () => window.clearInterval(timer);
-  }, [state.snapshot.currentRound?.id]);
-  const remainingSec = Math.max(0, Math.ceil((Date.parse(state.snapshot.currentRound?.locksAt ?? "") - now) / 1_000));
+  const { remainingMs } = useServerClock(state.snapshot.serverTime, state.snapshot.currentRound?.locksAt);
+  const remainingSec = Math.max(0, Math.ceil((remainingMs ?? 0) / 1_000));
   const total = Object.values(answerSummary).reduce((sum, value) => sum + value, 0);
   const football = state.snapshot.currentRound?.resolution.domain === "football";
 

@@ -1,9 +1,10 @@
 import { Check, Radio } from "lucide-react";
 import { motion, useReducedMotion } from "motion/react";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 import type { PresentationEvent, ReplayState } from "../../domain/types";
 import type { MatchTxlineContext } from "../../runtime/api";
+import { useServerClock } from "../../runtime/use-server-clock";
 import { AnimatedNumber } from "../../shared/number/AnimatedNumber";
 import { ActiveRoundScene } from "./ActiveRoundScene";
 import type { ViraExperienceModel } from "./experience-model";
@@ -41,7 +42,8 @@ function PreparingRoundStage({ state, kind, context }: { state: ReplayState; kin
   const reduceMotion = useReducedMotion();
   const connected = state.snapshot.connectionState === "live";
   const receivedSignals = state.snapshot.timeline.length;
-  const watch = context?.suggestedPrediction ?? null;
+  const projectedMarket = context?.consumerProjection?.availability.canShowMarket ? context.consumerProjection.market.canonical1X2 : null;
+  const watch = projectedMarket ? { priceLabel: projectedMarket.leadingChoice === "home" ? context?.fixture.homeTeam : projectedMarket.leadingChoice === "away" ? context?.fixture.awayTeam : "Empate", pct: projectedMarket.selections[projectedMarket.leadingChoice], directional: context?.consumerProjection?.availability.canMakeDirectionalClaim === true } : null;
 
   return (
     <motion.section layout className="relative min-h-[31rem] overflow-hidden border-y border-white/15 bg-[#090d18]">
@@ -75,7 +77,7 @@ function PreparingRoundStage({ state, kind, context }: { state: ReplayState; kin
           <StatusMetric label={`${state.snapshot.roomPopulation} na sala`} />
         </div>
         <p className="mt-12 border-t border-white/15 pt-5 text-xs text-white/35">{kind === "market" ? "Sem botoes agora. Assista ao jogo; o VIRA avisa quando houver algo que valha um palpite." : "A rodada abre somente quando o contrato futebolistico estiver pronto."}</p>
-        {watch ? <div className="mt-7 grid w-full max-w-xl grid-cols-[1fr_auto] items-center border-y border-white/15 py-4 text-left"><div><p className="font-['DM_Mono'] text-[9px] uppercase text-white/35">Market Watch · contexto passivo</p><strong className="mt-1 block font-['Chakra_Petch'] text-xl font-black uppercase">{watch.priceLabel} ganhou contexto</strong></div><span className="font-['Chakra_Petch'] text-3xl font-black text-primary">{watch.pct.toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%</span></div> : null}
+        {watch ? <div className="mt-7 grid w-full max-w-xl grid-cols-[1fr_auto] items-center border-y border-white/15 py-4 text-left"><div><p className="font-['DM_Mono'] text-[9px] uppercase text-white/35">Market Watch · contexto passivo</p><strong className="mt-1 block font-['Chakra_Petch'] text-xl font-black uppercase">{watch.directional ? `${watch.priceLabel} lidera o mercado atual` : "Último mercado observado"}</strong></div><span className="font-['Chakra_Petch'] text-3xl font-black text-primary">{watch.pct.toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%</span></div> : null}
       </div>
     </motion.section>
   );
@@ -84,18 +86,9 @@ function PreparingRoundStage({ state, kind, context }: { state: ReplayState; kin
 function OperationalStage({ state, kind, context = null, onFanPulse }: { state: ReplayState; kind: "provider" | "no-fixture" | "scheduled-empty" | "scheduled-ready"; context?: MatchTxlineContext | null; onFanPulse?: (side: "home" | "away") => Promise<void> }) {
   const match = state.snapshot.match;
   const scheduled = kind === "scheduled-empty" || kind === "scheduled-ready";
-  const offset = state.snapshot.serverTime ? Date.parse(state.snapshot.serverTime) - Date.now() : 0;
-  const [now, setNow] = useState(() => Date.now() + offset);
-  useEffect(() => {
-    if (!scheduled || !match.startTime) return undefined;
-    setNow(Date.now() + offset);
-    const interval = window.setInterval(() => setNow(Date.now() + offset), 1_000);
-    return () => window.clearInterval(interval);
-  }, [match.startTime, offset, scheduled]);
-  const kickoff = match.startTime
-    ? new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }).format(new Date(match.startTime))
-    : "horario a confirmar";
-  const remainingMs = match.startTime ? Math.max(0, new Date(match.startTime).getTime() - now) : null;
+  const { remainingMs } = useServerClock(state.snapshot.serverTime, scheduled ? match.startTime : null, 1_000);
+  const temporal = context?.consumerProjection?.temporal;
+  const kickoff = temporal?.localKickoffDate && temporal.localKickoffTime ? `${temporal.localKickoffDate} · ${temporal.localKickoffTime}` : "horario a confirmar";
   const countdown = remainingMs === null ? null : formatCountdown(remainingMs);
   const copy = kind === "provider"
     ? { eyebrow: "Sala pausada", title: "Conexao temporariamente interrompida", body: "O estado competitivo foi preservado. Nenhuma resposta ou pontuacao sera alterada enquanto a conexao nao voltar.", tone: "text-amber-300" }
@@ -117,7 +110,7 @@ function OperationalStage({ state, kind, context = null, onFanPulse }: { state: 
 function PreMatchMarketWatch({ state, context, participantCount, onFanPulse }: { state: ReplayState; context: MatchTxlineContext | null; participantCount: number; onFanPulse?: (side: "home" | "away") => Promise<void> }) {
   const [submitting, setSubmitting] = useState<"home" | "away" | null>(null);
   const [pulseError, setPulseError] = useState(false);
-  const probability = context?.canonical1X2?.selections ?? null;
+  const probability = context?.consumerProjection?.availability.canShowMarket ? context.consumerProjection.market.canonical1X2?.selections ?? null : null;
   const markets = context?.marketTaxonomy?.observed ?? context?.availableMarkets.length ?? 0;
   const homeName = context?.fixture.homeTeam ?? state.snapshot.match.homeTeam.name;
   const awayName = context?.fixture.awayTeam ?? state.snapshot.match.awayTeam.name;
@@ -146,7 +139,7 @@ function PreMatchMarketWatch({ state, context, participantCount, onFanPulse }: {
     <aside className="border-y border-white/15 bg-[#050814]/55 lg:border">
       <div className="p-6">
         <div className="flex items-center justify-between">
-          <div><p className="font-['DM_Mono'] text-[10px] font-black uppercase tracking-[.16em] text-primary">Mercado agora</p><h2 className="mt-2 font-['Chakra_Petch'] text-2xl font-black uppercase">Market Watch</h2></div>
+          <div><p className="font-['DM_Mono'] text-[10px] font-black uppercase tracking-[.16em] text-primary">{context?.consumerProjection?.availability.canMakeDirectionalClaim ? "Mercado atual" : probability ? "Último mercado observado" : "Mercado indisponível"}</p><h2 className="mt-2 font-['Chakra_Petch'] text-2xl font-black uppercase">Market Watch</h2></div>
           <Radio className="size-4 text-primary" />
         </div>
         {options.length ? <div className="mt-5 grid grid-cols-3 border-y border-white/15">{options.map((option) => <div key={option.label} className="border-r border-white/15 px-2 py-4 text-center last:border-r-0"><span className="block truncate font-['DM_Mono'] text-[9px] uppercase text-white/45">{option.label}</span><strong className="mt-2 block font-['Chakra_Petch'] text-xl font-black text-primary"><AnimatedNumber value={option.value} suffix="%" format={{ minimumFractionDigits: 1, maximumFractionDigits: 1 }} /></strong></div>)}</div> : <p className="mt-5 border-y border-white/15 py-5 text-sm text-white/45">Aguardando a primeira distribuição 1X2 confirmada.</p>}
@@ -199,15 +192,8 @@ function WaitingSignalStage({ state, latestPresentationEvent }: { state: ReplayS
   const predicate = round.resolution.predicate ?? {};
   const opening = typeof predicate.openingValue === "number" ? predicate.openingValue : null;
   const target = typeof predicate.pctGte === "number" ? predicate.pctGte : null;
-  const offset = state.snapshot.serverTime ? Date.parse(state.snapshot.serverTime) - Date.now() : 0;
-  const [now, setNow] = useState(() => Date.now() + offset);
-  useEffect(() => {
-    if (round.state !== "open") return undefined;
-    setNow(Date.now() + offset);
-    const timer = window.setInterval(() => setNow(Date.now() + offset), 500);
-    return () => window.clearInterval(timer);
-  }, [offset, round.id, round.state]);
-  const remainingSec = Math.max(0, Math.ceil((Date.parse(round.locksAt) - now) / 1_000));
+  const { remainingMs } = useServerClock(state.snapshot.serverTime, round.locksAt);
+  const remainingSec = Math.max(0, Math.ceil((remainingMs ?? 0) / 1_000));
   const answersClosed = round.state === "locked";
   const football = round.resolution.domain === "football" ? round.resolution.condition : null;
   const targetTeam = football?.targetSide === "away" ? state.snapshot.match.awayTeam : state.snapshot.match.homeTeam;

@@ -1,10 +1,10 @@
 import { CheckCircle2, CircleDot, Radio, Trophy } from "lucide-react";
 import { motion, useReducedMotion } from "motion/react";
-import { useEffect, useState } from "react";
 
 import { formatMatchClock } from "../../domain/contracts";
 import type { PresentationEvent, ReplayState } from "../../domain/types";
 import { AnimatedNumber } from "../../shared/number/AnimatedNumber";
+import { useServerClock } from "../../runtime/use-server-clock";
 
 interface LiveDecisionCapsuleProps {
   state: ReplayState;
@@ -78,12 +78,7 @@ function toneClasses(tone: string) {
 
 export function LiveDecisionCapsule({ state, latestPresentationEvent }: LiveDecisionCapsuleProps) {
   const reduceMotion = useReducedMotion();
-  const [now, setNow] = useState(() => Date.now());
-  useEffect(() => {
-    if (state.snapshot.currentRound?.state !== "open") return undefined;
-    const timer = window.setInterval(() => setNow(Date.now()), 500);
-    return () => window.clearInterval(timer);
-  }, [state.snapshot.currentRound?.id, state.snapshot.currentRound?.state]);
+  const { now } = useServerClock(state.snapshot.serverTime, state.snapshot.currentRound?.locksAt);
   const current = capsuleState(state, latestPresentationEvent, now);
   const Icon = current.icon;
   const event = "event" in current ? current.event : null;

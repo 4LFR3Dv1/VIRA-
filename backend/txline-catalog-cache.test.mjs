@@ -19,6 +19,10 @@ test("catalog materializes contexts once and serves a warm hit", async () => {
   const cold = await cache.get();
   const warm = await cache.get();
   assert.equal(cold.matches[0].availability.marketCount, 1);
+  assert.equal(cold.matches[0].consumerProjection.schemaVersion, 1);
+  assert.equal(cold.matches[0].consumerProjection.market.canonical1X2, null);
+  assert.equal(cold.matches[0].availability.hasPlayablePrediction, false);
+  assert.equal(cold.featuredFixtureId, "1");
   assert.equal(warm.cache.status, "hit");
   assert.equal(matchLoads, 1);
   assert.equal(contextLoads, 1);

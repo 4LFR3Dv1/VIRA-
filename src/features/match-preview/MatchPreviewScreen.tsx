@@ -12,8 +12,8 @@ import {
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router";
 
-import type { MatchSummary, MatchTxlineContext, TxlineAvailableMarket } from "../../runtime/api";
-import { fetchMatches, fetchMatchTxlineContext } from "../../runtime/api";
+import type { MatchCatalogEntry, MatchTxlineContext, TxlineAvailableMarket } from "../../runtime/api";
+import { fetchMatchCatalog, fetchMatchTxlineContext } from "../../runtime/api";
 import { AnimatedNumber } from "../../shared/number/AnimatedNumber";
 import { ViraLoader } from "../../shared/brand/ViraLoader";
 import { AppShell } from "../../shared/shell/AppShell";
@@ -34,15 +34,10 @@ function formatPercentage(value: number) {
   return `${percentageFormatter.format(value)}%`;
 }
 
-function formatStartTime(value: string | null) {
-  if (!value) return "Horario a confirmar";
-  return new Intl.DateTimeFormat("pt-BR", {
-    weekday: "short",
-    day: "2-digit",
-    month: "short",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(new Date(value));
+function formatStartTime(match: MatchCatalogEntry) {
+  const temporal = match.consumerProjection.temporal;
+  if (!temporal.localKickoffDate || !temporal.localKickoffTime) return "Horario a confirmar";
+  return `${temporal.localKickoffDate} · ${temporal.localKickoffTime}`;
 }
 
 function contextCacheKey(fixtureId: string) {
@@ -127,7 +122,7 @@ export function MatchPreviewScreen() {
   const { matchId = "" } = useParams();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const [matches, setMatches] = useState<MatchSummary[]>([]);
+  const [matches, setMatches] = useState<MatchCatalogEntry[]>([]);
   const [loadState, setLoadState] = useState<"loading" | "ready" | "error">("loading");
   const [contextState, setContextState] = useState<ContextState>("idle");
   const [context, setContext] = useState<MatchTxlineContext | null>(null);
@@ -137,7 +132,7 @@ export function MatchPreviewScreen() {
 
   useEffect(() => {
     let cancelled = false;
-    fetchMatches().then((response) => {
+    fetchMatchCatalog().then((response) => {
       if (!cancelled) {
         setMatches(response.matches);
         setLoadState("ready");
@@ -147,9 +142,10 @@ export function MatchPreviewScreen() {
   }, []);
 
   const match = useMemo(() => matches.find((item) => item.fixtureId === matchId) ?? matches[0] ?? null, [matchId, matches]);
+  const projection = match?.consumerProjection ?? null;
   useShellAtmosphere("route:preview", match ? {
-    atmosphere: match.status === "finished" ? "finished" : "anticipation",
-    context: match.status === "finished" ? "post-match" : "fixture-preview",
+    atmosphere: projection?.fixture.status === "finished" ? "finished" : "anticipation",
+    context: projection?.fixture.status === "finished" ? "post-match" : "fixture-preview",
     fixtureId: match.fixtureId,
     homeAccent: fixtureAccent(match.homeTeam, "home"),
     awayAccent: fixtureAccent(match.awayTeam, "away"),
@@ -178,7 +174,7 @@ export function MatchPreviewScreen() {
   }, [match?.fixtureId]);
 
   const prediction = context?.suggestedPrediction ?? null;
-  const probability = context?.canonical1X2?.selections ?? null;
+  const probability = projection?.availability.canShowMarket ? projection.market.canonical1X2?.selections ?? null : null;
   const markets = useMemo(() => {
     const all = context?.availableMarkets ?? [];
     return [...all].sort((left, right) => {
@@ -188,15 +184,17 @@ export function MatchPreviewScreen() {
     }).slice(0, 5);
   }, [context?.availableMarkets, prediction?.marketSignature]);
 
-  const currentSignal = prediction
-    ? `${prediction.priceLabel} · ${formatPercentage(prediction.pct)}`
-    : probability
-      ? `Empate · ${formatPercentage(probability.draw)}`
-      : "Mercado em sincronizacao";
+  const leadingChoice = projection?.market.canonical1X2?.leadingChoice ?? null;
+  const leadingLabel = leadingChoice === "home" ? match?.homeTeam : leadingChoice === "away" ? match?.awayTeam : leadingChoice === "draw" ? "Empate" : null;
+  const currentSignal = probability && leadingChoice && leadingLabel
+    ? projection?.availability.canMakeDirectionalClaim
+      ? `${leadingLabel} · ${formatPercentage(probability[leadingChoice])}`
+      : `Último mercado observado · ${formatPercentage(probability[leadingChoice])}`
+    : "Mercado indisponível";
   const signalCount = context?.marketTaxonomy?.observed ?? 0;
   const loadingContext = contextState === "idle" || contextState === "loading";
-  const roomReady = Boolean(match && (context || contextState === "empty" || contextState === "error"));
-  const canonical = deriveCanonicalExperienceState({ matchStatus: match?.status, roomExists: true, hasSignal: markets.length > 0, connectionState: contextState === "error" ? "reconnecting" : "live" });
+  const roomReady = projection?.availability.canEnterRoom === true;
+  const canonical = deriveCanonicalExperienceState({ matchStatus: projection?.fixture.status, roomExists: roomReady, hasSignal: projection?.availability.canShowMarket === true, connectionState: contextState === "error" ? "reconnecting" : "live" });
 
   const openRoom = (inspect = false) => {
     setInspectOnJoin(inspect);
@@ -250,8 +248,8 @@ export function MatchPreviewScreen() {
             <div className="flex flex-wrap items-center justify-between gap-4 border-b border-white/15 pb-6">
               <Link to="/matches" className="inline-flex items-center gap-2 text-xs font-bold uppercase text-white/55 hover:text-primary"><ArrowLeft className="size-4" /> Voltar ao lobby</Link>
               <div className="flex flex-wrap items-center gap-3 font-['DM_Mono'] text-[10px] uppercase text-white/50">
-                <span>{match.competitionLabel.replace(/world cup/gi, "Copa do Mundo")} · {formatStartTime(match.startTime)}</span>
-                <span className="inline-flex items-center gap-2 text-primary"><Radio className="size-3.5" /> {loadingContext ? "Sincronizando TxLINE" : "Mercados TxLINE online"}</span>
+                <span>{match.competitionLabel} · {formatStartTime(match)}</span>
+                <span className="inline-flex items-center gap-2 text-primary"><Radio className="size-3.5" /> {loadingContext ? "Sincronizando TxLINE" : projection?.availability.canShowMarket ? "Mercado TxLINE observado" : "Aguardando mercado elegível"}</span>
               </div>
             </div>
 
@@ -262,7 +260,7 @@ export function MatchPreviewScreen() {
             </div>
 
             <div className="mt-12 border-t border-white/15 pt-7 lg:mt-16">
-              <p className="font-['DM_Mono'] text-[10px] font-bold uppercase text-white/45">Lider atual do mercado</p>
+              <p className="font-['DM_Mono'] text-[10px] font-bold uppercase text-white/45">{projection?.availability.canMakeDirectionalClaim ? "Líder atual do mercado" : projection?.availability.canShowMarket ? "Último mercado observado" : "Contexto de mercado"}</p>
               <div className="mt-3 flex flex-wrap items-end justify-between gap-6">
                 <h1 style={{ viewTransitionName: "market-value" } as CSSProperties} className="max-w-4xl font-['Chakra_Petch'] text-[clamp(2rem,4.6vw,4.9rem)] font-black uppercase leading-[.9]">
                   {loadingContext && !context ? "Lendo o mercado" : currentSignal}
@@ -301,7 +299,7 @@ export function MatchPreviewScreen() {
           </aside>
         </section>
 
-        <PredictionSharePanel fixture={match} displayName={playerName} onChangeDisplayName={setPlayerName} />
+        <PredictionSharePanel fixture={match} projection={match.consumerProjection} displayName={playerName} onChangeDisplayName={setPlayerName} />
 
         <section className="border-y border-white/15 bg-[#0a0e1a]">
           <div className="mx-auto max-w-[1440px] px-5 py-12 sm:px-8 lg:px-14">

@@ -1,7 +1,8 @@
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
+import { deriveFixtureConsumerProjection, rankFixtureConsumerProjections } from "../shared/fixture-consumer-projection.mjs";
 
-const SNAPSHOT_VERSION = 2;
+const SNAPSHOT_VERSION = 3;
 
 async function mapWithConcurrency(items, limit, mapper) {
   const results = new Array(items.length);
@@ -26,6 +27,21 @@ function availability(context) {
     hasMarket: marketCount > 0,
     hasPlayablePrediction: Boolean(context?.suggestedPrediction),
     contextStatus: context ? "ready" : "unavailable",
+  };
+}
+
+function projectedAvailability(projection, context, contextStatus = null) {
+  const base = availability(context);
+  return {
+    ...base,
+    canonical1X2Available: Boolean(projection.market.canonical1X2),
+    hasPlayablePrediction: projection.availability.canPredict,
+    canPredict: projection.availability.canPredict,
+    canEnterRoom: projection.availability.canEnterRoom,
+    canShowMarket: projection.availability.canShowMarket,
+    canMakeDirectionalClaim: projection.availability.canMakeDirectionalClaim,
+    reason: projection.availability.reason,
+    contextStatus: contextStatus ?? base.contextStatus,
   };
 }
 
@@ -142,7 +158,13 @@ export function createTxlineCatalogCache({
           }
         });
         const generatedAt = new Date(now()).toISOString();
-        const next = { version: SNAPSHOT_VERSION, source: "txline", cacheSource: "server", generatedAt, refreshReason: reason, materialization: { contextsRefreshed, contextsReused, concurrency }, matches: enriched };
+        const projected = enriched.map((match) => {
+          const consumerProjection = deriveFixtureConsumerProjection({ fixture: match, txlineContext: match.context, evaluatedAt: generatedAt });
+          return { ...match, consumerProjection, availability: projectedAvailability(consumerProjection, match.context, match.availability?.contextStatus) };
+        });
+        const ranked = rankFixtureConsumerProjections(projected.map((match) => match.consumerProjection));
+        const featuredFixtureId = ranked.find((projection) => Number.isFinite(projection.editorial.priority))?.fixture.fixtureId ?? ranked[0]?.fixture.fixtureId ?? null;
+        const next = { version: SNAPSHOT_VERSION, source: "txline", cacheSource: "server", generatedAt, featuredFixtureId, refreshReason: reason, materialization: { contextsRefreshed, contextsReused, concurrency }, matches: projected };
         snapshot = next;
         lastError = null;
         await persist(next).catch((error) => { lastError = `persist:${error.message}`; });

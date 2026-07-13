@@ -9,9 +9,10 @@ import { deriveCanonicalExperienceState, experienceCopy, formatMarketCount } fro
 
 type Props = { model: FeaturedMatchModel; onOpen: () => void };
 
-function kickoff(value: string | null) {
-  if (!value) return "Horário a confirmar";
-  return new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }).format(new Date(value));
+function kickoff(model: FeaturedMatchModel) {
+  const temporal = model.fixture.consumerProjection?.temporal;
+  if (!temporal?.localKickoffDate || !temporal.localKickoffTime) return "Horário a confirmar";
+  return `${temporal.localKickoffDate} · ${temporal.localKickoffTime}`;
 }
 
 function teamNameScale(name: string) {
@@ -34,7 +35,7 @@ function signalAge(value: string | null) {
 export function FeaturedMatchStage({ model, onOpen }: Props) {
   const reduceMotion = useReducedMotion();
   const { fixture } = model;
-  const canonical = deriveCanonicalExperienceState({ matchStatus: fixture.status, roomExists: true, hasSignal: model.signal.kind === "available", connectionState: "live" });
+  const canonical = deriveCanonicalExperienceState({ matchStatus: fixture.consumerProjection?.fixture.status ?? fixture.status, roomExists: fixture.consumerProjection?.availability.canEnterRoom ?? false, hasSignal: model.signal.kind === "available", connectionState: "live" });
   return (
     <AnimatePresence mode="wait">
       <motion.section
@@ -49,7 +50,7 @@ export function FeaturedMatchStage({ model, onOpen }: Props) {
         <StageBackdrop home={fixture.homeTeam} away={fixture.awayTeam} />
         <header className="relative z-10 flex flex-wrap items-center justify-between gap-3 border-b border-white/12 px-4 py-4 sm:px-7 lg:px-10">
           <div className="flex items-center gap-3 font-['DM_Mono'] text-[10px] uppercase tracking-[.14em] text-white/50">
-            <span>{fixture.competitionLabel}</span><span className="text-white/20">/</span><span>{kickoff(fixture.startTime)}</span>
+            <span>{fixture.competitionLabel}</span><span className="text-white/20">/</span><span>{kickoff(model)}</span>
           </div>
           <div className="flex items-center gap-4 font-['DM_Mono'] text-[9px] uppercase tracking-[.14em]">
             <span className="inline-flex items-center gap-2 text-primary"><Radio className="size-3" />{experienceCopy.match[canonical.match]}</span>
