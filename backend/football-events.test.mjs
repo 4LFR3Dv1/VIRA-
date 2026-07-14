@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -7,6 +8,9 @@ import test from "node:test";
 import { createFileEventStore } from "./event-store.mjs";
 import { createRoomRuntime } from "./runtime.mjs";
 import { applyFixtureLifecycleTimeout, normalizeTxlineScore } from "./txline-client.mjs";
+import { txlineContextInternals } from "./txline-context.mjs";
+
+const capturedFranceSpain = JSON.parse(readFileSync(new URL("./test-fixtures/txline/france-spain-2026-sanitized.json", import.meta.url), "utf8"));
 
 function rawAction(fixtureId, { action, id, seq, clock, participant = 1, confirmed = true, outcome = null, score = { home: 0, away: 0 } }) {
   return { FixtureId: fixtureId, Action: action, Id: id, Seq: seq, Participant: participant, Participant1IsHome: true, Confirmed: confirmed, Data: outcome ? { Outcome: outcome } : {}, Clock: { Running: true, Seconds: clock }, Score: { Participant1: { Total: { Goals: score.home } }, Participant2: { Total: { Goals: score.away } } } };
@@ -27,6 +31,83 @@ test("normalizer preserves shot authority, amendments and discarded action ident
   assert.notEqual(amendment.id, shot.id);
   assert.equal(discarded.type, "action_discarded");
   assert.equal(discarded.discardedActionId, "shot-1");
+});
+
+test("sanitized France-Spain revisions keep action identity without classifying goal kicks as goals", () => {
+  const normalized = capturedFranceSpain.events.map((event) => normalizeTxlineScore(event));
+  const goalKicks = normalized.filter((event) => event.payload.Action === "goal_kick");
+  assert.ok(goalKicks.length >= 2);
+  assert.ok(goalKicks.every((event) => event.type === "period"));
+
+  const penaltyRevisions = normalized.filter((event) => event.providerActionId === "213");
+  assert.equal(new Set(penaltyRevisions.map((event) => event.id)).size, 3);
+  assert.deepEqual(penaltyRevisions.map((event) => event.confirmationState), ["candidate", "confirmed", "confirmed"]);
+  assert.ok(penaltyRevisions.every((event) => event.sourceActionId === "213"));
+
+  const goalRevisions = normalized.filter((event) => event.providerActionId === "551");
+  assert.equal(new Set(goalRevisions.map((event) => event.eventRevisionId)).size, 3);
+  assert.deepEqual(goalRevisions.map((event) => event.scoreAuthority), ["none", "confirmed_action", "confirmed_action"]);
+
+  const amendment = normalized.find((event) => event.payload.Action === "action_amend");
+  assert.equal(amendment.type, "action_amended");
+  assert.equal(amendment.amendedActionType, "shot");
+  assert.equal(amendment.outcome, "OnTarget");
+
+  const final = normalized.at(-1);
+  assert.equal(final.type, "match_end");
+  assert.equal(final.scoreAuthority, "final");
+  assert.deepEqual(final.absoluteScore, { home: 0, away: 2 });
+});
+
+test("TxLINE context exposes game_finalised as the shared terminal fixture authority", () => {
+  const projected = txlineContextInternals.projectScoreState(capturedFranceSpain.events, capturedFranceSpain.fixtureId);
+  assert.equal(projected.terminal.status, "finished");
+  assert.equal(projected.terminal.authority, "txline_game_finalised");
+  assert.equal(projected.terminal.providerSequence, 1026);
+  assert.deepEqual(projected.terminal.score, { home: 0, away: 2 });
+});
+
+test("sanitized France-Spain candidates never publish score and confirmed revisions converge once", async () => {
+  const runtime = createRoomRuntime();
+  const roomId = capturedFranceSpain.fixtureId;
+  runtime.configureMatch({ fixtureId: roomId, title: "France vs Spain", status: "live", homeTeam: "France", awayTeam: "Spain" });
+  const bySeq = new Map(capturedFranceSpain.events.map((event) => [event.Seq, event]));
+  const apply = (seq) => runtime.applyNormalizedEvent(roomId, normalizeTxlineScore(bySeq.get(seq), { matchId: roomId, source: "txline-live" }));
+
+  await apply(82);
+  await apply(200);
+  assert.deepEqual([runtime.snapshot(roomId).match.homeScore, runtime.snapshot(roomId).match.awayScore], [0, 0]);
+
+  await apply(220);
+  assert.equal(runtime.snapshot(roomId).match.awayScore, 0);
+  assert.equal([...runtime.getRoom(roomId).consumerEventKeys].filter((key) => key.includes(":213")).length, 0);
+  await apply(221);
+  assert.equal(runtime.snapshot(roomId).match.awayScore, 1);
+  await apply(222);
+  assert.equal(runtime.snapshot(roomId).match.awayScore, 1);
+  assert.equal([...runtime.getRoom(roomId).consumerEventKeys].filter((key) => key.includes(":213")).length, 1);
+
+  await apply(617);
+  assert.equal(runtime.snapshot(roomId).match.awayScore, 1);
+  await apply(618);
+  assert.equal(runtime.snapshot(roomId).match.awayScore, 2);
+  await apply(620);
+  assert.equal(runtime.snapshot(roomId).match.awayScore, 2);
+  assert.equal([...runtime.getRoom(roomId).consumerEventKeys].filter((key) => key === "goal:goal:551").length, 1);
+
+  for (const seq of [638, 639, 640, 641, 642]) await apply(seq);
+  assert.deepEqual([runtime.snapshot(roomId).match.homeScore, runtime.snapshot(roomId).match.awayScore], [0, 2]);
+
+  await apply(844);
+  assert.equal(runtime.snapshot(roomId).matchStats.home.shotsOnTarget, 1);
+  await apply(1026);
+  const final = runtime.snapshot(roomId);
+  assert.equal(final.match.status, "finished");
+  assert.deepEqual([final.match.homeScore, final.match.awayScore], [0, 2]);
+  assert.equal(runtime.getRoom(roomId).appliedEventIds.size, capturedFranceSpain.events.length);
+
+  await apply(1026);
+  assert.equal(runtime.getRoom(roomId).appliedEventIds.size, capturedFranceSpain.events.length);
 });
 
 test("stale live fixtures close only after the configured lifecycle window", () => {

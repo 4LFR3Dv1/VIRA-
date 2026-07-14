@@ -334,10 +334,46 @@ function normalizeFixtureStatus(rawStatus) {
   return "unknown";
 }
 
+const MATCH_END_ACTIONS = new Set(["end", "match_end", "full_time", "fulltime", "game_finalised", "game_finalized"]);
+
+export function classifyTxlineScoreAction(value, data = {}) {
+  const action = String(value ?? "period").toLowerCase().replaceAll("-", "_");
+  if (action === "action_discarded") return "action_discarded";
+  if (action === "action_amend" || action.startsWith("amend_") || action.startsWith("amended_")) return "action_amended";
+  if (MATCH_END_ACTIONS.has(action)) return "match_end";
+  if (action === "goal") return "goal";
+  if (action === "penalty" || action.startsWith("penalty_")) return "penalty";
+  if (action === "corner" || action.startsWith("corner_")) return "corner";
+  if (action === "shot" || action.startsWith("shot_")) return "shot";
+  if (action === "possession" || action.startsWith("possession_")) return "possession";
+  if (action === "var" || action === "var_end" || action.startsWith("video_assistant")) return "var";
+  if (action === "yellow_card" || action === "red_card" || action === "card" || action.endsWith("_card")) return "card";
+  if (action === "score_adjustment") return "score_adjustment";
+  if (action.startsWith("unreliable_")) return "reliability";
+  return "period";
+}
+
+function scoreAuthorityFor({ type, action, confirmed, outcome, hasAbsoluteScore }) {
+  if (type === "goal" && confirmed === true) return "confirmed_action";
+  if (type === "penalty" && confirmed === true && String(outcome ?? "").toLowerCase() === "scored") return "confirmed_action";
+  if (!hasAbsoluteScore) return "none";
+  if (type === "match_end") return "final";
+  if (type === "action_discarded" || type === "score_adjustment") return "correction";
+  if (type === "period" && ["period", "score", "score_snapshot", "snapshot"].includes(action)) return "snapshot";
+  return "none";
+}
+
 export function normalizeTxlineScore(raw, { matchId, sequenceFallback = 0, source = "txline-live" } = {}) {
   const sequence = Number(raw?.seq ?? raw?.Seq ?? raw?.sequence ?? sequenceFallback);
   const fixtureId = String(raw?.fixtureId ?? raw?.FixtureId ?? matchId ?? "unknown-fixture");
   const eventType = String(raw?.type ?? raw?.eventType ?? raw?.EventType ?? raw?.Action ?? raw?.action ?? raw?.gameState ?? raw?.GameState ?? "period").toLowerCase();
+  const action = eventType.replaceAll("-", "_");
+  const type = classifyTxlineScoreAction(action, raw?.Data);
+  const isAmendment = type === "action_amended";
+  const amendedRawAction = isAmendment
+    ? raw?.Data?.Action ?? action.replace(/^amend(?:ed)?_/, "")
+    : null;
+  const amendedActionType = amendedRawAction ? classifyTxlineScoreAction(amendedRawAction) : null;
   const matchClockSec = Number(
     raw?.matchClockSec
       ?? raw?.MatchClockSec
@@ -345,10 +381,14 @@ export function normalizeTxlineScore(raw, { matchId, sequenceFallback = 0, sourc
       ?? raw?.ClockSeconds
       ?? raw?.Clock?.Seconds
       ?? raw?.clock?.seconds
+      ?? (isAmendment ? raw?.Data?.New?.Clock?.Seconds : undefined)
       ?? 0,
   );
-  const participant1Goals = Number(raw?.Score?.Participant1?.Total?.Goals ?? raw?.Stats?.["1"]);
-  const participant2Goals = Number(raw?.Score?.Participant2?.Total?.Goals ?? raw?.Stats?.["2"]);
+  const participant1Total = raw?.Score?.Participant1?.Total;
+  const participant2Total = raw?.Score?.Participant2?.Total;
+  const hasScoreEnvelope = participant1Total && typeof participant1Total === "object" && participant2Total && typeof participant2Total === "object";
+  const participant1Goals = Number(hasScoreEnvelope ? participant1Total.Goals ?? 0 : raw?.Stats?.["1"]);
+  const participant2Goals = Number(hasScoreEnvelope ? participant2Total.Goals ?? 0 : raw?.Stats?.["2"]);
   const participant1IsHome = raw?.Participant1IsHome ?? true;
   const hasAbsoluteScore = Number.isFinite(participant1Goals) && Number.isFinite(participant2Goals);
   const absoluteScore = hasAbsoluteScore
@@ -358,32 +398,6 @@ export function normalizeTxlineScore(raw, { matchId, sequenceFallback = 0, sourc
       }
     : null;
   const participant = Number(raw?.Participant ?? raw?.participant);
-  const action = eventType.replaceAll("-", "_");
-  const isAmendment = action.startsWith("amend_") || action.startsWith("amended_");
-  const amendedActionType = isAmendment ? action.replace(/^amend(?:ed)?_/, "") : null;
-  const type = action === "action_discarded"
-    ? "action_discarded"
-    : isAmendment
-      ? "action_amended"
-      : action.startsWith("unreliable_")
-        ? "reliability"
-      : action.includes("penalty")
-        ? "penalty"
-        : action.includes("corner")
-          ? "corner"
-          : action.includes("shot")
-            ? "shot"
-            : action.includes("possession")
-              ? "possession"
-              : action === "var" || action.includes("video_assistant")
-                ? "var"
-                : action.includes("goal")
-                  ? "goal"
-                  : action.includes("card")
-                    ? "card"
-                    : action.includes("score_adjustment")
-                      ? "score_adjustment"
-                      : action.includes("end") ? "match_end" : "period";
   const statValue = (side, field) => Number(raw?.Stats?.[side]?.[field] ?? raw?.Stats?.[side]?.Total?.[field] ?? raw?.Score?.[side]?.Total?.[field]);
   const statsFor = (side) => {
     const values = { shots: statValue(side, "Shots"), shotsOnTarget: statValue(side, "ShotsOnTarget"), corners: statValue(side, "Corners"), yellowCards: statValue(side, "YellowCards"), redCards: statValue(side, "RedCards") };
@@ -397,11 +411,20 @@ export function normalizeTxlineScore(raw, { matchId, sequenceFallback = 0, sourc
     away: participant1IsHome ? participant2Stats : participant1Stats,
   } : null;
 
+  const providerActionId = String(raw?.Id ?? raw?.id ?? raw?.ActionId ?? `${fixtureId}-${sequence}`);
+  const eventRevisionId = `${fixtureId}:${providerActionId}:${sequence}:${action}`;
+  const explicitConfirmation = raw?.Confirmed ?? raw?.confirmed;
+  const requiresConfirmation = type === "goal" || type === "penalty" || type === "var";
+  const confirmed = typeof explicitConfirmation === "boolean" ? explicitConfirmation : !requiresConfirmation;
+  const outcome = raw?.Data?.New?.Outcome ?? raw?.Data?.Outcome ?? raw?.Outcome ?? null;
+
   return {
-    id: String(type === "action_amended" || type === "action_discarded" ? `${raw?.id ?? raw?.Id ?? fixtureId}:${action}:${sequence}` : raw?.id ?? raw?.Id ?? `${fixtureId}-${sequence}`),
+    id: eventRevisionId,
+    eventRevisionId,
+    providerActionId,
     matchId: fixtureId,
     sequence,
-    occurredAt: String(raw?.ts ?? raw?.timestamp ?? raw?.Timestamp ?? new Date().toISOString()),
+    occurredAt: String(raw?.ts ?? raw?.Ts ?? raw?.timestamp ?? raw?.Timestamp ?? new Date().toISOString()),
     matchClockSec,
     type,
     teamId: raw?.teamId ?? raw?.TeamId ?? raw?.participantId ?? raw?.ParticipantId,
@@ -411,13 +434,15 @@ export function normalizeTxlineScore(raw, { matchId, sequenceFallback = 0, sourc
         ? (participant1IsHome ? "away" : "home")
         : null,
     absoluteScore,
-    confirmed: raw?.Confirmed !== false && raw?.confirmed !== false,
-    sourceActionId: String(raw?.SourceActionId ?? raw?.ActionId ?? raw?.Id ?? raw?.id ?? `${fixtureId}-${sequence}`),
+    confirmed,
+    confirmationState: explicitConfirmation === false ? "candidate" : explicitConfirmation === true ? "confirmed" : "not_required",
+    sourceActionId: String(raw?.SourceActionId ?? raw?.ActionId ?? providerActionId),
     amendedActionType,
     discardedActionId: raw?.DiscardedActionId ?? raw?.Data?.ActionId ?? (type === "action_discarded" ? raw?.Id : null),
-    outcome: raw?.Data?.Outcome ?? raw?.Outcome ?? null,
+    outcome,
+    scoreAuthority: scoreAuthorityFor({ type, action, confirmed, outcome, hasAbsoluteScore }),
     cumulativeStats,
-    playerId: raw?.playerId ?? raw?.PlayerId,
+    playerId: raw?.playerId ?? raw?.PlayerId ?? raw?.Data?.PlayerId ?? raw?.Data?.New?.PlayerId,
     payload: raw,
     source,
   };

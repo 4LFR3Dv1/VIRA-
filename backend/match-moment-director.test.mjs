@@ -2,7 +2,9 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { matchMomentDirectorReducer } from "../src/features/match-moments/match-moment-reducer.ts";
+import { deriveMatchMoment } from "../src/features/match-moments/derive-match-moment.ts";
 import { initialMatchMomentDirectorState } from "../src/features/match-moments/match-moment-types.ts";
+import { normalizeTxlineScore } from "./txline-client.mjs";
 
 function moment(id, kind, presentation, priority, sourceActionId = id) {
   return {
@@ -38,6 +40,24 @@ test("reconnect duplicate cannot replay a seen scene", () => {
   assert.deepEqual(state.queue, []);
 });
 
+test("goal kick creates no goal scene and enriched goal revisions share one presentation id", () => {
+  const match = { homeTeam: { name: "France" }, awayTeam: { name: "Spain" }, homeScore: 0, awayScore: 2 };
+  const goalKick = normalizeTxlineScore({ FixtureId: 1, Id: 10, Seq: 10, Action: "goal_kick", Participant: 1, Clock: { Seconds: 100 } });
+  assert.equal(deriveMatchMoment(goalKick, match), null);
+
+  const first = normalizeTxlineScore({ FixtureId: 1, Id: 11, Seq: 11, Action: "goal", Participant: 2, Confirmed: true, Score: { Participant1: { Total: {} }, Participant2: { Total: { Goals: 2 } } } });
+  const enriched = normalizeTxlineScore({ FixtureId: 1, Id: 11, Seq: 12, Action: "goal", Participant: 2, Confirmed: true, Score: { Participant1: { Total: {} }, Participant2: { Total: { Goals: 2 } } }, Data: { PlayerId: 907005 } });
+  const firstCommand = deriveMatchMoment(first, match);
+  const enrichedCommand = deriveMatchMoment(enriched, match);
+  assert.equal(firstCommand?.type, "enqueue");
+  assert.equal(firstCommand?.moment.id, enrichedCommand?.moment.id);
+
+  let state = matchMomentDirectorReducer(initialMatchMomentDirectorState, firstCommand);
+  state = matchMomentDirectorReducer(state, enrichedCommand);
+  assert.equal(state.queue.length, 0);
+  assert.equal(state.seenIds.length, 1);
+});
+
 test("discard revokes an active or queued correlated scene", () => {
   const corner = moment("corner", "corner", "banner", 40, "action-corner");
   let state = matchMomentDirectorReducer(initialMatchMomentDirectorState, { type: "enqueue", moment: corner });
@@ -65,4 +85,3 @@ test("dismiss promotes the highest priority queued scene", () => {
   state = matchMomentDirectorReducer(state, { type: "dismiss" });
   assert.equal(state.active?.id, "card");
 });
-

@@ -86,6 +86,8 @@ function matchForRoom(roomId) {
     competitionLabel: fixture.competitionLabel,
     status: fixture.status ?? matchSeed.status,
     startTime: fixture.startTime ?? null,
+    homeScore: Number.isFinite(Number(fixture.homeScore)) ? Number(fixture.homeScore) : matchSeed.homeScore,
+    awayScore: Number.isFinite(Number(fixture.awayScore)) ? Number(fixture.awayScore) : matchSeed.awayScore,
     homeTeam: fixture.homeTeam,
     awayTeam: fixture.awayTeam,
   };
@@ -357,6 +359,8 @@ export function createRoomRuntime({ eventStore = null, commitmentPublisher = nul
       version: 1,
       lastSequence: 0,
       appliedEventIds: new Set(),
+      appliedScoreActionIds: new Set(),
+      consumerEventKeys: new Set(),
       source: undefined,
       lastNormalizedEvent: null,
       lastAuthoritativeScoreObservation: null,
@@ -388,6 +392,8 @@ export function createRoomRuntime({ eventStore = null, commitmentPublisher = nul
       competitionLabel: String(matchSummary.competitionLabel ?? "TxLINE Fixture"),
       status: String(matchSummary.status ?? "live"),
       startTime: matchSummary.startTime ?? null,
+      homeScore: Number.isFinite(Number(matchSummary.homeScore)) ? Number(matchSummary.homeScore) : undefined,
+      awayScore: Number.isFinite(Number(matchSummary.awayScore)) ? Number(matchSummary.awayScore) : undefined,
       homeTeam: teamFromName("home", matchSummary.homeTeam, "#caff28"),
       awayTeam: teamFromName("away", matchSummary.awayTeam, "#71b9e8"),
     });
@@ -404,6 +410,8 @@ export function createRoomRuntime({ eventStore = null, commitmentPublisher = nul
         competitionLabel: updatedMatch.competitionLabel,
         status: becameFinished ? room.match.status : updatedMatch.status,
         startTime: updatedMatch.startTime,
+        homeScore: Number.isFinite(Number(updatedMatch.homeScore)) ? Number(updatedMatch.homeScore) : room.match.homeScore,
+        awayScore: Number.isFinite(Number(updatedMatch.awayScore)) ? Number(updatedMatch.awayScore) : room.match.awayScore,
         homeTeam: updatedMatch.homeTeam,
         awayTeam: updatedMatch.awayTeam,
       };
@@ -540,7 +548,7 @@ export function createRoomRuntime({ eventStore = null, commitmentPublisher = nul
   function eventProviderSequenceKey(event) {
     const payload = event.payload ?? {};
     if (event.type === "odds_shift") return `odds:${marketSignatureFromPayload(payload)}`;
-    return `${event.source ?? "txline"}:${event.type}:${payload.FixtureId ?? event.matchId ?? "fixture"}`;
+    return `${event.source ?? "txline"}:scores:${payload.FixtureId ?? event.matchId ?? "fixture"}`;
   }
 
   function deriveParticipantResolution(room, participantId) {
@@ -1388,17 +1396,43 @@ export function createRoomRuntime({ eventStore = null, commitmentPublisher = nul
   }
 
   function applyAuthoritativeScore(room, event) {
+    const rawAction = String(event.payload?.Action ?? event.payload?.action ?? "").toLowerCase().replaceAll("-", "_");
+    const authority = event.scoreAuthority ?? (
+      rawAction === "goal_kick" || event.confirmed === false
+        ? "none"
+        : event.type === "match_end"
+          ? "final"
+          : event.type === "goal" || event.type === "penalty"
+            ? "confirmed_action"
+            : Number.isFinite(Number(event.absoluteScore?.home)) && Number.isFinite(Number(event.absoluteScore?.away))
+              ? "legacy_snapshot"
+              : "none"
+    );
+    if (authority === "none") return;
+    const scoreActionId = String(event.sourceActionId ?? event.providerActionId ?? event.id);
     const home = Number(event.absoluteScore?.home);
     const away = Number(event.absoluteScore?.away);
     if (Number.isFinite(home) && Number.isFinite(away)) {
       room.match.homeScore = Math.max(0, home);
       room.match.awayScore = Math.max(0, away);
       room.lastAuthoritativeScoreObservation = cloneJson(event);
+      if (authority === "confirmed_action") room.appliedScoreActionIds.add(scoreActionId);
       return;
     }
-    if (event.type !== "goal") return;
+    if ((event.type !== "goal" && event.type !== "penalty") || event.confirmed !== true || room.appliedScoreActionIds.has(scoreActionId)) return;
     if (event.participantSide === "home" || event.teamId === room.match.homeTeam.id) room.match.homeScore += 1;
     if (event.participantSide === "away" || event.teamId === room.match.awayTeam.id) room.match.awayScore += 1;
+    room.appliedScoreActionIds.add(scoreActionId);
+  }
+
+  function consumeConsumerVisibleMatchEvent(room, event) {
+    if (event.confirmed === false) return false;
+    if (!new Set(["goal", "penalty", "corner", "shot", "card", "var", "match_end", "action_amended", "action_discarded"]).has(event.type)) return false;
+    const rawAction = String(event.payload?.Action ?? event.payload?.action ?? event.type);
+    const key = `${event.type}:${rawAction}:${event.sourceActionId ?? event.providerActionId ?? event.id}`;
+    if (room.consumerEventKeys.has(key)) return false;
+    room.consumerEventKeys.add(key);
+    return true;
   }
 
   function applyFootballEventStats(room, event, correlationId = null, emitEvents = true) {
@@ -1620,6 +1654,8 @@ export function createRoomRuntime({ eventStore = null, commitmentPublisher = nul
     room.version = 1;
     room.lastSequence = 0;
     room.appliedEventIds = new Set();
+    room.appliedScoreActionIds = new Set();
+    room.consumerEventKeys = new Set();
     room.source = undefined;
     room.lastNormalizedEvent = null;
     room.lastAuthoritativeScoreObservation = null;
@@ -1742,7 +1778,8 @@ export function createRoomRuntime({ eventStore = null, commitmentPublisher = nul
         }
         applyAuthoritativeScore(room, event);
         applyFootballEventStats(room, event, storedEvent.correlationId, false);
-        if (event.type !== "match_end") {
+        const consumerEventVisible = consumeConsumerVisibleMatchEvent(room, event);
+        if (event.type !== "match_end" && consumerEventVisible) {
           pushTimeline(room, {
             id: `timeline-${event.id}`,
             matchClockSec: event.matchClockSec,
@@ -2291,8 +2328,9 @@ export function createRoomRuntime({ eventStore = null, commitmentPublisher = nul
     const evaluationEvent = { ...withConsolidatedScore(room, event), authoritativeStats: cloneJson(room.matchStats) };
     const footballConditionEvents = advanceFootballCondition(room, evaluationEvent, correlationId);
     if (footballConditionEvents.length) await appendDomainEvents(room, footballConditionEvents);
+    const consumerEventVisible = consumeConsumerVisibleMatchEvent(room, event);
     const timelineEntryId = event.type === "match_end" ? `timeline-match-finished-${event.id}` : `timeline-${event.id}`;
-    if (event.type !== "match_end") {
+    if (event.type !== "match_end" && consumerEventVisible) {
       pushTimeline(room, {
         id: timelineEntryId,
         matchClockSec: event.matchClockSec,
@@ -2400,8 +2438,10 @@ export function createRoomRuntime({ eventStore = null, commitmentPublisher = nul
         currentVersion: room.version,
       },
     ];
-    const eventEmit = emit(roomId, "match.event_received", event);
-    outputs.push({ type: "sse.emitted", eventId: eventEmit.eventId, eventName: "match.event_received", clientCount: eventEmit.clientCount });
+    if (consumerEventVisible) {
+      const eventEmit = emit(roomId, "match.event_received", event);
+      outputs.push({ type: "sse.emitted", eventId: eventEmit.eventId, eventName: "match.event_received", clientCount: eventEmit.clientCount });
+    }
     if (resolution) {
       const resolutionEmit = emit(roomId, "round.resolved", resolution);
       outputs.push({ type: "sse.emitted", eventId: resolutionEmit.eventId, eventName: "round.resolved", clientCount: resolutionEmit.clientCount });

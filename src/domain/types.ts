@@ -188,6 +188,8 @@ export interface TimelineEntry {
 
 export interface NormalizedMatchEvent {
   id: string;
+  eventRevisionId?: string;
+  providerActionId?: string;
   matchId: string;
   sequence: number;
   occurredAt: string;
@@ -198,6 +200,8 @@ export interface NormalizedMatchEvent {
   participantSide?: "home" | "away" | null;
   absoluteScore?: { home: number; away: number } | null;
   confirmed?: boolean;
+  confirmationState?: "candidate" | "confirmed" | "not_required";
+  scoreAuthority?: "none" | "confirmed_action" | "correction" | "snapshot" | "final";
   sourceActionId?: string | null;
   amendedActionType?: string | null;
   discardedActionId?: string | null;
