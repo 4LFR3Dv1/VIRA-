@@ -14,7 +14,8 @@ const keep = process.env.VIRA_KEEP_SMOKE_RESOURCES === "true";
 const startedAt = new Date().toISOString();
 
 function docker(args, options = {}) {
-  return execFileSync("docker", args, { encoding: "utf8", stdio: options.capture ? "pipe" : "inherit" }).trim();
+  const output = execFileSync("docker", args, { encoding: "utf8", stdio: options.capture ? "pipe" : "inherit" });
+  return options.capture ? String(output ?? "").trim() : "";
 }
 
 async function waitForReady() {

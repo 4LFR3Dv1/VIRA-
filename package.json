@@ -33,7 +33,7 @@
     "demo:compose": "node scripts/demo/compose-final-demo.mjs",
     "test:all": "npm run typecheck && node --test backend/e2e-mode.test.mjs backend/event-sourcing.test.mjs backend/event-sourcing-adversarial.test.mjs backend/http-security.test.mjs backend/http-routing.test.mjs backend/pwa-assets.test.mjs backend/txline-catalog-cache.test.mjs backend/verified-round-replay.test.mjs backend/verified-playback-seed.test.mjs backend/round-commitment.test.mjs backend/share-store.test.mjs backend/share-copy.test.mjs backend/share-image-png.test.mjs backend/home-projection.test.mjs backend/editorial-domain.test.mjs backend/fixture-consumer-projection.test.mjs backend/competition-registry.test.mjs backend/canonical-market.test.mjs backend/consumer-cadence.test.mjs backend/football-events.test.mjs && npm run test:moments && npm run test:i18n && npm run test:companion",
     "test:container": "node scripts/ci/container-smoke.mjs",
-    "verify": "npm run test:all && npm run build",
+    "verify": "npm run build && npm run test:all",
     "dev": "vite",
     "backend:dev": "node backend/server.mjs",
     "txline:setup": "node scripts/txline/free-tier-setup.mjs",
