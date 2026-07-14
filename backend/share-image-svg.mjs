@@ -57,7 +57,7 @@ function base(kindLabel) {
 }
 
 function defs() {
-  return `<defs><pattern id="grid" width="90" height="90" patternUnits="userSpaceOnUse"><path d="M90 0H0V90" fill="none" stroke="#F5F7F2" stroke-opacity=".12"/></pattern></defs>`;
+  return `<defs><style>text{font-family:"DM Sans",sans-serif!important}</style><pattern id="grid" width="90" height="90" patternUnits="userSpaceOnUse"><path d="M90 0H0V90" fill="none" stroke="#F5F7F2" stroke-opacity=".12"/></pattern></defs>`;
 }
 
 function predictionCard(share, copy) {

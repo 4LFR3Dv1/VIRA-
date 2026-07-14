@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import test from "node:test";
-import { renderSharePng } from "./share-image-png.mjs";
+import { renderSharePng, resolveShareFontFiles } from "./share-image-png.mjs";
 import { renderShareSvg, resolveShareLogoFile } from "./share-image-svg.mjs";
 import { renderSharePage } from "./share-page.mjs";
 
@@ -10,6 +11,19 @@ test("share renderer produces a real 1200x630 PNG", () => {
   assert.equal(png.readUInt32BE(16), 1200);
   assert.equal(png.readUInt32BE(20), 630);
   assert.ok(png.length > 5_000);
+});
+
+test("share renderer bundles every server-side font and renders dynamic text", () => {
+  assert.equal(resolveShareFontFiles().length, 2);
+  const base = { kind: "prediction", destination: { ctaLabel: "Open" }, payload: { homeTeam: "France", awayTeam: "Spain", choiceLabel: "France" } };
+  const france = renderSharePng({ ...base, metadata: { title: "Ana picked France" } });
+  const spain = renderSharePng({ ...base, metadata: { title: "Ana picked Spain" } });
+  const digest = (buffer) => createHash("sha256").update(buffer).digest("hex");
+  assert.notEqual(digest(france), digest(spain), "dynamic share text must affect the rendered pixels");
+});
+
+test("share renderer fails closed when a bundled font is missing", () => {
+  assert.throws(() => resolveShareFontFiles(["missing.ttf"], () => false), /share_image_fonts_missing/);
 });
 
 test("share renderer resolves the built asset when public is absent", () => {
