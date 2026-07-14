@@ -46,6 +46,12 @@ async function captureVisual(page: Page, testInfo: TestInfo, name: string) {
   await mkdir(directory, { recursive: true });
   await page.screenshot({ path: path.join(directory, `${name}.png`), fullPage: false });
 }
+async function captureCompanionVisual(page: Page, testInfo: TestInfo, name: string) {
+  if (testInfo.repeatEachIndex !== 0) return;
+  const directory = path.resolve("artifacts", "release-visual", testInfo.project.name);
+  await mkdir(directory, { recursive: true });
+  await page.locator('[data-companion-state]').screenshot({ path: path.join(directory, `${name}.png`) });
+}
 
 test.beforeAll(async () => {
   dataDir = await mkdtemp(path.join(os.tmpdir(), "vira-consumer-browser-e2e-"));
@@ -66,6 +72,14 @@ test("two isolated guests share, answer, resolve and receive the same ranking", 
   const playerB = await browser.newContext(contextOptions);
   try {
     const pageA = await playerA.newPage(); await pageA.goto(`/match/${roomId}?lang=en`); await join(pageA, "Ana");
+    const aAfterJoin = await session(pageA, roomId);
+    const versionBeforeFollow = (await authenticatedState(roomId, aAfterJoin)).ledger.streamVersion;
+    await pageA.getByRole("button", { name: /Follow match|Seguir partida/i }).click();
+    const companionA = pageA.locator('[data-companion-state]');
+    await expect(companionA).toHaveAttribute("data-companion-state", "round_open");
+    expect((await authenticatedState(roomId, aAfterJoin)).ledger.streamVersion).toBe(versionBeforeFollow);
+    await captureVisual(pageA, testInfo, "companion-round-open-en");
+    await captureCompanionVisual(pageA, testInfo, "companion-card-round-open-en");
     const shareResponse = pageA.waitForResponse((response) => response.url() === `${origin}/shares` && response.request().method() === "POST" && response.status() === 201);
     await pageA.getByRole("button", { name: /Convidar para a sala|Invite to the room/i }).click();
     const share = await (await shareResponse).json() as { url: string };
@@ -79,17 +93,22 @@ test("two isolated guests share, answer, resolve and receive the same ranking", 
     await expect(pageB.getByText("Ana", { exact: true }).first()).toBeVisible();
     await captureVisual(pageA, testInfo, "shared-room-en");
     await answerYes(pageA);
+    await expect(companionA).toHaveAttribute("data-companion-state", "answer_confirmed");
+    await expect(companionA).toContainText(/Answer confirmed/i);
+    await captureVisual(pageA, testInfo, "companion-answer-confirmed-en");
     const aBeforeRefresh = await session(pageA, roomId);
     const stateBeforeRefresh = await authenticatedState(roomId, aBeforeRefresh);
     const versionBeforeRefresh = stateBeforeRefresh.ledger.streamVersion;
     await pageA.getByRole("button", { name: "Portuguese" }).click();
     await expect(pageA.locator("html")).toHaveAttribute("lang", "pt-BR");
     await expect(pageA.getByText(/Palpite confirmado|Seu palpite está em jogo/i).first()).toBeVisible();
+    await expect(pageA.locator('[data-companion-state]')).toContainText(/Resposta confirmada/i);
     await captureVisual(pageA, testInfo, "answer-preserved-pt-BR");
     expect(await session(pageA, roomId)).toEqual(aBeforeRefresh);
     await pageA.getByRole("button", { name: "Inglês" }).click();
     await expect(pageA.locator("html")).toHaveAttribute("lang", "en");
     await expect(pageA.getByText(/Prediction confirmed|Your prediction is in play/i).first()).toBeVisible();
+    await expect(pageA.locator('[data-companion-state]')).toContainText(/Answer confirmed/i);
     const aAfterLocaleSwitch = await session(pageA, roomId);
     expect(aAfterLocaleSwitch).toEqual(aBeforeRefresh);
     const stateAfterLocaleSwitch = await authenticatedState(roomId, aAfterLocaleSwitch);
@@ -100,6 +119,7 @@ test("two isolated guests share, answer, resolve and receive the same ranking", 
     await pageA.reload();
     await expect(pageA.locator("html")).toHaveAttribute("lang", "en");
     await expect(pageA.getByText(/Prediction confirmed|Your prediction is in play/i).first()).toBeVisible();
+    await expect(pageA.locator('[data-companion-state]')).toHaveAttribute("data-companion-state", "answer_confirmed");
     const aAfterRefresh = await session(pageA, roomId);
     expect(aAfterRefresh).toEqual(aBeforeRefresh);
     const stateAfterRefresh = await authenticatedState(roomId, aAfterRefresh);
@@ -115,12 +135,22 @@ test("two isolated guests share, answer, resolve and receive the same ranking", 
     await pageB.goto("about:blank");
     await expect.poll(async () => (await metrics()).sseClients, { timeout: 10_000 }).toBe(1);
     await expect.poll(async () => (await (await fetch(`${origin}/public/rooms/${roomId}`)).json()).currentRound?.state, { timeout: 40_000 }).toBe("locked");
+    await expect(pageA.locator('[data-companion-state]')).toHaveAttribute("data-companion-state", "locked");
+    await captureVisual(pageA, testInfo, "companion-locked-en");
+    await captureCompanionVisual(pageA, testInfo, "companion-card-locked-en");
     const lockedState = await authenticatedState(roomId, aAfterRefresh);
     const lateResponse = await fetch(`${origin}/rooms/${roomId}/rounds/${lockedState.currentRound.id}/answer`, { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${aAfterRefresh.sessionToken}` }, body: JSON.stringify({ participantId: aAfterRefresh.participantId, optionId: "yes", clientAnswerId: crypto.randomUUID(), roundVersion: lockedState.currentRound.version, sessionToken: aAfterRefresh.sessionToken }) });
     expect(lateResponse.ok).toBe(false);
     const resolved = await scenario(runId, "resolve"); expect(resolved.status).toBe(200);
     await expect.poll(async () => (await (await fetch(`${origin}/public/rooms/${roomId}`)).json()).currentRound?.state, { timeout: 10_000 }).toBe("resolved");
     await expect(pageA.getByText(/Ranking (atualizado|updated)/i).first()).toBeVisible();
+    await expect(pageA.locator('[data-companion-state]')).toHaveAttribute("data-companion-state", "resolved");
+    await expect(pageA.locator('[data-companion-state]')).toContainText(/\+100/);
+    await expect(pageA.locator('[data-companion-state]')).toContainText(/#1/);
+    const backToRoom = pageA.getByRole("button", { name: /Back to room|Voltar à sala/i });
+    if (await backToRoom.isVisible()) await backToRoom.click();
+    await captureVisual(pageA, testInfo, "companion-resolved-en");
+    await captureCompanionVisual(pageA, testInfo, "companion-card-resolved-en");
     await playerB.setOffline(false);
     await pageB.goto(`/match/${roomId}`);
     await expect(pageB.getByText(/2 (na sala|in the room)/i).first()).toBeVisible();
