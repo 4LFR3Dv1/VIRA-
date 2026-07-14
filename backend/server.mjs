@@ -10,6 +10,9 @@ import { deriveHomeProjection } from "./home-projection.mjs";
 import { createRoomRuntime } from "./runtime.mjs";
 import { createSolanaCommitmentPublisherFromEnv } from "./solana-commitment-publisher.mjs";
 import { createShareStore } from "./share-store.mjs";
+import { createCompanionSubscriptionStore } from "./companion-subscription-store.mjs";
+import { createWebPushPublisherFromEnv } from "./web-push-publisher.mjs";
+import { createAttentionOrchestrator } from "./attention-orchestrator.mjs";
 import { renderSharePng } from "./share-image-png.mjs";
 import { renderShareSvg } from "./share-image-svg.mjs";
 import { renderSharePage } from "./share-page.mjs";
@@ -42,8 +45,11 @@ const e2eMode = e2eModeFromEnv();
 
 const eventStore = await createFileEventStore();
 const shareStore = await createShareStore();
+const companionSubscriptionStore = await createCompanionSubscriptionStore();
 const commitmentPublisher = createSolanaCommitmentPublisherFromEnv();
 const runtime = createRoomRuntime({ eventStore, commitmentPublisher });
+const webPushPublisher = createWebPushPublisherFromEnv();
+const attentionOrchestrator = createAttentionOrchestrator({ runtime, store: companionSubscriptionStore, publisher: webPushPublisher });
 const runtimeBoot = {
   liveness: true,
   readiness: false,
@@ -96,7 +102,7 @@ function sendJson(response, status, body) {
     "Content-Type": "application/json",
     "Access-Control-Allow-Origin": response.viraCorsOrigin || "http://localhost:5173",
     "Access-Control-Allow-Headers": "Content-Type, Authorization, Last-Event-ID, X-Vira-Public-Token, X-Vira-Locale, X-Vira-Time-Zone",
-    "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
+    "Access-Control-Allow-Methods": "GET,POST,DELETE,OPTIONS",
   });
   response.end(JSON.stringify(body));
 }
@@ -169,9 +175,11 @@ async function serveFrontend(request, response, pathname) {
   }
   try {
     const body = await readFile(filePath);
+    const isServiceWorker = path.basename(filePath) === "sw.js";
     response.writeHead(200, {
       "Content-Type": staticMimeTypes.get(path.extname(filePath).toLowerCase()) || "application/octet-stream",
-      "Cache-Control": path.basename(filePath) === "index.html" ? "no-cache" : "public, max-age=31536000, immutable",
+      "Cache-Control": path.basename(filePath) === "index.html" || isServiceWorker ? "no-cache" : "public, max-age=31536000, immutable",
+      ...(isServiceWorker ? { "Service-Worker-Allowed": "/" } : {}),
     });
     response.end(request.method === "HEAD" ? undefined : body);
     return true;
@@ -205,9 +213,16 @@ function ensureReady() {
   throw error;
 }
 
-async function readJson(request) {
+async function readJson(request, maxBytes = Number.POSITIVE_INFINITY) {
   const chunks = [];
+  let totalBytes = 0;
   for await (const chunk of request) {
+    totalBytes += chunk.length;
+    if (totalBytes > maxBytes) {
+      const error = new Error("payload_too_large");
+      error.status = 413;
+      throw error;
+    }
     chunks.push(chunk);
   }
   const raw = Buffer.concat(chunks).toString("utf8");
@@ -532,8 +547,52 @@ async function handleRequest(request, response) {
           fixtureId: txlineConfig.fixtureId || null,
           catalog: txlineCatalogCache.status(),
         },
+        companion: { webPushConfigured: webPushPublisher.enabled, activeSubscriptions: companionSubscriptionStore.activeSubscriptions().length },
       });
       return;
+    }
+
+    if (request.method === "GET" && url.pathname === "/companion/vapid-public-key") {
+      sendJson(response, 200, { enabled: webPushPublisher.enabled, publicKey: webPushPublisher.publicKey });
+      return;
+    }
+
+    if (request.method === "POST" && url.pathname === "/companion/subscriptions") {
+      if (!webPushPublisher.enabled) { sendJson(response, 503, { error: "web_push_not_configured" }); return; }
+      if (Number(request.headers["content-length"] ?? 0) > 16_384) { sendJson(response, 413, { error: "payload_too_large" }); return; }
+      const body = await readJson(request, 16_384);
+      const token = request.headers.authorization?.replace(/^Bearer\s+/i, "");
+      const validation = runtime.hasPublicRoom(String(body.roomId)) ? runtime.validateSession(String(body.roomId), String(body.participantId), token) : { valid: false };
+      if (!validation.valid) { sendJson(response, 401, { error: "valid_room_session_required" }); return; }
+      const subscription = await companionSubscriptionStore.register({ ...body, fixtureId: body.fixtureId || body.roomId });
+      sendJson(response, 201, { subscription });
+      return;
+    }
+
+    const companionSubscriptionRoute = url.pathname.match(/^\/companion\/subscriptions\/([^/]+)(?:\/(preferences|follow|unfollow))?$/);
+    if (companionSubscriptionRoute) {
+      const subscriptionId = decodeURIComponent(companionSubscriptionRoute[1]);
+      const action = companionSubscriptionRoute[2] ?? null;
+      const body = request.method === "GET" ? {} : await readJson(request, 16_384);
+      const roomId = String(body.roomId ?? url.searchParams.get("roomId") ?? "");
+      const participantId = String(body.participantId ?? url.searchParams.get("participantId") ?? "");
+      const token = request.headers.authorization?.replace(/^Bearer\s+/i, "");
+      const validation = runtime.hasPublicRoom(roomId) ? runtime.validateSession(roomId, participantId, token) : { valid: false };
+      if (!validation.valid) { sendJson(response, 401, { error: "valid_room_session_required" }); return; }
+      if (request.method === "GET" && !action) {
+        const subscription = companionSubscriptionStore.get(subscriptionId, participantId);
+        sendJson(response, subscription ? 200 : 404, { subscription }); return;
+      }
+      if (request.method === "DELETE" && !action) {
+        sendJson(response, 200, await companionSubscriptionStore.remove(subscriptionId, participantId)); return;
+      }
+      if (request.method === "POST" && action === "preferences") {
+        sendJson(response, 200, { subscription: await companionSubscriptionStore.update(subscriptionId, participantId, { enabledTypes: body.enabledTypes, locale: body.locale, timeZone: body.timeZone }) }); return;
+      }
+      if (request.method === "POST" && (action === "follow" || action === "unfollow")) {
+        sendJson(response, 200, { subscription: await companionSubscriptionStore.update(subscriptionId, participantId, { followed: action === "follow" }) }); return;
+      }
+      sendJson(response, 405, { error: "method_not_allowed" }); return;
     }
 
     if (request.method === "GET" && url.pathname === "/ready") {
@@ -1175,5 +1234,6 @@ if (hasTxlineCredentials(txlineConfig)) {
 }
 
 server.listen(port, () => {
+  attentionOrchestrator.start();
   console.log(`VIRA runtime listening on http://127.0.0.1:${port}`);
 });

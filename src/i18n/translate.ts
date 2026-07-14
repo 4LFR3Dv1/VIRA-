@@ -296,6 +296,18 @@ export type TranslationMessages = {
   "companion.offlineDescription": undefined;
   "companion.reconnectingDescription": undefined;
   "companion.compactDisclosure": undefined;
+  "companion.alerts.title": undefined;
+  "companion.alerts.description": undefined;
+  "companion.alerts.enable": undefined;
+  "companion.alerts.disable": undefined;
+  "companion.alerts.requesting": undefined;
+  "companion.alerts.denied": undefined;
+  "companion.alerts.error": undefined;
+  "companion.alerts.types": undefined;
+  "companion.alertType.matchStarting": undefined;
+  "companion.alertType.roundOpen": undefined;
+  "companion.alertType.roundResolved": undefined;
+  "companion.alertType.rankChanged": undefined;
   "companion.state.upcoming": undefined;
   "companion.state.live": undefined;
   "companion.state.round_open": undefined;

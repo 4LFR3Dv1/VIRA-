@@ -1,9 +1,10 @@
-import { ArrowRight, BellRing, ExternalLink, Radio, X } from "lucide-react";
+import { ArrowRight, Bell, BellOff, BellRing, ExternalLink, Radio, X } from "lucide-react";
 import { motion, useReducedMotion } from "motion/react";
 
 import { useLocale } from "../../i18n/locale-context.tsx";
 import { useServerClock } from "../../runtime/use-server-clock.ts";
 import type { ViraCompanionState, ViraCompanionViewModel } from "./view-model.ts";
+import type { UserPushType, WebPushState } from "./use-web-push.ts";
 
 interface ViraCompanionProps {
   model: ViraCompanionViewModel;
@@ -14,7 +15,16 @@ interface ViraCompanionProps {
   onOpenFloating?: () => void;
   floatingAvailable?: boolean;
   mode?: "in_app" | "compact" | "pip";
+  pushState?: WebPushState;
+  enabledPushTypes?: UserPushType[];
+  onEnableAlerts?: () => void;
+  onDisableAlerts?: () => void;
+  onToggleAlertType?: (type: UserPushType) => void;
 }
+
+const pushTypeKeys: Record<UserPushType, "companion.alertType.matchStarting" | "companion.alertType.roundOpen" | "companion.alertType.roundResolved" | "companion.alertType.rankChanged"> = {
+  match_starting: "companion.alertType.matchStarting", round_open: "companion.alertType.roundOpen", round_resolved: "companion.alertType.roundResolved", rank_changed: "companion.alertType.rankChanged",
+};
 
 const stateKeys: Record<ViraCompanionState, `companion.state.${ViraCompanionState}`> = {
   upcoming: "companion.state.upcoming",
@@ -33,7 +43,7 @@ function clock(value: number) {
   return `${Math.floor(seconds / 60).toString().padStart(2, "0")}:${(seconds % 60).toString().padStart(2, "0")}`;
 }
 
-export function ViraCompanion({ model, enabled, onFollow, onUnfollow, onReturnToRoom, onOpenFloating, floatingAvailable = false, mode = "in_app" }: ViraCompanionProps) {
+export function ViraCompanion({ model, enabled, onFollow, onUnfollow, onReturnToRoom, onOpenFloating, floatingAvailable = false, mode = "in_app", pushState, enabledPushTypes = [], onEnableAlerts, onDisableAlerts, onToggleAlertType }: ViraCompanionProps) {
   const { t } = useLocale();
   const reduceMotion = useReducedMotion();
   const { remainingMs } = useServerClock(undefined, model.locksAt);
@@ -95,6 +105,14 @@ export function ViraCompanion({ model, enabled, onFollow, onUnfollow, onReturnTo
         {onOpenFloating ? <button type="button" onClick={onOpenFloating} className="inline-flex min-h-10 items-center gap-2 border border-white/20 px-3 font-['DM_Mono'] text-[10px] font-black uppercase tracking-[.1em] text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"><ExternalLink className="size-3.5" />{floatingAvailable ? t("companion.openFloating") : t("companion.openCompact")}</button> : null}
         <span className="ml-auto inline-flex items-center gap-1.5 self-center font-['DM_Mono'] text-[9px] uppercase tracking-[.12em] text-white/35"><Radio className="size-3" />{t("companion.authority")}</span>
       </div>
+      {mode === "in_app" && pushState && pushState !== "checking" && pushState !== "unavailable" ? <div className="mt-4 border-t border-white/10 pl-2 pt-4" data-testid="companion-alerts">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div><p className="font-['DM_Mono'] text-[9px] font-black uppercase tracking-[.14em] text-white/70">{t("companion.alerts.title")}</p><p className="mt-1 text-xs text-white/45">{t("companion.alerts.description")}</p></div>
+          {pushState === "enabled" ? <button type="button" onClick={onDisableAlerts} className="inline-flex min-h-9 items-center gap-2 border border-white/15 px-3 font-['DM_Mono'] text-[9px] font-black uppercase tracking-[.1em]"><BellOff className="size-3.5" />{t("companion.alerts.disable")}</button> : pushState === "denied" ? <span className="text-xs text-amber-200">{t("companion.alerts.denied")}</span> : <button type="button" disabled={pushState === "requesting"} onClick={onEnableAlerts} className="inline-flex min-h-9 items-center gap-2 border border-primary/50 px-3 font-['DM_Mono'] text-[9px] font-black uppercase tracking-[.1em] text-primary disabled:opacity-50"><Bell className="size-3.5" />{pushState === "requesting" ? t("companion.alerts.requesting") : t("companion.alerts.enable")}</button>}
+        </div>
+        {pushState === "enabled" ? <fieldset className="mt-3 grid gap-2 sm:grid-cols-2"><legend className="sr-only">{t("companion.alerts.types")}</legend>{(Object.keys(pushTypeKeys) as UserPushType[]).map((type) => <label key={type} className="flex min-h-9 cursor-pointer items-center gap-2 text-xs text-white/65"><input type="checkbox" checked={enabledPushTypes.includes(type)} onChange={() => onToggleAlertType?.(type)} className="accent-[#C8FF00]" />{t(pushTypeKeys[type])}</label>)}</fieldset> : null}
+        {pushState === "error" ? <p role="status" className="mt-2 text-xs text-amber-200">{t("companion.alerts.error")}</p> : null}
+      </div> : null}
     </motion.section>
   );
 }

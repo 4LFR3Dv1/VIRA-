@@ -14,10 +14,13 @@ test("PWA manifest is installable without making installation a gate", async () 
 
 test("Service Worker cannot cache competitive state and sanitizes notification destinations", async () => {
   const source = await readFile(new URL("../public/sw.js", import.meta.url), "utf8");
+  assert.match(source, /addEventListener\("push"/);
+  assert.match(source, /showNotification/);
   assert.match(source, /notificationclick/);
   assert.match(source, /sessionToken/);
   assert.match(source, /participantToken/);
   assert.doesNotMatch(source, /addEventListener\(["']fetch["']/);
   assert.doesNotMatch(source, /caches\.(open|match|put|delete)/);
   assert.doesNotMatch(source, /new\s+Cache/);
+  assert.doesNotMatch(source, /silent/i);
 });

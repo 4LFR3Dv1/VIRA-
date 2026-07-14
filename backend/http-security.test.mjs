@@ -61,6 +61,15 @@ test("internal ingestion is disabled by default and rejected requests do not app
     assert.equal(moduleResponse.status, 200);
     assert.match(moduleResponse.headers.get("content-type") || "", /^text\/javascript/);
     assert.doesNotMatch(await moduleResponse.text(), /<html/i);
+    const vapid = await fetch(`${origin}/companion/vapid-public-key`);
+    assert.equal(vapid.status, 200);
+    assert.deepEqual(await vapid.json(), { enabled: false, publicKey: null });
+    const disabledSubscription = await fetch(`${origin}/companion/subscriptions`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sessionToken: "must-not-be-accepted" }) });
+    assert.equal(disabledSubscription.status, 503);
+    const serviceWorker = await fetch(`${origin}/sw.js`);
+    assert.equal(serviceWorker.status, 200);
+    assert.equal(serviceWorker.headers.get("cache-control"), "no-cache");
+    assert.equal(serviceWorker.headers.get("service-worker-allowed"), "/");
     const response = await fetch(`${origin}/rooms/security-room/txline-event`, {
       method: "POST",
       headers: { "Content-Type": "application/json", "X-Vira-Admin-Token": "test-admin-secret" },

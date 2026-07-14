@@ -3,6 +3,30 @@ import type { PublicDomainEvent, RoundCommitmentStatus, RoomSnapshot, RoomVerifi
 const API_ORIGIN = import.meta.env.VITE_VIRA_API_ORIGIN
   ?? (import.meta.env.PROD ? window.location.origin : "http://127.0.0.1:8787");
 
+export async function fetchVapidPublicKey(): Promise<string> {
+  const response = await fetch(`${API_ORIGIN}/companion/vapid-public-key`);
+  if (!response.ok) throw new Error(`web_push_unavailable:${response.status}`);
+  const body = await response.json();
+  if (!body.enabled || !body.publicKey) throw new Error("web_push_unavailable");
+  return body.publicKey;
+}
+
+export async function registerCompanionSubscription(input: { roomId: string; fixtureId: string; participantId: string; sessionToken: string; pushSubscription: PushSubscriptionJSON; locale: "en" | "pt-BR"; timeZone: string; enabledTypes: string[]; inviteCode: string | null }) {
+  const response = await fetch(`${API_ORIGIN}/companion/subscriptions`, { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${input.sessionToken}` }, body: JSON.stringify({ roomId: input.roomId, fixtureId: input.fixtureId, participantId: input.participantId, pushSubscription: input.pushSubscription, locale: input.locale, timeZone: input.timeZone, enabledTypes: input.enabledTypes, inviteCode: input.inviteCode }) });
+  if (!response.ok) throw new Error(`web_push_register_failed:${response.status}`);
+  return response.json() as Promise<{ subscription: { id: string; enabledTypes: string[] } }>;
+}
+
+export async function updateCompanionSubscription(input: { id: string; roomId: string; participantId: string; sessionToken: string; locale: "en" | "pt-BR"; timeZone: string; enabledTypes: string[] }) {
+  const response = await fetch(`${API_ORIGIN}/companion/subscriptions/${encodeURIComponent(input.id)}/preferences`, { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${input.sessionToken}` }, body: JSON.stringify({ roomId: input.roomId, participantId: input.participantId, locale: input.locale, timeZone: input.timeZone, enabledTypes: input.enabledTypes }) });
+  if (!response.ok) throw new Error(`web_push_update_failed:${response.status}`);
+}
+
+export async function removeCompanionSubscription(input: { id: string; roomId: string; participantId: string; sessionToken: string }) {
+  const response = await fetch(`${API_ORIGIN}/companion/subscriptions/${encodeURIComponent(input.id)}`, { method: "DELETE", headers: { "Content-Type": "application/json", Authorization: `Bearer ${input.sessionToken}` }, body: JSON.stringify({ roomId: input.roomId, participantId: input.participantId }) });
+  if (!response.ok) throw new Error(`web_push_remove_failed:${response.status}`);
+}
+
 export async function fetchBackendHealth(): Promise<boolean> {
   const response = await fetch(`${API_ORIGIN}/health`);
   return response.ok;

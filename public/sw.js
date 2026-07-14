@@ -9,6 +9,28 @@ self.addEventListener("activate", (event) => {
   event.waitUntil(self.clients.claim());
 });
 
+function visiblePushPayload(raw) {
+  if (!raw || raw.version !== 1 || typeof raw.title !== "string" || typeof raw.body !== "string" || typeof raw.url !== "string") return null;
+  return {
+    title: raw.title.slice(0, 120),
+    options: {
+      body: raw.body.slice(0, 240),
+      icon: "/apple-touch-icon.png",
+      badge: "/favicon-32x32.png",
+      tag: typeof raw.tag === "string" ? raw.tag.slice(0, 120) : "vira-companion",
+      data: { url: safeDestination(raw.url) },
+    },
+  };
+}
+
+self.addEventListener("push", (event) => {
+  if (!event.data) return;
+  let payload = null;
+  try { payload = visiblePushPayload(event.data.json()); } catch { payload = null; }
+  if (!payload) return;
+  event.waitUntil(self.registration.showNotification(payload.title, payload.options));
+});
+
 function safeDestination(rawDestination) {
   try {
     const destination = new URL(rawDestination || "/", self.location.origin);
