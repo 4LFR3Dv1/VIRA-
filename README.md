@@ -6,7 +6,7 @@
 
 ## Official submission
 
-- **Official video:** [VIRA — Live Multiplayer Football Experience Powered by TxLINE (3:40, English, 1080p)](https://github.com/4LFR3Dv1/VIRA-/releases/download/vira-demo-final-2026-07-14/vira-demo-final-en-1080p.mp4)
+- **Demo Video (canonical):** [VIRA — Live Multiplayer Football Experience Powered by TxLINE (3:40, English, 1080p)](https://www.youtube.com/watch?v=eqe9e5TZ02k)
 - **GitHub Release:** [final demo and publication package](https://github.com/4LFR3Dv1/VIRA-/releases/tag/vira-demo-final-2026-07-14)
 - **Captioned master:** [1080p MP4](https://github.com/4LFR3Dv1/VIRA-/releases/download/vira-demo-final-2026-07-14/vira-demo-final-en-1080p.mp4)
 - **Certification:** [metadata, authority disclosures, QA results and SHA-256 hashes](https://github.com/4LFR3Dv1/VIRA-/releases/download/vira-demo-final-2026-07-14/vira-demo-certification.json)
