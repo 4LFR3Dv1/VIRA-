@@ -1,9 +1,9 @@
 import { ArrowRight, Bell, BellOff, BellRing, ExternalLink, Radio, X } from "lucide-react";
 import { motion, useReducedMotion } from "motion/react";
+import { memo } from "react";
 
 import { useLocale } from "../../i18n/locale-context.tsx";
-import { useServerClock } from "../../runtime/use-server-clock.ts";
-import type { ViraCompanionState, ViraCompanionViewModel } from "./view-model.ts";
+import { sameViraCompanionViewModel, type ViraCompanionState, type ViraCompanionViewModel } from "./view-model.ts";
 import type { UserPushType, WebPushState } from "./use-web-push.ts";
 
 interface ViraCompanionProps {
@@ -20,6 +20,8 @@ interface ViraCompanionProps {
   onEnableAlerts?: () => void;
   onDisableAlerts?: () => void;
   onToggleAlertType?: (type: UserPushType) => void;
+  onClose?: () => void;
+  remainingMs?: number | null;
 }
 
 const pushTypeKeys: Record<UserPushType, "companion.alertType.matchStarting" | "companion.alertType.roundOpen" | "companion.alertType.roundResolved" | "companion.alertType.rankChanged"> = {
@@ -43,10 +45,10 @@ function clock(value: number) {
   return `${Math.floor(seconds / 60).toString().padStart(2, "0")}:${(seconds % 60).toString().padStart(2, "0")}`;
 }
 
-export function ViraCompanion({ model, enabled, onFollow, onUnfollow, onReturnToRoom, onOpenFloating, floatingAvailable = false, mode = "in_app", pushState, enabledPushTypes = [], onEnableAlerts, onDisableAlerts, onToggleAlertType }: ViraCompanionProps) {
+function ViraCompanionComponent({ model, enabled, onFollow, onUnfollow, onReturnToRoom, onOpenFloating, floatingAvailable = false, mode = "in_app", pushState, enabledPushTypes = [], onEnableAlerts, onDisableAlerts, onToggleAlertType, onClose, remainingMs = null }: ViraCompanionProps) {
+  (globalThis as typeof globalThis & { __VIRA_COMPANION_RENDER_PROBE__?: (mode: string) => void }).__VIRA_COMPANION_RENDER_PROBE__?.(mode);
   const { t } = useLocale();
   const reduceMotion = useReducedMotion();
-  const { remainingMs } = useServerClock(undefined, model.locksAt);
   const isUrgent = model.state === "round_open" || model.state === "answer_confirmed";
   const roundPrompt = model.roundKind === "team_scores" && model.targetTeam && model.durationMinutes
     ? t("round.question.teamScores", { team: model.targetTeam, minutes: model.durationMinutes })
@@ -71,6 +73,8 @@ export function ViraCompanion({ model, enabled, onFollow, onUnfollow, onReturnTo
       </section>
     );
   }
+
+  if (mode === "pip") return <PipCompanion model={model} remainingMs={remainingMs} roundPrompt={roundPrompt} onClose={onClose} onReturnToRoom={onReturnToRoom} />;
 
   return (
     <motion.section
@@ -116,6 +120,29 @@ export function ViraCompanion({ model, enabled, onFollow, onUnfollow, onReturnTo
     </motion.section>
   );
 }
+
+function sameProps(left: ViraCompanionProps, right: ViraCompanionProps) {
+  return sameViraCompanionViewModel(left.model, right.model) && left.enabled === right.enabled && left.mode === right.mode && left.remainingMs === right.remainingMs && left.floatingAvailable === right.floatingAvailable && left.pushState === right.pushState && left.enabledPushTypes?.join("|") === right.enabledPushTypes?.join("|") && left.onFollow === right.onFollow && left.onUnfollow === right.onUnfollow && left.onReturnToRoom === right.onReturnToRoom && left.onOpenFloating === right.onOpenFloating && left.onEnableAlerts === right.onEnableAlerts && left.onDisableAlerts === right.onDisableAlerts && left.onToggleAlertType === right.onToggleAlertType && left.onClose === right.onClose;
+}
+
+export const ViraCompanion = memo(ViraCompanionComponent, sameProps);
+
+function PipCompanion({ model, remainingMs, roundPrompt, onClose, onReturnToRoom }: { model: ViraCompanionViewModel; remainingMs: number | null; roundPrompt: string; onClose?: () => void; onReturnToRoom?: () => void }) {
+  const { t } = useLocale();
+  const urgent = model.state === "round_open" || model.state === "answer_confirmed";
+  return <section className="vira-pip" aria-label={t("companion.title")} aria-live="polite" data-companion-state={model.state}>
+    <header className="vira-pip__header"><div className="vira-pip__brand"><img src="/vira-symbol.png" alt="" /><div><p className="vira-pip__title">{t("companion.title")}</p><p className="vira-pip__fixture">{model.homeTeam} × {model.awayTeam}</p></div></div>{onClose ? <button type="button" className="vira-pip__close" onClick={onClose} aria-label={t("common.close")}>×</button> : null}</header>
+    <div className="vira-pip__body"><p className="vira-pip__state">{t(stateKeys[model.state])}</p><div className="vira-pip__score"><strong className="vira-pip__score-value">{model.homeScore} : {model.awayScore}</strong>{urgent && remainingMs !== null ? <div><p className="vira-pip__label">{t("companion.closesIn")}</p><div className="vira-pip__countdown">{clock(remainingMs)}</div></div> : null}</div>
+      {(model.state === "round_open" || model.state === "answer_confirmed" || model.state === "locked") ? <p className="vira-pip__prompt">{roundPrompt}</p> : null}
+      {model.state === "answer_confirmed" ? <p className="vira-pip__notice">{t("companion.privateUntilLock")}</p> : null}
+      {model.state === "offline" || model.state === "reconnecting" ? <p className="vira-pip__notice">{t(model.state === "offline" ? "companion.offlineDescription" : "companion.reconnectingDescription")}</p> : null}
+      {model.state === "resolved" ? <div className="vira-pip__metrics"><PipMetric label={t("companion.result")} value={model.correct ? t("companion.correct") : t("companion.incorrect")} /><PipMetric label={t("companion.points")} value={model.pointsAwarded === null ? "—" : `+${model.pointsAwarded}`} /><PipMetric label={t("companion.rank")} value={model.rank === null ? "—" : `#${model.rank}`} /></div> : null}
+    </div>
+    <footer className="vira-pip__actions">{onReturnToRoom ? <button type="button" className="vira-pip__return" onClick={onReturnToRoom}>{t("companion.returnToRoom")} →</button> : null}<span className="vira-pip__authority">{t("companion.authority")}</span></footer>
+  </section>;
+}
+
+function PipMetric({ label, value }: { label: string; value: string }) { return <div><p className="vira-pip__label">{label}</p><p className="vira-pip__metric-value">{value}</p></div>; }
 
 function Metric({ label, value }: { label: string; value: string }) {
   return <div><p className="font-['DM_Mono'] text-[8px] uppercase tracking-[.12em] text-white/35">{label}</p><p className="mt-1 font-['Chakra_Petch'] text-lg font-black uppercase">{value}</p></div>;

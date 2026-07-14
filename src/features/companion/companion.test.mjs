@@ -1,10 +1,11 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 import { projectConsumerAttentionEvents, selectAttentionForParticipant } from "./attention-projector.ts";
 import { readCompanionPreferences, writeCompanionPreferences } from "./preferences.ts";
-import { deriveViraCompanionViewModel } from "./view-model.ts";
-import { documentPictureInPictureController } from "./document-pip.ts";
+import { deriveViraCompanionViewModel, sameViraCompanionViewModel } from "./view-model.ts";
+import { documentPictureInPictureController, installCompanionStyles } from "./document-pip.ts";
 import { canRegisterServiceWorker } from "../../pwa/register-service-worker.ts";
 
 function roomState() {
@@ -82,6 +83,14 @@ test("view model follows authoritative state without changing streamVersion", ()
   assert.equal(deriveViraCompanionViewModel(state, "player-a").state, "offline");
 });
 
+test("Companion presentation ignores irrelevant stream events but preserves semantic updates", () => {
+  const model = deriveViraCompanionViewModel(openRound(roomState()), "player-a");
+  const irrelevant = structuredClone(model); irrelevant.streamVersion += 1; irrelevant.attentionEvents = [];
+  assert.equal(sameViraCompanionViewModel(model, irrelevant), true);
+  const relevant = structuredClone(model); relevant.homeScore += 1;
+  assert.equal(sameViraCompanionViewModel(model, relevant), false);
+});
+
 test("Follow preference is local, idempotent and contains no competitive credential", () => {
   const values = new Map();
   const storage = { getItem: (key) => values.get(key) ?? null, setItem: (key, value) => values.set(key, value) };
@@ -98,6 +107,30 @@ test("Document PiP is capability-detected without browser sniffing", () => {
   const requestWindow = async () => ({});
   assert.equal(documentPictureInPictureController({ documentPictureInPicture: { requestWindow } }).requestWindow, requestWindow);
   assert.equal(documentPictureInPictureController({ documentPictureInPicture: {} }), null);
+});
+
+test("Document PiP installs one dedicated stylesheet without copying the application", () => {
+  const appended = [];
+  const target = { createElement: () => ({ dataset: {}, textContent: "" }), head: { append: (node) => appended.push(node) } };
+  installCompanionStyles(target, "#vira-companion-pip-root{contain:layout paint style}");
+  assert.equal(appended.length, 1);
+  assert.equal(appended[0].dataset.viraCompanionPip, "true");
+  assert.match(appended[0].textContent, /contain:layout paint style/);
+});
+
+test("performance guardrails keep PiP static and clocks at one hertz or less", async () => {
+  const clockSource = await readFile(new URL("../../runtime/use-server-clock.ts", import.meta.url), "utf8");
+  const pipSource = await readFile(new URL("./ViraCompanion.tsx", import.meta.url), "utf8");
+  const documentPipSource = await readFile(new URL("./document-pip.ts", import.meta.url), "utf8");
+  const pipCss = await readFile(new URL("./companion-pip.css", import.meta.url), "utf8");
+  assert.match(clockSource, /intervalMs = 1_000/);
+  assert.match(clockSource, /if \(!hasTarget\) return/);
+  assert.match(clockSource, /Math\.max\(1_000, intervalMs\)/);
+  assert.match(pipSource, /mode === "pip"\) return <PipCompanion/);
+  assert.doesNotMatch(pipSource.slice(pipSource.indexOf("function PipCompanion")), /<motion\./);
+  assert.doesNotMatch(documentPipSource, /styleSheets|cssRules|rel = "stylesheet"/);
+  assert.match(pipCss, /contain:\s*layout paint style/);
+  assert.doesNotMatch(pipCss, /infinite|animation-iteration-count:\s*infinite/);
 });
 
 test("Service Worker registration requires capability and a secure context", () => {

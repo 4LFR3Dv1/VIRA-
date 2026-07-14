@@ -1,0 +1,28 @@
+:root { color-scheme: dark; font-family: Arial, Helvetica, sans-serif; background: #050a12; color: #f5f7f2; }
+* { box-sizing: border-box; }
+html, body { margin: 0; min-width: 280px; width: 100%; height: 100%; overflow: hidden; background: #050a12; }
+button { font: inherit; }
+#vira-companion-pip-root { width: 100%; height: 100%; contain: layout paint style; }
+.vira-pip { width: 100%; height: 100vh; overflow: auto; display: flex; flex-direction: column; padding: 20px; border: 1px solid rgba(200,255,0,.55); background: #08101a; color: #f5f7f2; }
+.vira-pip__header, .vira-pip__score, .vira-pip__actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.vira-pip__brand { display: flex; min-width: 0; align-items: center; gap: 10px; }
+.vira-pip__brand img { width: 30px; height: 30px; object-fit: contain; }
+.vira-pip__title, .vira-pip__state, .vira-pip__metric-value { margin: 0; font-weight: 900; text-transform: uppercase; }
+.vira-pip__title { font-size: 15px; letter-spacing: .02em; }
+.vira-pip__fixture, .vira-pip__label, .vira-pip__authority { margin: 3px 0 0; color: rgba(245,247,242,.48); font-family: Consolas, monospace; font-size: 9px; letter-spacing: .12em; text-transform: uppercase; }
+.vira-pip__close { width: 36px; height: 36px; border: 0; background: transparent; color: rgba(245,247,242,.6); cursor: pointer; font-size: 24px; }
+.vira-pip__body { flex: 1; padding: 32px 0 24px; }
+.vira-pip__state { color: #c8ff00; font-family: Consolas, monospace; font-size: 11px; letter-spacing: .14em; }
+.vira-pip__score { align-items: flex-end; margin-top: 12px; }
+.vira-pip__score-value { font-size: 34px; font-weight: 900; }
+.vira-pip__countdown { color: #c8ff00; font-size: 36px; font-weight: 900; font-variant-numeric: tabular-nums; text-align: right; }
+.vira-pip__prompt, .vira-pip__notice, .vira-pip__metrics { border-top: 1px solid rgba(245,247,242,.12); }
+.vira-pip__prompt { margin: 24px 0 0; padding-top: 20px; font-size: 15px; font-weight: 700; line-height: 1.4; }
+.vira-pip__notice { margin: 16px 0 0; padding-top: 16px; color: rgba(245,247,242,.58); font-size: 12px; line-height: 1.4; }
+.vira-pip__metrics { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 24px; padding-top: 20px; }
+.vira-pip__metric-value { margin-top: 5px; font-size: 20px; }
+.vira-pip__actions { flex-wrap: wrap; border-top: 1px solid rgba(245,247,242,.12); padding-top: 16px; }
+.vira-pip__return { min-height: 42px; border: 0; padding: 0 16px; background: #c8ff00; color: #050a12; cursor: pointer; font-family: Consolas, monospace; font-size: 10px; font-weight: 900; letter-spacing: .08em; text-transform: uppercase; }
+.vira-pip button:focus-visible { outline: 2px solid #c8ff00; outline-offset: 3px; }
+@media (max-width: 340px) { .vira-pip { padding: 14px; } .vira-pip__metrics { gap: 6px; } .vira-pip__metric-value { font-size: 17px; } }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; } }

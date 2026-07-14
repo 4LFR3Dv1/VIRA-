@@ -17,6 +17,7 @@ export interface ViraCompanionViewModel {
   kickoffAt: string | null;
   roundId: string | null;
   locksAt: string | null;
+  serverTime: string | null;
   roundKind: "team_scores" | "team_shot_on_target" | "market" | null;
   targetTeam: string | null;
   durationMinutes: number | null;
@@ -26,6 +27,10 @@ export interface ViraCompanionViewModel {
   rank: number | null;
   streamVersion: number;
   attentionEvents: ConsumerAttentionEventV1[];
+}
+
+export function sameViraCompanionViewModel(left: ViraCompanionViewModel, right: ViraCompanionViewModel) {
+  return left.state === right.state && left.homeTeam === right.homeTeam && left.awayTeam === right.awayTeam && left.homeScore === right.homeScore && left.awayScore === right.awayScore && left.locksAt === right.locksAt && left.roundKind === right.roundKind && left.targetTeam === right.targetTeam && left.durationMinutes === right.durationMinutes && left.answerConfirmed === right.answerConfirmed && left.correct === right.correct && left.pointsAwarded === right.pointsAwarded && left.rank === right.rank;
 }
 
 export function deriveViraCompanionViewModel(state: ReplayState, participantId: string | null): ViraCompanionViewModel {
@@ -66,6 +71,7 @@ export function deriveViraCompanionViewModel(state: ReplayState, participantId: 
     kickoffAt: snapshot.match.startTime ?? null,
     roundId: round?.id ?? null,
     locksAt: round?.locksAt ?? null,
+    serverTime: snapshot.serverTime ?? null,
     roundKind: round?.resolution.domain === "football" ? round.resolution.condition?.kind ?? null : round ? "market" : null,
     targetTeam: round?.resolution.condition?.targetSide === "away" ? snapshot.match.awayTeam.name : round?.resolution.condition ? snapshot.match.homeTeam.name : null,
     durationMinutes: round?.resolution.condition ? Math.max(1, Math.round(round.resolution.condition.durationSec / 60)) : null,
