@@ -1,0 +1,72 @@
+{
+  "schemaVersion": 1,
+  "status": "editorial_release_candidate_certified",
+  "durationSeconds": 220,
+  "video": {
+    "width": 1920,
+    "height": 1080,
+    "fps": 30,
+    "constantFrameRate": true,
+    "codec": "h264",
+    "profile": "High",
+    "pixelFormat": "yuv420p",
+    "mezzanineCrf": 15
+  },
+  "audio": {
+    "sampleRateHz": 48000,
+    "channels": 1,
+    "integratedLufs": -16.08,
+    "truePeakDbtp": -1.43,
+    "loudnessRangeLu": 7.1
+  },
+  "crossDevice": {
+    "runId": "demo-20260714185002-f4d562",
+    "commitSha": "2766f3db5c76c81c13178bf2e375b2583e7754e9",
+    "buildId": "D-p5ETSL",
+    "playerA": "chromium_desktop",
+    "playerB": "emulated_mobile_webkit",
+    "roomId": "e2e-demo-20260714185002-f4d562",
+    "roundId": "round-1",
+    "locksAt": "2026-07-14T18:50:43.038Z",
+    "identitiesDistinct": true,
+    "participantCount": 2,
+    "duplicateParticipants": 0,
+    "privateBeforeLock": true,
+    "liveReplayEquivalent": true,
+    "rankingReplayEquivalent": true,
+    "framePerfectSimultaneityClaimed": false,
+    "consoleErrors": 0,
+    "serverErrors": 0,
+    "unexpectedFailedRequests": 0
+  },
+  "authority": {
+    "deadline": "authoritative_room_runtime",
+    "resolution": "captured_txline_test_fixture",
+    "liveProjectionHash": "sha256:8c7e0141fa5e2744e1c43e19a0478b7c32d065eb48974a6f9b55941de923d483",
+    "replayedProjectionHash": "sha256:8c7e0141fa5e2744e1c43e19a0478b7c32d065eb48974a6f9b55941de923d483"
+  },
+  "editorialQa": {
+    "strictBlackSegments": 0,
+    "captionSafeAreasReviewed": true,
+    "webPushSegmentSeconds": 8,
+    "nativePushCaptureClaimed": false,
+    "youtubeLike720pTranscodeReviewed": true,
+    "underFiveMinutes": true
+  },
+  "verification": {
+    "unitAndContractTestsPassed": 128,
+    "productionBuildPassed": true,
+    "chromiumConsumerE2ePassed": true,
+    "mobileWebkitConsumerE2ePassed": true,
+    "productionDesktopSmokePassed": true,
+    "productionMobileSmokePassed": true
+  },
+  "outputs": {
+    "vira-demo-mezzanine-clean-1080p.mp4": "sha256:6b9e4a6b16e56120fadd9acee8c51f837c24a00f911310308227c678204d1bf4",
+    "vira-demo-master-clean-1080p.mp4": "sha256:58cefba31c5638f0e09ace7757d8cfcab39fd946586a22c9e59d394078a1e690",
+    "vira-demo-final-en-1080p.mp4": "sha256:7fc4cc47e502c4710e8db4148babb1cf3b9906a9f73b80008393444f88f52f78",
+    "vira-demo-captions-en.srt": "sha256:41979c5927ecc6c21fe3d6279c00378fc9ac6e79595260950e274799227cd52a",
+    "vira-demo-thumbnail.png": "sha256:aa1ba022eedf670f979aeda1148ddf06b045356f72ed1437d9a63f8fe8e6fd78",
+    "vira-demo-youtube-720p.mp4": "sha256:8a16c0f32fbaea8e2d07f28d072a67c5de8681fd8ce21c3ab620d6d0ee5918f2"
+  }
+}

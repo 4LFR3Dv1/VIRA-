@@ -1,0 +1,27 @@
+[Script Info]
+ScriptType: v4.00+
+PlayResX: 1920
+PlayResY: 1080
+WrapStyle: 0
+ScaledBorderAndShadow: yes
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Top,Arial,24,&H00F5F7F2,&H00F5F7F2,&HCC050A12,&HCC050A12,-1,0,0,0,100,100,0,0,3,1,0,2,180,180,24,1
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+Dialogue: 0,0:00:00.00,0:00:15.00,Top,,0,0,0,,Football is social, but most live sports products are passive.\NVIRA turns real match events into synchronized multiplayer decisions for friends.
+Dialogue: 0,0:00:15.00,0:00:33.00,Top,,0,0,0,,One fan makes a pre-match pick and creates a visual invite directly from the product.
+Dialogue: 0,0:00:33.00,0:00:45.00,Top,,0,0,0,,A friend joins instantly as a guest — no wallet, social account, payment or installation.
+Dialogue: 0,0:00:45.00,0:01:09.00,Top,,0,0,0,,Both participants arrive in the same Match Room and share one authoritative match state.
+Dialogue: 0,0:01:09.00,0:01:17.00,Top,,0,0,0,,Optional Web Push can bring fans back when a round opens.
+Dialogue: 0,0:01:17.00,0:01:35.00,Top,,0,0,0,,Every participant receives the same structured question\Nand the same server-synchronized countdown.
+Dialogue: 0,0:01:35.00,0:01:53.00,Top,,0,0,0,,Answers remain private until lock.\NThe server accepts one eligible response per participant.
+Dialogue: 0,0:01:53.00,0:02:07.00,Top,,0,0,0,,The deadline belongs to the authoritative runtime.\NLate or duplicate submissions cannot rewrite the state.
+Dialogue: 0,0:02:07.00,0:02:29.00,Top,,0,0,0,,Demo input: captured TxLINE test fixture.\NThe same normalization pipeline resolves the structured rule for everyone.
+Dialogue: 0,0:02:29.00,0:02:35.00,Top,,0,0,0,,Points and ranking converge from the same resolved room state.
+Dialogue: 0,0:02:35.00,0:03:02.00,Top,,0,0,0,,TxLINE fixtures, scores, updates and market data flow\Nthrough normalization, runtime and SSE to fans.
+Dialogue: 0,0:03:02.00,0:03:14.00,Top,,0,0,0,,Official Review reproduces the ledger, projection, result and ranking\Nwithout misrepresenting input origin.
+Dialogue: 0,0:03:14.00,0:03:30.00,Top,,0,0,0,,Fans participate for free. Partners fund branded match experiences and measurable engagement.
+Dialogue: 0,0:03:30.00,0:03:40.00,Top,,0,0,0,,VIRA — a verifiable multiplayer participation layer for live football, powered by TxLINE.

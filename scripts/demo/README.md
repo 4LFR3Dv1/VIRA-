@@ -23,7 +23,17 @@ The visible disclosure and manifest identify the input as `captured_txline_test_
 The final compositor refuses to replace external evidence with placeholders:
 
 ```bash
-npm run demo:compose -- --capture artifacts/demo/en/desktop/<run-id> --push artifacts/submission/sources/push-external/<capture>.mp4 --txline artifacts/submission/sources/txline/<evidence>.mp4 --voice artifacts/submission/sources/narration-en.wav --push-browser "Chrome on Windows"
+npm run demo:compose -- --capture artifacts/demo/en/desktop/<run-id> --cross-device artifacts/demo/en/hybrid-cross-device/<run-id>/multiplayer-split-screen.mp4 --txline artifacts/submission-inputs/txline-real.mp4 --voice artifacts/submission/audio/vira-demo-narration-aligned-48k-mono.wav
 ```
 
+The submission compositor also requires the split-screen file from one certified `hybrid-cross-device` run through `--cross-device`. That run uses Chromium desktop and emulated Mobile WebKit with distinct identities against the same room, round and authoritative server deadline. Its manifest records correlation and observed convergence intervals; it does not claim native iOS or frame-perfect simultaneity.
+
+The final composition uses the real in-product alerts control plus a labeled editorial Web Push flow. It never substitutes an HTML toast for a native operating-system notification. A native capture may be supplied in a future revision, but is not required for this submission cut.
+
 Without `--voice`, it emits the clean master and rough cut but deliberately withholds `vira-demo-final-en-1080p.mp4`.
+
+The publication contract and final QA evidence are versioned in
+`vira-demo-metadata.md` and `vira-demo-certification.json`. Generated videos,
+screenshots, contact sheets and transcodes remain under ignored `artifacts/`
+directories and must be published as external release assets rather than added
+to Git history.

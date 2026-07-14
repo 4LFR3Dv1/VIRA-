@@ -12,46 +12,46 @@ One fan makes a pre-match pick and creates a visual invite directly from the pro
 A friend joins instantly as a guest — no wallet, social account, payment or installation.
 
 4
-00:00:45,000 --> 00:01:05,000
+00:00:45,000 --> 00:01:09,000
 Both participants arrive in the same Match Room and share one authoritative match state.
 
 5
-00:01:05,000 --> 00:01:28,000
-Real Web Push through VAPID and the browser Push Service brings the fan back to the same room.
+00:01:09,000 --> 00:01:17,000
+Optional Web Push can bring fans back when a round opens.
 
 6
-00:01:28,000 --> 00:01:48,000
+00:01:17,000 --> 00:01:35,000
 Every participant receives the same structured question and the same server-synchronized countdown.
 
 7
-00:01:48,000 --> 00:02:08,000
+00:01:35,000 --> 00:01:53,000
 Answers remain private until lock. The server accepts one eligible response per participant.
 
 8
-00:02:08,000 --> 00:02:23,000
+00:01:53,000 --> 00:02:07,000
 The deadline belongs to the authoritative runtime. Late or duplicate submissions cannot rewrite the state.
 
 9
-00:02:23,000 --> 00:02:48,000
+00:02:07,000 --> 00:02:29,000
 Demo input: captured TxLINE test fixture.
 The same normalization pipeline resolves the structured rule for everyone.
 
 10
-00:02:48,000 --> 00:03:03,000
+00:02:29,000 --> 00:02:35,000
 Points and ranking converge from the same resolved room state.
 
 11
-00:03:03,000 --> 00:03:28,000
+00:02:35,000 --> 00:03:02,000
 TxLINE fixtures, scores, updates and market data flow through normalization, runtime and SSE to fans.
 
 12
-00:03:28,000 --> 00:03:50,000
+00:03:02,000 --> 00:03:14,000
 Official Review reproduces the ledger, projection, result and ranking without misrepresenting input origin.
 
 13
-00:03:50,000 --> 00:04:00,000
+00:03:14,000 --> 00:03:30,000
 Fans participate for free. Partners fund branded match experiences and measurable engagement.
 
 14
-00:04:00,000 --> 00:04:08,000
+00:03:30,000 --> 00:03:40,000
 VIRA — a verifiable multiplayer participation layer for live football, powered by TxLINE.
