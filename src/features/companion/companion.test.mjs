@@ -5,6 +5,7 @@ import { projectConsumerAttentionEvents, selectAttentionForParticipant } from ".
 import { readCompanionPreferences, writeCompanionPreferences } from "./preferences.ts";
 import { deriveViraCompanionViewModel } from "./view-model.ts";
 import { documentPictureInPictureController } from "./document-pip.ts";
+import { canRegisterServiceWorker } from "../../pwa/register-service-worker.ts";
 
 function roomState() {
   const snapshot = {
@@ -97,4 +98,12 @@ test("Document PiP is capability-detected without browser sniffing", () => {
   const requestWindow = async () => ({});
   assert.equal(documentPictureInPictureController({ documentPictureInPicture: { requestWindow } }).requestWindow, requestWindow);
   assert.equal(documentPictureInPictureController({ documentPictureInPicture: {} }), null);
+});
+
+test("Service Worker registration requires capability and a secure context", () => {
+  const serviceWorker = {};
+  assert.equal(canRegisterServiceWorker({ protocol: "https:", hostname: "vira.example" }, { serviceWorker }), true);
+  assert.equal(canRegisterServiceWorker({ protocol: "http:", hostname: "127.0.0.1" }, { serviceWorker }), true);
+  assert.equal(canRegisterServiceWorker({ protocol: "http:", hostname: "vira.example" }, { serviceWorker }), false);
+  assert.equal(canRegisterServiceWorker({ protocol: "https:", hostname: "vira.example" }, { serviceWorker: undefined }), false);
 });

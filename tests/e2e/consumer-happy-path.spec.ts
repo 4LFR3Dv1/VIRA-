@@ -74,6 +74,10 @@ test("two isolated guests share, answer, resolve and receive the same ranking", 
   try {
     await playerA.addInitScript(() => { Object.defineProperty(window, "documentPictureInPicture", { configurable: true, value: undefined }); });
     const pageA = await playerA.newPage(); await pageA.goto(`/match/${roomId}?lang=en`); await join(pageA, "Ana");
+    await expect.poll(() => pageA.evaluate(async () => (await navigator.serviceWorker.getRegistration())?.active?.scriptURL ?? ""), { timeout: 15_000 }).toMatch(/\/sw\.js$/);
+    const manifestResponse = await pageA.request.get("/site.webmanifest");
+    expect(manifestResponse.status()).toBe(200);
+    expect((await manifestResponse.json()).display).toBe("standalone");
     const aAfterJoin = await session(pageA, roomId);
     const versionBeforeFollow = (await authenticatedState(roomId, aAfterJoin)).ledger.streamVersion;
     await pageA.getByRole("button", { name: /Follow match|Seguir partida/i }).click();
@@ -92,6 +96,12 @@ test("two isolated guests share, answer, resolve and receive the same ranking", 
     await pageA.getByRole("button", { name: /Return to room|Voltar à sala/i }).click();
     await expect(pageA).toHaveURL(new RegExp(`/match/${roomId}\\?lang=en`));
     await expect(pageA.locator('[data-companion-state]')).toHaveAttribute("data-companion-state", "round_open");
+    await pageA.goto(`/match/${roomId}/companion?lang=pt-BR&invite=companion-safe`);
+    await expect(pageA.locator("html")).toHaveAttribute("lang", "pt-BR");
+    expect(await session(pageA, roomId)).toEqual(identityBeforeCompact);
+    await pageA.getByRole("button", { name: /Voltar à sala/i }).click();
+    await expect.poll(() => pageA.evaluate(() => ({ lang: new URL(location.href).searchParams.get("lang"), invite: new URL(location.href).searchParams.get("invite") }))).toEqual({ lang: "pt-BR", invite: "companion-safe" });
+    await pageA.getByRole("button", { name: "Inglês" }).click();
     const shareResponse = pageA.waitForResponse((response) => response.url() === `${origin}/shares` && response.request().method() === "POST" && response.status() === 201);
     await pageA.getByRole("button", { name: /Convidar para a sala|Invite to the room/i }).click();
     const share = await (await shareResponse).json() as { url: string };
