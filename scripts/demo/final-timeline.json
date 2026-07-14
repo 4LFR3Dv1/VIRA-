@@ -17,7 +17,7 @@
     { "id": "10-resolution", "start": 143, "duration": 25, "overlay": "SYNCHRONIZED RESULT", "disclosure": "Demo input: captured TxLINE test fixture", "sources": ["locked:A", "resolution-both:A", "resolution-both:B"] },
     { "id": "11-ranking", "start": 168, "duration": 15, "overlay": "REPRODUCIBLE RANKING", "disclosure": "Demo input: captured TxLINE test fixture", "sources": ["ranking:A", "ranking:B"] },
     { "id": "12-txline", "start": 183, "duration": 25, "overlay": "TxLINE → NORMALIZATION → RUNTIME → SSE → FANS", "external": "txline" },
-    { "id": "13-review", "start": 208, "duration": 22, "overlay": "RESULT + RANKING REPRODUCED", "editorialFocus": { "x": 0.77, "y": 0.34, "zoom": 1.16 }, "sources": ["official-review:B", "replay-proof:B"] },
+    { "id": "13-review", "start": 208, "duration": 22, "overlay": "RESULT + RANKING REPRODUCED", "editorialFocus": { "x": 0.77, "y": 0.34, "startZoom": 1.08, "zoom": 1.22, "step": 0.00045 }, "sources": ["official-review:B", "replay-proof:B"] },
     { "id": "14-commercial", "start": 230, "duration": 10, "overlay": "FREE FOR FANS · BUILT FOR PARTNERS", "sources": ["room-share-sheet:A", "shared-room:A", "ranking:A"] },
     { "id": "15-outro", "start": 240, "duration": 8, "overlay": "VIRA", "cta": { "url": "vira.snelabs.space", "repo": "github.com/4LFR3Dv1/VIRA-", "reassurance": "NO ACCOUNT. NO X. NO WALLET." }, "sources": ["ranking:A", "home:A"] }
   ]

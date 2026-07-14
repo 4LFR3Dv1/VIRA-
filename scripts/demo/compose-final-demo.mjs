@@ -33,7 +33,9 @@ async function makeScene(scene, inputs, output) {
   const args = ["-y"];
   for (const input of inputs) args.push("-stream_loop", "-1", "-i", input);
   const focus = scene.editorialFocus ?? { x: 0.5, y: 0.5, zoom: 1.035 };
-  const filters = inputs.map((_, index) => `[${index}:v]fps=30,scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2:#050A12,setsar=1,trim=duration=${segmentDuration.toFixed(3)},setpts=PTS-STARTPTS,zoompan=z='min(zoom+0.00012,${focus.zoom})':x='iw*${focus.x}-(iw/zoom/2)':y='ih*${focus.y}-(ih/zoom/2)':d=1:s=1920x1080:fps=30[v${index}]`);
+  const zoomStep = focus.step ?? 0.00012;
+  const zoomExpression = focus.startZoom ? `if(eq(on,0),${focus.startZoom},min(pzoom+${zoomStep},${focus.zoom}))` : `min(max(zoom,pzoom)+${zoomStep},${focus.zoom})`;
+  const filters = inputs.map((_, index) => `[${index}:v]fps=30,scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2:#050A12,setsar=1,trim=duration=${segmentDuration.toFixed(3)},setpts=PTS-STARTPTS,zoompan=z='${zoomExpression}':x='iw*${focus.x}-(iw/zoom/2)':y='ih*${focus.y}-(ih/zoom/2)':d=1:s=1920x1080:fps=30[v${index}]`);
   filters.push(`${inputs.map((_, index) => `[v${index}]`).join("")}concat=n=${inputs.length}:v=1:a=0[cut]`);
   const label = `drawtext=fontfile='${q(FONT)}':text='${q(scene.overlay)}':fontcolor=0xC8FF00:fontsize=34:box=1:boxcolor=0x050A12dd:boxborderw=16:x=64:y=96`;
   const disclosure = scene.disclosure ? `,drawtext=fontfile='${q(FONT)}':text='${q(scene.disclosure)}':fontcolor=white:fontsize=22:box=1:boxcolor=0x050A12dd:boxborderw=12:x=(w-text_w)/2:y=h-94` : "";
