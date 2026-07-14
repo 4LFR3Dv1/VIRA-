@@ -24,3 +24,12 @@ test("Service Worker cannot cache competitive state and sanitizes notification d
   assert.doesNotMatch(source, /new\s+Cache/);
   assert.doesNotMatch(source, /silent/i);
 });
+
+test("Consumer fonts are bundled locally without a Google Fonts runtime dependency", async () => {
+  const source = await readFile(new URL("../src/styles/fonts.css", import.meta.url), "utf8");
+  assert.match(source, /@fontsource\/chakra-petch/);
+  assert.match(source, /@fontsource\/dm-sans/);
+  assert.match(source, /@fontsource\/dm-mono/);
+  assert.doesNotMatch(source, /fonts\.(googleapis|gstatic)\.com/);
+  assert.doesNotMatch(source, /https?:\/\//);
+});
