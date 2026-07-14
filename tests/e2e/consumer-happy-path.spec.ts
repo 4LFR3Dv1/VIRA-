@@ -196,6 +196,8 @@ test("two isolated guests share, answer, resolve and receive the same ranking", 
     }
     await captureVisual(pageA, testInfo, "shared-room-en");
     await answerYes(pageA);
+    await expect(pageA.getByText("Your answer is private until the server locks the round.").first()).toBeVisible();
+    await expect(pageA.getByText(/^You answered:/).first()).toBeHidden();
     if (visualCompanionEnabled) {
       await expect(companionA).toHaveAttribute("data-companion-state", "answer_confirmed");
       await expect(companionA).toContainText(/Answer confirmed/i);
@@ -240,6 +242,8 @@ test("two isolated guests share, answer, resolve and receive the same ranking", 
     await pageB.goto("about:blank");
     await expect.poll(async () => (await metrics()).sseClients, { timeout: 10_000 }).toBe(1);
     await expect.poll(async () => (await (await fetch(`${origin}/public/rooms/${roomId}`)).json()).currentRound?.state, { timeout: 40_000 }).toBe("locked");
+    await expect(pageA.getByText("You answered: Yes").first()).toBeVisible();
+    await expect(pageA.getByText("You answered: --")).toHaveCount(0);
     if (visualCompanionEnabled) {
       await expect(pageA.locator('[data-companion-state]')).toHaveAttribute("data-companion-state", "locked");
       await captureVisual(pageA, testInfo, "companion-locked-en");

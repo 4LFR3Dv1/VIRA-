@@ -368,6 +368,7 @@ export const ptBR = {
   "round.target": "Alvo",
   "round.answerConfirmed": "Palpite confirmado",
   "round.answerInPlay": "Palpite em jogo",
+  "round.answerPrivateUntilLock": "Sua resposta fica privada até o servidor fechar a rodada.",
   "round.yourAnswer": ({ answer }) => `Você respondeu: ${answer}`,
   "round.predictionHorizon": "Horizonte da previsão",
   "round.answerWindow": "Janela de resposta",

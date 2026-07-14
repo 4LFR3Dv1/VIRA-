@@ -331,11 +331,8 @@ export function useRoomRuntime(roomId: string, displayName?: string | null) {
         roundId: response.roundId ?? round.id,
         optionId: response.optionId ?? selectedOptionId,
       });
-      setState((current) => ({
-        ...current,
-        currentAnswerState: "submitted",
-        currentUiState: "awaiting_resolution",
-      }));
+      const snapshot = await fetchRoomState(roomId, participantId, sessionToken);
+      setState((current) => stateFromSnapshot(current, snapshot, participantId));
     },
     castFanPulse: async (side) => {
       if (!participantId || !sessionToken || state.snapshot.match.status !== "scheduled") return;

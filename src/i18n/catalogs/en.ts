@@ -368,6 +368,7 @@ export const en = {
   "round.target": "Target",
   "round.answerConfirmed": "Prediction confirmed",
   "round.answerInPlay": "Prediction in play",
+  "round.answerPrivateUntilLock": "Your answer is private until the server locks the round.",
   "round.yourAnswer": ({ answer }) => `You answered: ${answer}`,
   "round.predictionHorizon": "Prediction horizon",
   "round.answerWindow": "Answer window",

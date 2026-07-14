@@ -412,6 +412,7 @@ export type TranslationMessages = {
   "round.target": undefined;
   "round.answerConfirmed": undefined;
   "round.answerInPlay": undefined;
+  "round.answerPrivateUntilLock": undefined;
   "round.yourAnswer": { answer: string };
   "round.predictionHorizon": undefined;
   "round.answerWindow": undefined;
