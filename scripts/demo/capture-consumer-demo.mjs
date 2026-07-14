@@ -18,6 +18,8 @@ const LOCALE = argument("locale", "en");
 const TIME_ZONE = argument("time-zone", "America/Sao_Paulo");
 const INPUT = argument("input", AUTHORITY);
 const CAPTURE_MODE = argument("capture-mode", "desktop");
+const CLIP_ONLY = argument("clip-only", null);
+const CLIP_ONLY_IDS = new Set(String(CLIP_ONLY ?? "").split(",").map((value) => value.trim()).filter(Boolean));
 const DEPLOYMENT = argument("deployment", DEFAULT_DEPLOYMENT);
 if (!["en", "pt-BR"].includes(LOCALE)) throw new Error("--locale must be en or pt-BR");
 if (INPUT !== AUTHORITY) throw new Error(`Unsupported deterministic demo input: ${INPUT}`);
@@ -153,11 +155,13 @@ async function main() {
     await Promise.all([contextA.close(), contextB.close()]); contextA = contextB = null; await Promise.all([videoA.saveAs(aRaw), videoB.saveAs(bRaw)]);
     await Promise.all((await readdir(raw)).filter((name) => name.endsWith(".webm") && !["player-a.webm", "player-b.webm"].includes(name)).map((name) => rm(path.join(raw, name), { force: true })));
     const aMaster = path.join(masters, "player-a-master-1080p30.mp4"), bMaster = path.join(masters, "player-b-master-1080p30.mp4");
-    await Promise.all([master(aRaw, aMaster), master(bRaw, bMaster)]);
+    if (!CLIP_ONLY) await Promise.all([master(aRaw, aMaster), master(bRaw, bMaster)]);
     const files = [];
-    for (const item of scenes) for (const player of item.players) { const target = path.join(clips, `${item.id}-player-${player.toLowerCase()}.mp4`); await clip(player === "A" ? aRaw : bRaw, target, preroll + item.startedAtMs, preroll + item.endedAtMs); files.push(path.relative(output, target).replaceAll("\\", "/")); }
-    const multiplayer = scenes.filter((item) => item.players.length === 2), splitStart = multiplayer[0].startedAtMs, splitEnd = multiplayer.at(-1).endedAtMs;
-    await split(aRaw, bRaw, path.join(output, "multiplayer-split-screen.mp4"), preroll + splitStart, splitEnd - splitStart);
+    const exportedScenes = CLIP_ONLY ? scenes.filter((item) => CLIP_ONLY_IDS.has(item.id)) : scenes;
+    if (CLIP_ONLY && exportedScenes.length !== CLIP_ONLY_IDS.size) throw new Error(`Unknown --clip-only scene list: ${CLIP_ONLY}`);
+    for (const item of exportedScenes) for (const player of item.players) { const target = path.join(clips, `${item.id}-player-${player.toLowerCase()}.mp4`); await clip(player === "A" ? aRaw : bRaw, target, preroll + item.startedAtMs, preroll + item.endedAtMs); files.push(path.relative(output, target).replaceAll("\\", "/")); }
+    if (!CLIP_ONLY) { const multiplayer = scenes.filter((item) => item.players.length === 2), splitStart = multiplayer[0].startedAtMs, splitEnd = multiplayer.at(-1).endedAtMs; await split(aRaw, bRaw, path.join(output, "multiplayer-split-screen.mp4"), preroll + splitStart, splitEnd - splitStart); }
+    if (CLIP_ONLY) await Promise.all([rm(raw, { recursive: true, force: true }), rm(masters, { recursive: true, force: true })]);
     const manifest = {
       schemaVersion: 3, kind: "VIRA_CONSUMER_DEMO_CAPTURE", runId, commitSha: gitSha(), buildId: await buildId(), deployment: DEPLOYMENT,
       capturedAtUtc: new Date().toISOString(), locale: LOCALE, timeZone: TIME_ZONE, captureMode: CAPTURE_MODE, inputAuthority: AUTHORITY,
@@ -166,7 +170,7 @@ async function main() {
       runtime: { node: process.version, browser: CAPTURE_MODE === "mobile-webkit" ? "webkit" : "chromium", browserVersion: browser.version() },
       players: { A: "Ana", B: "Bruno" },
       scenes: scenes.map((item) => ({ ...item, startedAtSeconds: Number(seconds(item.startedAtMs)), endedAtSeconds: Number(seconds(item.endedAtMs)), durationSeconds: Number(seconds(item.endedAtMs - item.startedAtMs)) })),
-      outputs: { playerA: "masters/player-a-master-1080p30.mp4", playerB: "masters/player-b-master-1080p30.mp4", rawPlayerA: "raw/player-a.webm", rawPlayerB: "raw/player-b.webm", splitScreen: "multiplayer-split-screen.mp4", clips: files },
+      outputs: CLIP_ONLY ? { clipPatchFor: [...CLIP_ONLY_IDS], clips: files } : { playerA: "masters/player-a-master-1080p30.mp4", playerB: "masters/player-b-master-1080p30.mp4", rawPlayerA: "raw/player-a.webm", rawPlayerB: "raw/player-b.webm", splitScreen: "multiplayer-split-screen.mp4", clips: files },
       authority: { deadline: "authoritative_room_runtime", resolution: AUTHORITY, liveProjectionHash: verification.liveProjectionHash, replayedProjectionHash: verification.replayedProjectionHash, liveReplayEquivalent: verification.projectionMatches === true, rankingReplayEquivalent: verification.rankingMatches === true },
       alerts: { ...alertsCapture, nativeNotificationCaptured: false, nativeNotificationSource: "external_capture_required" },
       health: { consoleErrors: 0, serverErrors: 0 },
