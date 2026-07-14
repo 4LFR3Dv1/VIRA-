@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "title": "VIRA — Live Multiplayer Football Experience Powered by TxLINE",
+  "resolution": "1920x1080",
+  "fps": 30,
+  "durationSeconds": 248,
+  "scenes": [
+    { "id": "01-hook", "start": 0, "duration": 15, "overlay": "PLAY THE MATCH LIVE", "sources": ["home:A", "round-open:A", "resolution-both:A"] },
+    { "id": "02-pick-share", "start": 15, "duration": 18, "overlay": "PICK · SHARE", "sources": ["home-pick:A", "prediction-share:A", "room-share-sheet:A"] },
+    { "id": "03-join", "start": 33, "duration": 12, "overlay": "NO ACCOUNT · NO WALLET", "sources": ["player-b-opens-share:B", "guest-join:B", "shared-room:B"] },
+    { "id": "04-match-room", "start": 45, "duration": 20, "overlay": "ONE SHARED MATCH ROOM", "sources": ["match-room:A", "round-open:A", "shared-room:A"] },
+    { "id": "05-alerts-enabled", "start": 65, "duration": 8, "overlay": "RECEIVE MATCH ALERTS", "external": "push-prelude" },
+    { "id": "06-web-push-external", "start": 73, "duration": 15, "overlay": "REAL WEB PUSH · VAPID", "external": "push" },
+    { "id": "07-round-open", "start": 88, "duration": 20, "overlay": "SAME ROUND · SAME DEADLINE", "sources": ["round-open:A", "round-open:B", "player-a-selects:A"] },
+    { "id": "08-private-answers", "start": 108, "duration": 20, "overlay": "PRIVATE UNTIL LOCK", "sources": ["player-a-selects:A", "player-b-selects:B", "private-answers:A", "private-answers:B"] },
+    { "id": "09-lock", "start": 128, "duration": 15, "overlay": "SERVER-OWNED LOCK", "sources": ["normal-deadline:A", "normal-deadline:B", "locked:A"] },
+    { "id": "10-resolution", "start": 143, "duration": 25, "overlay": "SYNCHRONIZED RESULT", "disclosure": "Demo input: captured TxLINE test fixture", "sources": ["locked:A", "resolution-both:A", "resolution-both:B"] },
+    { "id": "11-ranking", "start": 168, "duration": 15, "overlay": "REPRODUCIBLE RANKING", "disclosure": "Demo input: captured TxLINE test fixture", "sources": ["ranking:A", "ranking:B"] },
+    { "id": "12-txline", "start": 183, "duration": 25, "overlay": "TxLINE → NORMALIZATION → RUNTIME → SSE → FANS", "external": "txline" },
+    { "id": "13-review", "start": 208, "duration": 22, "overlay": "RESULT + RANKING REPRODUCED", "sources": ["official-review:B", "replay-proof:B"] },
+    { "id": "14-commercial", "start": 230, "duration": 10, "overlay": "FREE FOR FANS · BUILT FOR PARTNERS", "sources": ["room-share-sheet:A", "shared-room:A", "ranking:A"] },
+    { "id": "15-outro", "start": 240, "duration": 8, "overlay": "VIRA", "sources": ["ranking:A", "home:A"] }
+  ]
+}
