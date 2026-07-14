@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "source": "../voice_narration.mp3",
+  "durationSeconds": 248,
+  "audio": {
+    "sampleRate": 48000,
+    "channels": 1,
+    "codec": "pcm_s24le"
+  },
+  "normalization": {
+    "method": "EBU_R128_two_pass_global",
+    "integratedLufs": -16,
+    "truePeakDbtp": -1.5,
+    "loudnessRangeLu": 11
+  },
+  "blocks": [
+    { "id": "01-hook", "label": "Hook", "sourceStart": 0, "sourceEnd": 11.5049, "timelineStart": 0, "timelineEnd": 15 },
+    { "id": "02-pick-share", "label": "Pick and share", "sourceStart": 11.5049, "sourceEnd": 17.8151, "timelineStart": 15, "timelineEnd": 33 },
+    { "id": "03-guest-join", "label": "Guest-first join", "sourceStart": 17.8151, "sourceEnd": 24.9246, "timelineStart": 33, "timelineEnd": 45 },
+    { "id": "04-match-room", "label": "Match Room", "sourceStart": 24.9246, "sourceEnd": 31.7226, "timelineStart": 45, "timelineEnd": 65 },
+    { "id": "05-web-push", "label": "Web Push", "sourceStart": 31.7226, "sourceEnd": 39.7068, "timelineStart": 65, "timelineEnd": 88 },
+    { "id": "06-round-open", "label": "Round open", "sourceStart": 39.7068, "sourceEnd": 46.6637, "timelineStart": 88, "timelineEnd": 108 },
+    { "id": "07-private-answers", "label": "Private answers", "sourceStart": 46.6637, "sourceEnd": 54.1001, "timelineStart": 108, "timelineEnd": 128 },
+    { "id": "08-authoritative-lock", "label": "Authoritative lock", "sourceStart": 54.1001, "sourceEnd": 61.8949, "timelineStart": 128, "timelineEnd": 143 },
+    { "id": "09-resolution", "label": "Resolution", "sourceStart": 61.8949, "sourceEnd": 72.258, "timelineStart": 143, "timelineEnd": 168 },
+    { "id": "10-ranking", "label": "Ranking", "sourceStart": 72.258, "sourceEnd": 77.3837, "timelineStart": 168, "timelineEnd": 183 },
+    { "id": "11-txline", "label": "TxLINE", "sourceStart": 77.3837, "sourceEnd": 87.5986, "timelineStart": 183, "timelineEnd": 208 },
+    { "id": "12-official-review", "label": "Official Review", "sourceStart": 87.5986, "sourceEnd": 96.4309, "timelineStart": 208, "timelineEnd": 230 },
+    { "id": "13-commercial", "label": "Commercial path", "sourceStart": 96.4309, "sourceEnd": 104.7105, "timelineStart": 230, "timelineEnd": 240 },
+    { "id": "14-closing", "label": "Closing", "sourceStart": 104.7105, "sourceEnd": 112.43, "timelineStart": 240, "timelineEnd": 248 }
+  ]
+}
