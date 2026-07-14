@@ -7,6 +7,7 @@ import { readCompanionPreferences, writeCompanionPreferences } from "./preferenc
 import { deriveViraCompanionViewModel, sameViraCompanionViewModel } from "./view-model.ts";
 import { documentPictureInPictureController, installCompanionStyles } from "./document-pip.ts";
 import { canRegisterServiceWorker } from "../../pwa/register-service-worker.ts";
+import { VIRA_VISUAL_COMPANION_ENABLED } from "./feature-flags.ts";
 
 function roomState() {
   const snapshot = {
@@ -139,4 +140,13 @@ test("Service Worker registration requires capability and a secure context", () 
   assert.equal(canRegisterServiceWorker({ protocol: "http:", hostname: "127.0.0.1" }, { serviceWorker }), true);
   assert.equal(canRegisterServiceWorker({ protocol: "http:", hostname: "vira.example" }, { serviceWorker }), false);
   assert.equal(canRegisterServiceWorker({ protocol: "https:", hostname: "vira.example" }, { serviceWorker: undefined }), false);
+});
+
+test("visual Companion is disabled by default while attention contracts remain available", async () => {
+  assert.equal(VIRA_VISUAL_COMPANION_ENABLED, false);
+  const roomSource = await readFile(new URL("../match-room/MatchRoomScreen.tsx", import.meta.url), "utf8");
+  const routeSource = await readFile(new URL("../../app/routing/route-manifest.tsx", import.meta.url), "utf8");
+  assert.match(roomSource, /VIRA_VISUAL_COMPANION_ENABLED && participantId && sessionToken/);
+  assert.match(routeSource, /VIRA_VISUAL_COMPANION_ENABLED \?/);
+  assert.match(roomSource, /MatchAlertsControl/);
 });

@@ -299,6 +299,7 @@ export type TranslationMessages = {
   "companion.alerts.title": undefined;
   "companion.alerts.description": undefined;
   "companion.alerts.enable": undefined;
+  "companion.alerts.receive": undefined;
   "companion.alerts.disable": undefined;
   "companion.alerts.requesting": undefined;
   "companion.alerts.denied": undefined;

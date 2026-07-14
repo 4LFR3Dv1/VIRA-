@@ -13,5 +13,6 @@ function run(commandArgs, env = process.env) {
   if (result.status !== 0) process.exit(result.status ?? 1);
 }
 
-run(["run", "build"]);
-run(["run", "test:browser:consumer"], { ...process.env, VIRA_COMPANION_PROFILE: label });
+const profileEnv = { ...process.env, VITE_VIRA_VISUAL_COMPANION_ENABLED: "true", VIRA_COMPANION_PROFILE: label };
+run(["run", "build"], profileEnv);
+run(["run", "test:browser:consumer"], profileEnv);

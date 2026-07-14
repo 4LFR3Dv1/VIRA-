@@ -10,6 +10,8 @@ let backend: ChildProcess;
 let origin = "";
 let dataDir = "";
 const e2eToken = crypto.randomBytes(32).toString("hex");
+let e2eVapidPublicKey = "";
+let e2eVapidPrivateKey = "";
 
 function freePort(): Promise<number> { return new Promise((resolve, reject) => { const server = http.createServer(); server.once("error", reject); server.listen(0, "127.0.0.1", () => { const address = server.address(); server.close(() => resolve(typeof address === "object" && address ? address.port : 0)); }); }); }
 async function waitForHealth() { await expect.poll(async () => { try { return (await fetch(`${origin}/health`)).status; } catch { return 0; } }, { timeout: 15_000 }).toBe(200); }
@@ -54,15 +56,20 @@ async function captureCompanionVisual(page: Page, testInfo: TestInfo, name: stri
 }
 
 test.beforeAll(async () => {
+  const webPush = await import("web-push");
+  const vapid = webPush.default.generateVAPIDKeys();
+  e2eVapidPublicKey = vapid.publicKey;
+  e2eVapidPrivateKey = vapid.privateKey;
   dataDir = await mkdtemp(path.join(os.tmpdir(), "vira-consumer-browser-e2e-"));
   const port = await freePort(); origin = `http://127.0.0.1:${port}`;
-  backend = spawn(process.execPath, ["backend/server.mjs"], { cwd: process.cwd(), env: { ...process.env, PORT: String(port), NODE_ENV: "production", VIRA_DATA_DIR: dataDir, VIRA_E2E_ENABLED: "true", VIRA_E2E_TOKEN: e2eToken, VIRA_E2E_ALLOWED_HOSTS: "127.0.0.1", VIRA_VERIFIED_PLAYBACK_ENABLED: "false", VIRA_MARKET_ROUNDS_ENABLED: "false", VIRA_ROUND_ANSWER_WINDOW_SEC: "30", TXLINE_JWT: "", TXLINE_API_TOKEN: "" }, stdio: ["ignore", "pipe", "pipe"] });
+  backend = spawn(process.execPath, ["backend/server.mjs"], { cwd: process.cwd(), env: { ...process.env, PORT: String(port), NODE_ENV: "production", VIRA_DATA_DIR: dataDir, VIRA_E2E_ENABLED: "true", VIRA_E2E_TOKEN: e2eToken, VIRA_E2E_ALLOWED_HOSTS: "127.0.0.1", VIRA_VERIFIED_PLAYBACK_ENABLED: "false", VIRA_MARKET_ROUNDS_ENABLED: "false", VIRA_ROUND_ANSWER_WINDOW_SEC: "30", VIRA_WEB_PUSH_ENABLED: "true", VIRA_VAPID_PUBLIC_KEY: e2eVapidPublicKey, VIRA_VAPID_PRIVATE_KEY: e2eVapidPrivateKey, VIRA_VAPID_SUBJECT: "mailto:e2e@vira.invalid", TXLINE_JWT: "", TXLINE_API_TOKEN: "" }, stdio: ["ignore", "pipe", "pipe"] });
   await waitForHealth();
 });
 test.afterAll(async () => { backend?.kill("SIGTERM"); if (backend) await new Promise((resolve) => backend.once("exit", resolve)); await rm(dataDir, { recursive: true, force: true }); });
 
 test("two isolated guests share, answer, resolve and receive the same ranking", async ({ browser }, testInfo) => {
   const performanceProfile = process.env.VIRA_COMPANION_PROFILE ?? null;
+  const visualCompanionEnabled = Boolean(performanceProfile);
   const runId = `run-${testInfo.repeatEachIndex}-${crypto.randomUUID().slice(0, 8)}`;
   const started = await scenario(runId, "start"); expect(started.status).toBe(200);
   const { roomId, inputAuthority } = await started.json() as { roomId: string; inputAuthority: string };
@@ -86,35 +93,43 @@ test("two isolated guests share, answer, resolve and receive the same ranking", 
   let companionPerformance: Record<string, unknown> | null = null;
   try {
     await playerA.addInitScript(() => { Object.defineProperty(window, "documentPictureInPicture", { configurable: true, value: undefined }); });
-    const pageA = await playerA.newPage(); await pageA.goto(`/match/${roomId}?lang=en`); await join(pageA, "Ana");
+    const pageA = await playerA.newPage();
+    const remoteFontRequests: string[] = [];
+    pageA.on("request", (request) => { if (/fonts\.(googleapis|gstatic)\.com/.test(request.url())) remoteFontRequests.push(request.url()); });
+    await pageA.goto(`/match/${roomId}?lang=en`); await join(pageA, "Ana");
+    await expect.poll(() => pageA.evaluate(() => ({ chakra: document.fonts.check('700 16px "Chakra Petch"'), sans: document.fonts.check('400 16px "DM Sans"'), mono: document.fonts.check('400 16px "DM Mono"') }))).toEqual({ chakra: true, sans: true, mono: true });
+    expect(remoteFontRequests).toEqual([]);
     await expect.poll(() => pageA.evaluate(async () => (await navigator.serviceWorker.getRegistration())?.active?.scriptURL ?? ""), { timeout: 15_000 }).toMatch(/\/sw\.js$/);
     const manifestResponse = await pageA.request.get("/site.webmanifest");
     expect(manifestResponse.status()).toBe(200);
     expect((await manifestResponse.json()).display).toBe("standalone");
     const aAfterJoin = await session(pageA, roomId);
+    const pushCapabilities = await pageA.evaluate(() => "Notification" in window && "serviceWorker" in navigator && "PushManager" in window);
+    if (pushCapabilities) await expect(pageA.locator("[data-match-alerts-control]")).toBeVisible();
+    else await expect(pageA.locator("[data-match-alerts-control]")).toHaveCount(0);
     const versionBeforeFollow = (await authenticatedState(roomId, aAfterJoin)).ledger.streamVersion;
-    await pageA.getByRole("button", { name: /Follow match|Seguir partida/i }).click();
     const companionA = pageA.locator('[data-companion-state]');
-    await expect(companionA).toHaveAttribute("data-companion-state", "round_open");
-    expect((await authenticatedState(roomId, aAfterJoin)).ledger.streamVersion).toBe(versionBeforeFollow);
-    await captureVisual(pageA, testInfo, "companion-round-open-en");
-    await captureCompanionVisual(pageA, testInfo, "companion-card-round-open-en");
-    const identityBeforeCompact = await session(pageA, roomId);
-    await pageA.getByRole("button", { name: /Open compact view|Abrir visão compacta/i }).click();
-    await expect(pageA).toHaveURL(new RegExp(`/match/${roomId}/companion\\?lang=en`));
-    await expect(pageA.locator('[data-companion-state]')).toHaveAttribute("data-companion-state", "round_open");
-    expect(await session(pageA, roomId)).toEqual(identityBeforeCompact);
-    expect((await authenticatedState(roomId, identityBeforeCompact)).ledger.streamVersion).toBe(versionBeforeFollow);
-    await captureVisual(pageA, testInfo, "companion-compact-fallback-en");
-    await pageA.getByRole("button", { name: /Return to room|Voltar à sala/i }).click();
-    await expect(pageA).toHaveURL(new RegExp(`/match/${roomId}\\?lang=en`));
-    await expect(pageA.locator('[data-companion-state]')).toHaveAttribute("data-companion-state", "round_open");
-    await pageA.goto(`/match/${roomId}/companion?lang=pt-BR&invite=companion-safe`);
-    await expect(pageA.locator("html")).toHaveAttribute("lang", "pt-BR");
-    expect(await session(pageA, roomId)).toEqual(identityBeforeCompact);
-    await pageA.getByRole("button", { name: /Voltar à sala/i }).click();
-    await expect.poll(() => pageA.evaluate(() => ({ lang: new URL(location.href).searchParams.get("lang"), invite: new URL(location.href).searchParams.get("invite") }))).toEqual({ lang: "pt-BR", invite: "companion-safe" });
-    await pageA.getByRole("button", { name: "Inglês" }).click();
+    if (visualCompanionEnabled) {
+      await pageA.getByRole("button", { name: /Follow match|Seguir partida/i }).click();
+      await expect(companionA).toHaveAttribute("data-companion-state", "round_open");
+      expect((await authenticatedState(roomId, aAfterJoin)).ledger.streamVersion).toBe(versionBeforeFollow);
+      await captureVisual(pageA, testInfo, "companion-round-open-en");
+      await captureCompanionVisual(pageA, testInfo, "companion-card-round-open-en");
+      const identityBeforeCompact = await session(pageA, roomId);
+      await pageA.getByRole("button", { name: /Open compact view|Abrir visão compacta/i }).click();
+      await expect(pageA).toHaveURL(new RegExp(`/match/${roomId}/companion\\?lang=en`));
+      await expect(pageA.locator('[data-companion-state]')).toHaveAttribute("data-companion-state", "round_open");
+      expect(await session(pageA, roomId)).toEqual(identityBeforeCompact);
+      expect((await authenticatedState(roomId, identityBeforeCompact)).ledger.streamVersion).toBe(versionBeforeFollow);
+      await captureVisual(pageA, testInfo, "companion-compact-fallback-en");
+      await pageA.getByRole("button", { name: /Return to room|Voltar à sala/i }).click();
+      await expect(pageA).toHaveURL(new RegExp(`/match/${roomId}\\?lang=en`));
+    } else {
+      await expect(companionA).toHaveCount(0);
+      await expect(pageA.getByRole("button", { name: /Open floating|Abrir flutuante|Open compact view|Abrir visão compacta/i })).toHaveCount(0);
+      expect((await authenticatedState(roomId, aAfterJoin)).ledger.streamVersion).toBe(versionBeforeFollow);
+      await captureVisual(pageA, testInfo, "match-room-clean-after-en");
+    }
     const shareResponse = pageA.waitForResponse((response) => response.url() === `${origin}/shares` && response.request().method() === "POST" && response.status() === 201);
     await pageA.getByRole("button", { name: /Convidar para a sala|Invite to the room/i }).click();
     const share = await (await shareResponse).json() as { url: string };
@@ -127,7 +142,7 @@ test("two isolated guests share, answer, resolve and receive the same ranking", 
     await expect(pageA.getByText("Bruno", { exact: true }).first()).toBeVisible();
     await expect(pageB.getByText("Ana", { exact: true }).first()).toBeVisible();
     const nativePipSupported = testInfo.project.name === "chromium-desktop" && await pageB.evaluate(() => typeof (window as Window & { documentPictureInPicture?: unknown }).documentPictureInPicture !== "undefined");
-    if (nativePipSupported) {
+    if (visualCompanionEnabled && nativePipSupported) {
       const bBeforePip = await session(pageB, roomId);
       const versionBeforePip = (await authenticatedState(roomId, bBeforePip)).ledger.streamVersion;
       await pageB.getByRole("button", { name: /Follow match|Seguir partida/i }).click();
@@ -181,22 +196,24 @@ test("two isolated guests share, answer, resolve and receive the same ranking", 
     }
     await captureVisual(pageA, testInfo, "shared-room-en");
     await answerYes(pageA);
-    await expect(companionA).toHaveAttribute("data-companion-state", "answer_confirmed");
-    await expect(companionA).toContainText(/Answer confirmed/i);
-    await captureVisual(pageA, testInfo, "companion-answer-confirmed-en");
+    if (visualCompanionEnabled) {
+      await expect(companionA).toHaveAttribute("data-companion-state", "answer_confirmed");
+      await expect(companionA).toContainText(/Answer confirmed/i);
+      await captureVisual(pageA, testInfo, "companion-answer-confirmed-en");
+    }
     const aBeforeRefresh = await session(pageA, roomId);
     const stateBeforeRefresh = await authenticatedState(roomId, aBeforeRefresh);
     const versionBeforeRefresh = stateBeforeRefresh.ledger.streamVersion;
     await pageA.getByRole("button", { name: "Portuguese" }).click();
     await expect(pageA.locator("html")).toHaveAttribute("lang", "pt-BR");
     await expect(pageA.getByText(/Palpite confirmado|Seu palpite está em jogo/i).first()).toBeVisible();
-    await expect(pageA.locator('[data-companion-state]')).toContainText(/Resposta confirmada/i);
+    if (visualCompanionEnabled) await expect(pageA.locator('[data-companion-state]')).toContainText(/Resposta confirmada/i);
     await captureVisual(pageA, testInfo, "answer-preserved-pt-BR");
     expect(await session(pageA, roomId)).toEqual(aBeforeRefresh);
     await pageA.getByRole("button", { name: "Inglês" }).click();
     await expect(pageA.locator("html")).toHaveAttribute("lang", "en");
     await expect(pageA.getByText(/Prediction confirmed|Your prediction is in play/i).first()).toBeVisible();
-    await expect(pageA.locator('[data-companion-state]')).toContainText(/Answer confirmed/i);
+    if (visualCompanionEnabled) await expect(pageA.locator('[data-companion-state]')).toContainText(/Answer confirmed/i);
     const aAfterLocaleSwitch = await session(pageA, roomId);
     expect(aAfterLocaleSwitch).toEqual(aBeforeRefresh);
     const stateAfterLocaleSwitch = await authenticatedState(roomId, aAfterLocaleSwitch);
@@ -207,7 +224,7 @@ test("two isolated guests share, answer, resolve and receive the same ranking", 
     await pageA.reload();
     await expect(pageA.locator("html")).toHaveAttribute("lang", "en");
     await expect(pageA.getByText(/Prediction confirmed|Your prediction is in play/i).first()).toBeVisible();
-    await expect(pageA.locator('[data-companion-state]')).toHaveAttribute("data-companion-state", "answer_confirmed");
+    if (visualCompanionEnabled) await expect(pageA.locator('[data-companion-state]')).toHaveAttribute("data-companion-state", "answer_confirmed");
     const aAfterRefresh = await session(pageA, roomId);
     expect(aAfterRefresh).toEqual(aBeforeRefresh);
     const stateAfterRefresh = await authenticatedState(roomId, aAfterRefresh);
@@ -223,22 +240,28 @@ test("two isolated guests share, answer, resolve and receive the same ranking", 
     await pageB.goto("about:blank");
     await expect.poll(async () => (await metrics()).sseClients, { timeout: 10_000 }).toBe(1);
     await expect.poll(async () => (await (await fetch(`${origin}/public/rooms/${roomId}`)).json()).currentRound?.state, { timeout: 40_000 }).toBe("locked");
-    await expect(pageA.locator('[data-companion-state]')).toHaveAttribute("data-companion-state", "locked");
-    await captureVisual(pageA, testInfo, "companion-locked-en");
-    await captureCompanionVisual(pageA, testInfo, "companion-card-locked-en");
+    if (visualCompanionEnabled) {
+      await expect(pageA.locator('[data-companion-state]')).toHaveAttribute("data-companion-state", "locked");
+      await captureVisual(pageA, testInfo, "companion-locked-en");
+      await captureCompanionVisual(pageA, testInfo, "companion-card-locked-en");
+    }
     const lockedState = await authenticatedState(roomId, aAfterRefresh);
     const lateResponse = await fetch(`${origin}/rooms/${roomId}/rounds/${lockedState.currentRound.id}/answer`, { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${aAfterRefresh.sessionToken}` }, body: JSON.stringify({ participantId: aAfterRefresh.participantId, optionId: "yes", clientAnswerId: crypto.randomUUID(), roundVersion: lockedState.currentRound.version, sessionToken: aAfterRefresh.sessionToken }) });
     expect(lateResponse.ok).toBe(false);
     const resolved = await scenario(runId, "resolve"); expect(resolved.status).toBe(200);
     await expect.poll(async () => (await (await fetch(`${origin}/public/rooms/${roomId}`)).json()).currentRound?.state, { timeout: 10_000 }).toBe("resolved");
     await expect(pageA.getByText(/Ranking (atualizado|updated)/i).first()).toBeVisible();
-    await expect(pageA.locator('[data-companion-state]')).toHaveAttribute("data-companion-state", "resolved");
-    await expect(pageA.locator('[data-companion-state]')).toContainText(/\+100/);
-    await expect(pageA.locator('[data-companion-state]')).toContainText(/#1/);
+    if (visualCompanionEnabled) {
+      await expect(pageA.locator('[data-companion-state]')).toHaveAttribute("data-companion-state", "resolved");
+      await expect(pageA.locator('[data-companion-state]')).toContainText(/\+100/);
+      await expect(pageA.locator('[data-companion-state]')).toContainText(/#1/);
+    }
     const backToRoom = pageA.getByRole("button", { name: /Back to room|Voltar à sala/i });
     if (await backToRoom.isVisible()) await backToRoom.click();
-    await captureVisual(pageA, testInfo, "companion-resolved-en");
-    await captureCompanionVisual(pageA, testInfo, "companion-card-resolved-en");
+    if (visualCompanionEnabled) {
+      await captureVisual(pageA, testInfo, "companion-resolved-en");
+      await captureCompanionVisual(pageA, testInfo, "companion-card-resolved-en");
+    }
     await playerB.setOffline(false);
     await pageB.goto(`/match/${roomId}`);
     await expect(pageB.getByText(/2 (na sala|in the room)/i).first()).toBeVisible();
@@ -323,7 +346,7 @@ test("two isolated guests share, answer, resolve and receive the same ranking", 
       identities: { playerAPreservedAfterRefresh: JSON.stringify(aAfterRefresh) === JSON.stringify(aBeforeRefresh), roomPreserved: stateAfterRefresh.roomId === roomId, participantCount: publicState.participants.length, uniqueParticipants: new Set(publicState.participants.map((participant: { id: string }) => participant.id)).size, confirmedAnswers: publicState.answerSummary.total },
       versions: { beforeRefresh: versionBeforeRefresh, afterRefresh: stateAfterRefresh.ledger.streamVersion, finalA: aFinal.ledger.streamVersion, finalB: bFinal.ledger.streamVersion },
       sse: { beforeOffline: 2, whileDisconnected: 1, afterReconnect: 2, afterClose: 0, orphanListeners: 0 },
-      companion: { nativeDocumentPip: nativePipEvidence, compactFallback: true, streamVersionUnchangedByFollow: true, performance: companionPerformance },
+      companion: { visualSurface: visualCompanionEnabled ? "feature_flag_enabled" : "disabled_by_default", nativeDocumentPip: nativePipEvidence, compactFallback: visualCompanionEnabled, streamVersionUnchangedByAttentionUi: true, performance: companionPerformance },
       hashes: { liveProjectionHash: verification.liveProjectionHash, replayedProjectionHash: verification.replayedProjectionHash, projectionMatches: verification.projectionMatches, rankingMatches: verification.rankingMatches, leaderboardAfterHash: replay.scoring.leaderboardAfterHash },
       security: { tokensArchived: false, participantIdsArchived: false, requestHeadersArchived: false, traceDisabled: true },
     });
