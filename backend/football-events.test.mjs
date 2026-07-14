@@ -9,6 +9,7 @@ import { createFileEventStore } from "./event-store.mjs";
 import { createRoomRuntime } from "./runtime.mjs";
 import { applyFixtureLifecycleTimeout, normalizeTxlineScore } from "./txline-client.mjs";
 import { txlineContextInternals } from "./txline-context.mjs";
+import { planScoreUpdateReconciliation } from "./txline-score-reconciler.mjs";
 
 const capturedFranceSpain = JSON.parse(readFileSync(new URL("./test-fixtures/txline/france-spain-2026-sanitized.json", import.meta.url), "utf8"));
 
@@ -65,6 +66,32 @@ test("TxLINE context exposes game_finalised as the shared terminal fixture autho
   assert.equal(projected.terminal.authority, "txline_game_finalised");
   assert.equal(projected.terminal.providerSequence, 1026);
   assert.deepEqual(projected.terminal.score, { home: 0, away: 2 });
+});
+
+test("poll reconciliation establishes one baseline then applies every later provider revision", () => {
+  const liveRecords = capturedFranceSpain.events.filter((event) => event.Seq <= 620);
+  const initial = planScoreUpdateReconciliation(liveRecords, { fixtureId: capturedFranceSpain.fixtureId });
+  assert.equal(initial.baseline.Seq, 620);
+  assert.equal(initial.cursor, 620);
+  assert.deepEqual(initial.updates, []);
+
+  const catchup = planScoreUpdateReconciliation(capturedFranceSpain.events, { fixtureId: capturedFranceSpain.fixtureId, cursor: initial.cursor, initialized: true });
+  assert.deepEqual(catchup.updates.map((event) => event.Seq), [638, 639, 640, 641, 642, 844, 1026]);
+  assert.equal(catchup.cursor, 1026);
+});
+
+test("baseline reconciliation updates state without opening a historical competitive round or alert", async () => {
+  const runtime = createRoomRuntime();
+  const roomId = "baseline-reconciliation";
+  runtime.configureMatch({ fixtureId: roomId, title: "France vs Spain", status: "live", homeTeam: "France", awayTeam: "Spain" });
+  runtime.getRoom(roomId).currentRound = null;
+  const goal = capturedFranceSpain.events.find((event) => event.Seq === 620);
+  await runtime.applyNormalizedEvent(roomId, normalizeTxlineScore(goal, { matchId: roomId, source: "txline-snapshot" }), { reconciliationOnly: true, suppressConsumerPresentation: true });
+  const room = runtime.getRoom(roomId);
+  assert.deepEqual([room.match.homeScore, room.match.awayScore], [0, 2]);
+  assert.equal(room.currentRound, null);
+  assert.equal(room.lastResolution, null);
+  assert.equal(room.timeline.some((entry) => entry.title === "Gol confirmado"), false);
 });
 
 test("sanitized France-Spain candidates never publish score and confirmed revisions converge once", async () => {
@@ -226,6 +253,18 @@ test("catalog final status uses the same terminal ledger transition", async () =
   assert.equal(final.currentRound.state, "resolved");
   assert.equal(final.lastResolution.resolutionReason, "match_finished");
   assert.equal(final.lastResolution.event.acquisitionOrigin, "verified_playback");
+});
+
+test("catalog terminal reconciliation carries the official final score into the room", async () => {
+  const runtime = createRoomRuntime();
+  const roomId = "catalog-final-score";
+  runtime.configureMatch({ fixtureId: roomId, title: "France vs Spain", status: "live", homeTeam: "France", awayTeam: "Spain" });
+  runtime.snapshot(roomId);
+  runtime.configureMatch({ fixtureId: roomId, title: "France vs Spain", status: "finished", lifecycleResolution: "txline_game_finalised", homeScore: 0, awayScore: 2, homeTeam: "France", awayTeam: "Spain" });
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  const final = runtime.snapshot(roomId);
+  assert.equal(final.match.status, "finished");
+  assert.deepEqual([final.match.homeScore, final.match.awayScore], [0, 2]);
 });
 
 test("startup reconciles legacy finished rooms with an unresolved football round", async () => {

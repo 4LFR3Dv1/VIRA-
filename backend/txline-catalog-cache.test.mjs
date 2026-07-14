@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { createTxlineCatalogCache } from "./txline-catalog-cache.mjs";
+import { deriveHomeProjection } from "./home-projection.mjs";
 
 const match = { fixtureId: "1", title: "A vs B", competitionLabel: "Cup", homeTeam: "A", awayTeam: "B" };
 const context = { availableMarkets: [{ id: "m1" }], suggestedPrediction: { marketId: "m1" }, endpoints: { odds: { data: { availableMarkets: [] } } } };
@@ -125,4 +126,7 @@ test("game_finalised context closes a stale live fixture and promotes the next e
   assert.deepEqual([reconciled.homeScore, reconciled.awayScore], [0, 2]);
   assert.equal(catalog.featuredFixtureId, "next");
   assert.equal(configured.find((fixture) => fixture.fixtureId === "closed").lifecycleResolution, "txline_game_finalised");
+  const home = deriveHomeProjection({ catalog, now: new Date(evaluatedAt) });
+  assert.equal(home.editorial.fixture.fixtureId, "next");
+  assert.notEqual(home.editorial.kind, "join_live_room");
 });

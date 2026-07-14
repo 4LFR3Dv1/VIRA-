@@ -1778,7 +1778,7 @@ export function createRoomRuntime({ eventStore = null, commitmentPublisher = nul
         }
         applyAuthoritativeScore(room, event);
         applyFootballEventStats(room, event, storedEvent.correlationId, false);
-        const consumerEventVisible = consumeConsumerVisibleMatchEvent(room, event);
+        const consumerEventVisible = consumeConsumerVisibleMatchEvent(room, event) && event.consumerPresentationSuppressed !== true;
         if (event.type !== "match_end" && consumerEventVisible) {
           pushTimeline(room, {
             id: `timeline-${event.id}`,
@@ -2148,6 +2148,8 @@ export function createRoomRuntime({ eventStore = null, commitmentPublisher = nul
       source: normalizedEvent.source === "txline-live" && normalizedEvent.payload?.txlineEndpoint?.includes("/snapshot/")
         ? "txline-snapshot"
         : normalizedEvent.source,
+      consumerPresentationSuppressed: acquisition.suppressConsumerPresentation === true,
+      stateReconciliationOnly: acquisition.reconciliationOnly === true && normalizedEvent.type !== "match_end",
     };
     const evidenceBase = {
       id: evidenceId,
@@ -2326,9 +2328,9 @@ export function createRoomRuntime({ eventStore = null, commitmentPublisher = nul
     const footballStatEvents = applyFootballEventStats(room, event, correlationId);
     if (footballStatEvents.length) await appendDomainEvents(room, footballStatEvents);
     const evaluationEvent = { ...withConsolidatedScore(room, event), authoritativeStats: cloneJson(room.matchStats) };
-    const footballConditionEvents = advanceFootballCondition(room, evaluationEvent, correlationId);
+    const footballConditionEvents = event.stateReconciliationOnly ? [] : advanceFootballCondition(room, evaluationEvent, correlationId);
     if (footballConditionEvents.length) await appendDomainEvents(room, footballConditionEvents);
-    const consumerEventVisible = consumeConsumerVisibleMatchEvent(room, event);
+    const consumerEventVisible = consumeConsumerVisibleMatchEvent(room, event) && event.consumerPresentationSuppressed !== true;
     const timelineEntryId = event.type === "match_end" ? `timeline-match-finished-${event.id}` : `timeline-${event.id}`;
     if (event.type !== "match_end" && consumerEventVisible) {
       pushTimeline(room, {
@@ -2340,14 +2342,14 @@ export function createRoomRuntime({ eventStore = null, commitmentPublisher = nul
       });
     }
     const currentRuleEvaluation = ruleEvaluationFor(room.currentRound, evaluationEvent);
-    if (room.currentRound?.state === "open") {
+    if (!event.stateReconciliationOnly && room.currentRound?.state === "open") {
       const deadlineElapsed = room.currentRound.locksAt && Date.now() >= Date.parse(room.currentRound.locksAt);
       if (deadlineElapsed || event.type === "match_end") {
         await lockCurrentRound(room, event.type === "match_end" ? "match_finished" : "deadline_elapsed", { causationId: event.id, correlationId });
       }
     }
-    const resolution = resolveCurrentRound(room, evaluationEvent);
-    const directedRound = resolution || event.type === "match_end" ? null : maybeOpenDirectedFootballRound(room, evaluationEvent);
+    const resolution = event.stateReconciliationOnly ? null : resolveCurrentRound(room, evaluationEvent);
+    const directedRound = event.stateReconciliationOnly || resolution || event.type === "match_end" ? null : maybeOpenDirectedFootballRound(room, evaluationEvent);
     if (resolution) {
       await appendDomainEvents(room, [
         ...(resolution.resolutionDomain === "football" && resolution.resolutionReason === "window_expired"
