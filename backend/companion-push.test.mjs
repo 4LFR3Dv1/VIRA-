@@ -38,6 +38,29 @@ test("attention events are discriminated, stable across stream changes and priva
   assert.equal(JSON.stringify(locked).includes("secret-option"), false);
 });
 
+test("match_starting uses authoritative serverTime and only emits inside the 15-minute window", () => {
+  const scheduled = (startTime, serverTime = "2026-07-14T18:00:00.000Z", overrides = {}) => snapshot({
+    serverTime,
+    match: { ...snapshot().match, status: "scheduled", startTime, ...overrides },
+    currentRound: null,
+  });
+  const starting = (value) => projectConsumerAttentionEvents(value, "player-a").find(({ event }) => event.type === "match_starting")?.event ?? null;
+
+  assert.equal(starting(scheduled("2026-07-15T00:00:00.000Z")), null, "six hours away is not starting");
+  const boundary = starting(scheduled("2026-07-14T18:15:00.000Z"));
+  assert.ok(boundary, "the exact 15-minute boundary is eligible");
+  assert.equal(boundary.occurredAt, "2026-07-14T18:00:00.000Z");
+  assert.equal(starting(scheduled("2026-07-14T17:59:59.999Z")), null, "past kickoff is not starting");
+  assert.equal(starting(scheduled("not-a-date")), null, "invalid kickoff is rejected");
+  assert.equal(starting(scheduled(undefined)), null, "missing kickoff is rejected");
+  assert.equal(starting(scheduled("2026-07-14T18:15:00.000Z", "invalid-server-time")), null, "invalid authoritative time fails closed");
+
+  const changedStream = scheduled("2026-07-14T18:15:00.000Z");
+  changedStream.version = 99;
+  changedStream.ledger = { streamVersion: 99 };
+  assert.equal(starting(changedStream).eventId, boundary.eventId, "streamVersion does not change event identity");
+});
+
 test("rank changes are derived from authoritative leaderboard fields only", () => {
   const change = projectRankChangedEvent(snapshot(), "player-a", 4);
   assert.equal(change.event.type, "rank_changed");
@@ -92,6 +115,25 @@ test("orchestrator delivers only enabled participant projection and deduplicates
   assert.equal(sent.length, 1);
   assert.equal(sent[0].type, "rank_changed");
   assert.equal(JSON.stringify(sent[0]).includes("participantId"), false);
+});
+
+test("delivered match_starting is not resent on later stream versions", async () => {
+  const dataDir = await mkdtemp(path.join(os.tmpdir(), "vira-match-starting-"));
+  const store = await createCompanionSubscriptionStore({ dataDir });
+  await store.register(registrationInput({ enabledTypes: ["match_starting"] }));
+  const baseMatch = { ...snapshot().match, status: "scheduled", startTime: "2026-07-14T18:15:00.000Z" };
+  let current = snapshot({ serverTime: "2026-07-14T18:00:00.000Z", match: baseMatch, currentRound: null });
+  const sent = [];
+  const runtime = { hasPublicRoom: () => true, snapshot: () => current };
+  const publisher = { enabled: true, async send(_subscription, payload) { sent.push(payload); return { delivered: true }; } };
+  const orchestrator = createAttentionOrchestrator({ runtime, store, publisher });
+
+  await orchestrator.tick();
+  current = snapshot({ serverTime: "2026-07-14T18:01:00.000Z", version: 99, ledger: { streamVersion: 99 }, match: baseMatch, currentRound: null });
+  await orchestrator.tick();
+
+  assert.equal(sent.length, 1);
+  assert.equal(sent[0].type, "match_starting");
 });
 
 test("web push remains disabled without explicit VAPID configuration", async () => {
