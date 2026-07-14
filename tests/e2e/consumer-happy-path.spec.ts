@@ -70,7 +70,9 @@ test("two isolated guests share, answer, resolve and receive the same ranking", 
   const contextOptions = testInfo.project.name === "mobile-webkit" ? { ...mobileDevice, baseURL: origin, reducedMotion: "reduce" as const } : { baseURL: origin, reducedMotion: "reduce" as const };
   const playerA = await browser.newContext(contextOptions);
   const playerB = await browser.newContext(contextOptions);
+  let nativePipEvidence: "opened" | "unsupported" = "unsupported";
   try {
+    await playerA.addInitScript(() => { Object.defineProperty(window, "documentPictureInPicture", { configurable: true, value: undefined }); });
     const pageA = await playerA.newPage(); await pageA.goto(`/match/${roomId}?lang=en`); await join(pageA, "Ana");
     const aAfterJoin = await session(pageA, roomId);
     const versionBeforeFollow = (await authenticatedState(roomId, aAfterJoin)).ledger.streamVersion;
@@ -80,6 +82,16 @@ test("two isolated guests share, answer, resolve and receive the same ranking", 
     expect((await authenticatedState(roomId, aAfterJoin)).ledger.streamVersion).toBe(versionBeforeFollow);
     await captureVisual(pageA, testInfo, "companion-round-open-en");
     await captureCompanionVisual(pageA, testInfo, "companion-card-round-open-en");
+    const identityBeforeCompact = await session(pageA, roomId);
+    await pageA.getByRole("button", { name: /Open compact view|Abrir visão compacta/i }).click();
+    await expect(pageA).toHaveURL(new RegExp(`/match/${roomId}/companion\\?lang=en`));
+    await expect(pageA.locator('[data-companion-state]')).toHaveAttribute("data-companion-state", "round_open");
+    expect(await session(pageA, roomId)).toEqual(identityBeforeCompact);
+    expect((await authenticatedState(roomId, identityBeforeCompact)).ledger.streamVersion).toBe(versionBeforeFollow);
+    await captureVisual(pageA, testInfo, "companion-compact-fallback-en");
+    await pageA.getByRole("button", { name: /Return to room|Voltar à sala/i }).click();
+    await expect(pageA).toHaveURL(new RegExp(`/match/${roomId}\\?lang=en`));
+    await expect(pageA.locator('[data-companion-state]')).toHaveAttribute("data-companion-state", "round_open");
     const shareResponse = pageA.waitForResponse((response) => response.url() === `${origin}/shares` && response.request().method() === "POST" && response.status() === 201);
     await pageA.getByRole("button", { name: /Convidar para a sala|Invite to the room/i }).click();
     const share = await (await shareResponse).json() as { url: string };
@@ -91,6 +103,24 @@ test("two isolated guests share, answer, resolve and receive the same ranking", 
     await pageB.locator("[data-share-cta]").click(); await join(pageB, "Bruno");
     await expect(pageA.getByText("Bruno", { exact: true }).first()).toBeVisible();
     await expect(pageB.getByText("Ana", { exact: true }).first()).toBeVisible();
+    const nativePipSupported = testInfo.project.name === "chromium-desktop" && await pageB.evaluate(() => typeof (window as Window & { documentPictureInPicture?: unknown }).documentPictureInPicture !== "undefined");
+    if (nativePipSupported) {
+      const bBeforePip = await session(pageB, roomId);
+      const versionBeforePip = (await authenticatedState(roomId, bBeforePip)).ledger.streamVersion;
+      await pageB.getByRole("button", { name: /Follow match|Seguir partida/i }).click();
+      const pipPagePromise = playerB.waitForEvent("page");
+      await pageB.getByRole("button", { name: /Open floating|Abrir flutuante/i }).click();
+      const pipPage = await pipPagePromise;
+      await pipPage.setViewportSize({ width: 420, height: 560 });
+      await expect(pipPage.getByText("VIRA Companion", { exact: true })).toBeVisible();
+      await expect(pipPage.locator('[data-companion-state]')).toHaveAttribute("data-companion-state", "round_open");
+      expect((await authenticatedState(roomId, bBeforePip)).ledger.streamVersion).toBe(versionBeforePip);
+      await captureVisual(pipPage, testInfo, "companion-document-pip-en");
+      await pipPage.getByRole("button", { name: /Return to room|Voltar à sala/i }).click();
+      await expect.poll(() => pipPage.isClosed()).toBe(true);
+      expect(await session(pageB, roomId)).toEqual(bBeforePip);
+      nativePipEvidence = "opened";
+    }
     await captureVisual(pageA, testInfo, "shared-room-en");
     await answerYes(pageA);
     await expect(companionA).toHaveAttribute("data-companion-state", "answer_confirmed");
@@ -210,6 +240,7 @@ test("two isolated guests share, answer, resolve and receive the same ranking", 
       identities: { playerAPreservedAfterRefresh: JSON.stringify(aAfterRefresh) === JSON.stringify(aBeforeRefresh), roomPreserved: stateAfterRefresh.roomId === roomId, participantCount: publicState.participants.length, uniqueParticipants: new Set(publicState.participants.map((participant: { id: string }) => participant.id)).size, confirmedAnswers: publicState.answerSummary.total },
       versions: { beforeRefresh: versionBeforeRefresh, afterRefresh: stateAfterRefresh.ledger.streamVersion, finalA: aFinal.ledger.streamVersion, finalB: bFinal.ledger.streamVersion },
       sse: { beforeOffline: 2, whileDisconnected: 1, afterReconnect: 2, afterClose: 0, orphanListeners: 0 },
+      companion: { nativeDocumentPip: nativePipEvidence, compactFallback: true, streamVersionUnchangedByFollow: true },
       hashes: { liveProjectionHash: verification.liveProjectionHash, replayedProjectionHash: verification.replayedProjectionHash, projectionMatches: verification.projectionMatches, rankingMatches: verification.rankingMatches, leaderboardAfterHash: replay.scoring.leaderboardAfterHash },
       security: { tokensArchived: false, participantIdsArchived: false, requestHeadersArchived: false, traceDisabled: true },
     });

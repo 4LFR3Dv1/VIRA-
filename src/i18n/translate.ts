@@ -29,6 +29,7 @@ export type TranslationMessages = {
   "route.matches.context": undefined;
   "route.matchPreview.title": undefined;
   "route.matchRoom.title": undefined;
+  "route.matchCompanion.title": undefined;
   "shell.connectionRestored.title": undefined;
   "shell.connectionRestored.description": undefined;
   "shell.returningToRoom": undefined;
@@ -294,6 +295,7 @@ export type TranslationMessages = {
   "companion.authority": undefined;
   "companion.offlineDescription": undefined;
   "companion.reconnectingDescription": undefined;
+  "companion.compactDisclosure": undefined;
   "companion.state.upcoming": undefined;
   "companion.state.live": undefined;
   "companion.state.round_open": undefined;

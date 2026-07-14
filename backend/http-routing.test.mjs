@@ -44,7 +44,7 @@ test("SPA deep links and canonical catalog route do not collide", async () => {
   });
   try {
     await waitForHealth(origin, child);
-    for (const route of ["/matches", "/matches", "/match/fixture-direct/preview", "/match/fixture-direct/preview"]) {
+    for (const route of ["/matches", "/match/fixture-direct/preview", "/match/fixture-direct", "/match/fixture-direct/companion"]) {
       const response = await fetch(`${origin}${route}`, { headers: { Accept: "text/html" } });
       assert.equal(response.status, 200, route);
       assert.match(response.headers.get("content-type") || "", /^text\/html/, route);

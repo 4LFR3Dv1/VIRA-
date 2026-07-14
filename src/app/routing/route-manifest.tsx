@@ -6,13 +6,14 @@ import { HomeScreen } from "../../features/home/HomeScreen";
 import { HelpScreen } from "../../features/help/HelpScreen";
 import { MatchPreviewScreen } from "../../features/match-preview/MatchPreviewScreen";
 import { MatchRoomScreen } from "../../features/match-room/MatchRoomScreen";
+import { CompanionRouteScreen } from "../../features/companion/CompanionRouteScreen.tsx";
 import type { StaticTranslationKey } from "../../i18n/translate.ts";
 
 export type ShellMode = "discovery" | "game" | "immersive";
 export type RouteAvailability = "available" | "feature_flag" | "planned";
 
 export interface ViraRouteDefinition {
-  id: "home" | "help" | "matches" | "match-preview" | "match-room";
+  id: "home" | "help" | "matches" | "match-preview" | "match-room" | "match-companion";
   index?: boolean;
   path?: string;
   pattern: string;
@@ -30,6 +31,7 @@ export const viraRoutes = [
   { id: "help", path: "help", pattern: "/help", titleKey: "route.help.title", contextKey: "route.help.context", shellMode: "discovery", maxWidth: "full", availability: "available", component: HelpScreen },
   { id: "matches", path: "matches", pattern: "/matches", titleKey: "route.matches.title", contextKey: "route.matches.context", shellMode: "discovery", maxWidth: "full", availability: "available", component: LobbyScreen },
   { id: "match-preview", path: "match/:matchId/preview", pattern: "/match/:matchId/preview", titleKey: "route.matchPreview.title", shellMode: "game", maxWidth: "full", backPath: "/matches", availability: "available", component: MatchPreviewScreen },
+  { id: "match-companion", path: "match/:matchId/companion", pattern: "/match/:matchId/companion", titleKey: "route.matchCompanion.title", shellMode: "immersive", maxWidth: "full", backPath: "/matches", availability: "available", component: CompanionRouteScreen },
   { id: "match-room", path: "match/:matchId", pattern: "/match/:matchId", titleKey: "route.matchRoom.title", shellMode: "immersive", maxWidth: "full", availability: "available", component: MatchRoomScreen },
 ] satisfies ViraRouteDefinition[];
 

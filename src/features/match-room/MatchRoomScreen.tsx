@@ -1,5 +1,6 @@
 import { Info } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import { useNavigate, useParams, useSearchParams } from "react-router";
 import { toast } from "sonner";
 
@@ -34,6 +35,7 @@ import { useLocale } from "../../i18n/locale-context.tsx";
 import { ViraCompanion } from "../companion/ViraCompanion.tsx";
 import { deriveViraCompanionViewModel } from "../companion/view-model.ts";
 import { useCompanionPreferences } from "../companion/use-companion-preferences.ts";
+import { useDocumentPictureInPicture } from "../companion/use-document-pip.ts";
 
 export function MatchRoomScreen() {
   const { locale, localizedHref, t, timeZone } = useLocale();
@@ -55,6 +57,7 @@ export function MatchRoomScreen() {
   const matchDirection = useMatchMomentDirector(matchId, state.snapshot.match, matchMomentEvents);
   const companion = useMemo(() => deriveViraCompanionViewModel(state, participantId), [participantId, state]);
   const { preferences: companionPreferences, setEnabled: setCompanionEnabled } = useCompanionPreferences(matchId);
+  const floatingCompanion = useDocumentPictureInPicture();
   useShellAtmosphere("route:match-room", {
     atmosphere: state.snapshot.match.status === "finished" ? "finished" : state.snapshot.match.status === "paused" ? "halftime" : "live",
     context: state.snapshot.match.status === "finished" ? "post-match" : "match-room",
@@ -83,6 +86,16 @@ export function MatchRoomScreen() {
   const competitiveStage = experience === "round_open" || experience === "answer_locked" || experience === "resolving" || experience === "finished";
   const previewChoice = searchParams.get("choice");
   const inviteCode = searchParams.get("invite");
+  const companionParams = new URLSearchParams(searchParams);
+  companionParams.delete("inspect");
+  const companionHref = localizedHref(`/match/${encodeURIComponent(matchId)}/companion?${companionParams.toString()}`);
+  const openCompanion = () => {
+    if (!floatingCompanion.supported) {
+      navigate(companionHref);
+      return;
+    }
+    void floatingCompanion.open().catch(() => navigate(companionHref));
+  };
   const answerSummary = useMemo(() => {
     if (!currentRound) {
       return {};
@@ -179,7 +192,7 @@ export function MatchRoomScreen() {
       <TournamentLifecycleRail model={experienceModel} />
       <main className="mx-auto w-full max-w-[1440px] px-4 pb-24 pt-5 md:px-7 lg:px-10 lg:pb-12">
         {participantId && sessionToken ? <div className="flex justify-end"><ViraShareButton label={t("room.invite")} create={() => createRoomShare({ kind: "room", roomId: matchId, participantId, sessionToken, displayName: state.snapshot.currentParticipant?.displayName ?? playerName }, { locale, timeZone })} /></div> : null}
-        {participantId && sessionToken ? <div className="ml-auto mt-4 max-w-2xl"><ViraCompanion model={companion} enabled={companionPreferences.enabled} onFollow={() => setCompanionEnabled(true)} onUnfollow={() => setCompanionEnabled(false)} /></div> : null}
+        {participantId && sessionToken ? <div className="ml-auto mt-4 max-w-2xl"><ViraCompanion model={companion} enabled={companionPreferences.enabled} onFollow={() => setCompanionEnabled(true)} onUnfollow={() => setCompanionEnabled(false)} onOpenFloating={openCompanion} floatingAvailable={floatingCompanion.supported} /></div> : null}
         {competitiveStage ? <LiveDecisionCapsule state={state} latestPresentationEvent={latestPresentationEvent} /> : null}
 
         <section className={`mt-5 grid gap-5 lg:items-start ${competitiveStage ? "lg:grid-cols-[minmax(0,1fr)_19rem] xl:grid-cols-[minmax(0,1fr)_22rem]" : "grid-cols-1"}`}>
@@ -265,6 +278,17 @@ export function MatchRoomScreen() {
       >
         <Info className="size-4" />
       </button>
+      {floatingCompanion.pipWindow && floatingCompanion.pipWindow.document.getElementById("vira-companion-pip-root") ? createPortal(
+        <ViraCompanion
+          model={companion}
+          enabled={companionPreferences.enabled}
+          onFollow={() => setCompanionEnabled(true)}
+          onUnfollow={() => { setCompanionEnabled(false); floatingCompanion.close(); }}
+          onReturnToRoom={() => { floatingCompanion.close(); window.focus(); }}
+          mode="pip"
+        />,
+        floatingCompanion.pipWindow.document.getElementById("vira-companion-pip-root")!,
+      ) : null}
     </div>
   );
 }

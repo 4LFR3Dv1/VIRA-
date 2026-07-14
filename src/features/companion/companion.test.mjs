@@ -4,6 +4,7 @@ import test from "node:test";
 import { projectConsumerAttentionEvents, selectAttentionForParticipant } from "./attention-projector.ts";
 import { readCompanionPreferences, writeCompanionPreferences } from "./preferences.ts";
 import { deriveViraCompanionViewModel } from "./view-model.ts";
+import { documentPictureInPictureController } from "./document-pip.ts";
 
 function roomState() {
   const snapshot = {
@@ -89,4 +90,11 @@ test("Follow preference is local, idempotent and contains no competitive credent
   const stored = readCompanionPreferences(storage, "fixture-companion");
   assert.equal(stored.enabled, true);
   assert.equal(JSON.stringify(stored).match(/participant|session|token/gi), null);
+});
+
+test("Document PiP is capability-detected without browser sniffing", () => {
+  assert.equal(documentPictureInPictureController({}), null);
+  const requestWindow = async () => ({});
+  assert.equal(documentPictureInPictureController({ documentPictureInPicture: { requestWindow } }).requestWindow, requestWindow);
+  assert.equal(documentPictureInPictureController({ documentPictureInPicture: {} }), null);
 });
