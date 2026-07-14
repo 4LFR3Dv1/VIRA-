@@ -4,6 +4,17 @@
 
 > Play the match live with your friends. VIRA turns authoritative football moments into synchronized multiplayer challenges.
 
+## Official submission
+
+- **Official video:** [VIRA — Live Multiplayer Football Experience Powered by TxLINE (3:40, English, 1080p)](https://github.com/4LFR3Dv1/VIRA-/releases/download/vira-demo-final-2026-07-14/vira-demo-final-en-1080p.mp4)
+- **GitHub Release:** [final demo and publication package](https://github.com/4LFR3Dv1/VIRA-/releases/tag/vira-demo-final-2026-07-14)
+- **Captioned master:** [1080p MP4](https://github.com/4LFR3Dv1/VIRA-/releases/download/vira-demo-final-2026-07-14/vira-demo-final-en-1080p.mp4)
+- **Certification:** [metadata, authority disclosures, QA results and SHA-256 hashes](https://github.com/4LFR3Dv1/VIRA-/releases/download/vira-demo-final-2026-07-14/vira-demo-certification.json)
+
+### Screenshot
+
+[![VIRA — synchronized multiplayer football experience](https://github.com/4LFR3Dv1/VIRA-/releases/download/vira-demo-final-2026-07-14/vira-demo-thumbnail.png)](https://github.com/4LFR3Dv1/VIRA-/releases/download/vira-demo-final-2026-07-14/vira-demo-final-en-1080p.mp4)
+
 ```text
 Live app (English): https://vira.snelabs.space/?lang=en
 Live app (PT-BR): https://vira.snelabs.space/?lang=pt-BR
@@ -270,7 +281,6 @@ The normalized competition model and consistent fixture identifiers make it prac
 - The current event store requires one process and one persistent volume.
 - Market-family diversity is still narrower than the runtime rule engine supports.
 - Long-running ledgers will eventually need snapshots/compaction or a transactional event store.
-- Production URLs and submission video should be added here when published.
 
 ## TxLINE Discovery Matrix
 
