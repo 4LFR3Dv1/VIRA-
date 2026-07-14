@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { createTxlineCatalogCache } from "./txline-catalog-cache.mjs";
+import { deriveHomeProjection } from "./home-projection.mjs";
 
 const match = { fixtureId: "1", title: "A vs B", competitionLabel: "Cup", homeTeam: "A", awayTeam: "B" };
 const context = { availableMarkets: [{ id: "m1" }], suggestedPrediction: { marketId: "m1" }, endpoints: { odds: { data: { availableMarkets: [] } } } };
@@ -102,4 +103,30 @@ test("background startup refresh contains provider failures", async () => {
   await new Promise((resolve) => setTimeout(resolve, 10));
   assert.equal(cache.status().lastError, "missing_txline_credentials");
   cache.stop();
+});
+
+test("game_finalised context closes a stale live fixture and promotes the next eligible match", async () => {
+  const evaluatedAt = "2026-07-14T12:00:00.000Z";
+  const competition = { kind: "world_cup", mapped: true, authority: "registry" };
+  const closed = { ...match, fixtureId: "closed", status: "live", startTime: "2026-07-14T09:00:00.000Z", competition };
+  const upcoming = { ...match, fixtureId: "next", title: "C vs D", homeTeam: "C", awayTeam: "D", status: "scheduled", startTime: "2026-07-14T14:00:00.000Z", competition };
+  const configured = [];
+  const cache = createTxlineCatalogCache({
+    loadMatches: async () => ({ source: "txline", matches: [closed, upcoming] }),
+    loadContext: async (fixture) => fixture.fixtureId === "closed"
+      ? { generatedAt: evaluatedAt, availableMarkets: [], fixtureState: { authority: "txline_game_finalised", status: "finished", providerSequence: 1026, score: { home: 0, away: 2 } } }
+      : { generatedAt: evaluatedAt, availableMarkets: [{ id: "market" }], canonical1X2: { marketSignature: "next|1x2", snapshotId: "next-market", providerSequence: 1, observedAt: evaluatedAt, selections: { home: 45, draw: 30, away: 25 } } },
+    configureMatch: (fixture) => configured.push(fixture),
+    now: () => Date.parse(evaluatedAt),
+  });
+  const catalog = await cache.get();
+  const reconciled = catalog.matches.find((fixture) => fixture.fixtureId === "closed");
+  assert.equal(reconciled.status, "finished");
+  assert.equal(reconciled.consumerProjection.fixture.status, "finished");
+  assert.deepEqual([reconciled.homeScore, reconciled.awayScore], [0, 2]);
+  assert.equal(catalog.featuredFixtureId, "next");
+  assert.equal(configured.find((fixture) => fixture.fixtureId === "closed").lifecycleResolution, "txline_game_finalised");
+  const home = deriveHomeProjection({ catalog, now: new Date(evaluatedAt) });
+  assert.equal(home.editorial.fixture.fixtureId, "next");
+  assert.notEqual(home.editorial.kind, "join_live_room");
 });

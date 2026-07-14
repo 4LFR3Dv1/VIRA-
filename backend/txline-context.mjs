@@ -4,6 +4,7 @@ import {
   fetchOddsUpdates,
   fetchScoresSnapshot,
   fetchScoresUpdates,
+  normalizeTxlineScore,
 } from "./txline-client.mjs";
 
 function asRecords(payload) {
@@ -253,6 +254,25 @@ function latestRecords(payload, limit = 5) {
     }));
 }
 
+function projectScoreState(payload, fixtureId) {
+  const normalized = asRecords(payload)
+    .map((record, index) => normalizeTxlineScore(record, { matchId: fixtureId, sequenceFallback: index, source: "txline-snapshot" }))
+    .sort((left, right) => Number(left.sequence) - Number(right.sequence));
+  const terminal = [...normalized].reverse().find((event) => event.type === "match_end") ?? null;
+  return {
+    latest: latestRecords(payload),
+    terminal: terminal ? {
+      authority: "txline_game_finalised",
+      status: "finished",
+      providerActionId: terminal.providerActionId,
+      eventRevisionId: terminal.eventRevisionId,
+      providerSequence: terminal.sequence,
+      occurredAt: terminal.occurredAt,
+      score: terminal.absoluteScore,
+    } : null,
+  };
+}
+
 async function readEndpoint({ name, endpoint, fetcher, config, fixtureId, projector }) {
   const requestedAt = new Date().toISOString();
   try {
@@ -301,7 +321,7 @@ export async function buildTxlineContext(config, match) {
       fetcher: fetchScoresSnapshot,
       config,
       fixtureId,
-      projector: (payload) => ({ latest: latestRecords(payload) }),
+      projector: (payload) => projectScoreState(payload, fixtureId),
     }),
     readEndpoint({
       name: "score_updates",
@@ -309,7 +329,7 @@ export async function buildTxlineContext(config, match) {
       fetcher: fetchScoresUpdates,
       config,
       fixtureId,
-      projector: (payload) => ({ latest: latestRecords(payload) }),
+      projector: (payload) => projectScoreState(payload, fixtureId),
     }),
     readEndpoint({
       name: "historical_scores",
@@ -317,7 +337,7 @@ export async function buildTxlineContext(config, match) {
       fetcher: fetchHistoricalScores,
       config,
       fixtureId,
-      projector: (payload) => ({ latest: latestRecords(payload) }),
+      projector: (payload) => projectScoreState(payload, fixtureId),
     }),
     readEndpoint({
       name: "odds",
@@ -349,6 +369,7 @@ export async function buildTxlineContext(config, match) {
   ];
   const uniqueMarkets = dedupeMarkets(availableMarkets, 24);
   const canonical1X2 = selectCanonicalFixture1X2(uniqueMarkets, match);
+  const fixtureState = updates.data?.terminal ?? scores.data?.terminal ?? historical.data?.terminal ?? null;
 
   return {
     fixtureId,
@@ -375,6 +396,7 @@ export async function buildTxlineContext(config, match) {
     },
     availableMarkets: uniqueMarkets,
     canonical1X2,
+    fixtureState,
     marketTaxonomy: {
       observed: uniqueMarkets.length,
       inFocus: Math.min(5, uniqueMarkets.length),
@@ -383,3 +405,5 @@ export async function buildTxlineContext(config, match) {
     suggestedPrediction: bestPredictionFromMarkets(uniqueMarkets),
   };
 }
+
+export const txlineContextInternals = { projectScoreState };

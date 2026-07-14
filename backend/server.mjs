@@ -34,6 +34,7 @@ import {
   txlineConfigFromEnv,
 } from "./txline-client.mjs";
 import { createTxlineStreamManager } from "./txline-stream.mjs";
+import { planScoreUpdateReconciliation } from "./txline-score-reconciler.mjs";
 import { createTxlineCatalogCache } from "./txline-catalog-cache.mjs";
 import { ensureVerifiedPlayback, verifiedPlaybackIds } from "./verified-playback-seed.mjs";
 import { deriveFixtureTemporalContext, resolveEditorialLocaleContext } from "../shared/editorial-domain.mjs";
@@ -296,6 +297,42 @@ async function applyLatestScoreSnapshot(roomId, reason = "room-live-feed") {
   );
 }
 
+async function applyScoreUpdates(roomId, feed, reason = "room-live-feed") {
+  const scoresPayload = await fetchScoresUpdates(txlineConfig, roomId);
+  const plan = planScoreUpdateReconciliation(scoresPayload, {
+    fixtureId: roomId,
+    cursor: feed.scoreCursor,
+    initialized: feed.scoreInitialized,
+  });
+  if (plan.baseline) {
+    await runtime.applyNormalizedEvent(roomId, normalizeTxlineScore(plan.baseline, { matchId: roomId, source: "txline-snapshot" }), {
+      endpoint: `/api/scores/updates/${roomId}`,
+      httpMethod: "GET",
+      httpStatus: 200,
+      receivedAt: new Date().toISOString(),
+      rawPayload: plan.baseline,
+      requestId: `${reason}_baseline_${cryptoRandomId()}`,
+      acquisitionOrigin: "txline_snapshot",
+      reconciliationOnly: true,
+      suppressConsumerPresentation: true,
+    });
+  }
+  for (const rawEvent of plan.updates) {
+    await runtime.applyNormalizedEvent(roomId, normalizeTxlineScore(rawEvent, { matchId: roomId, source: "txline-snapshot" }), {
+      endpoint: `/api/scores/updates/${roomId}`,
+      httpMethod: "GET",
+      httpStatus: 200,
+      receivedAt: new Date().toISOString(),
+      rawPayload: rawEvent,
+      requestId: `${reason}_${cryptoRandomId()}`,
+      acquisitionOrigin: "txline_snapshot",
+    });
+  }
+  feed.scoreCursor = plan.cursor;
+  feed.scoreInitialized = plan.initialized;
+  return { cursor: feed.scoreCursor, applied: plan.updates.length, baseline: Boolean(plan.baseline) };
+}
+
 async function applyLatestOddsSnapshot(roomId, reason = "room-live-feed") {
   const oddsPayload = await fetchOddsSnapshot(txlineConfig, roomId);
   const oddsRecords = Array.isArray(oddsPayload) ? oddsPayload : [];
@@ -336,6 +373,8 @@ function liveRoomFeedStatus(roomId) {
     lastPollAt: feed.lastPollAt,
     lastError: feed.lastError,
     pollCount: feed.pollCount,
+    scoreCursor: feed.scoreCursor,
+    scoreInitialized: feed.scoreInitialized,
   };
 }
 
@@ -351,27 +390,24 @@ function startRoomLiveFeed(roomId) {
     lastPollAt: null,
     lastError: null,
     pollCount: 0,
+    scoreCursor: null,
+    scoreInitialized: false,
     interval: null,
   };
   liveRoomFeeds.set(key, feed);
   runtime.emit(key, "txline.room_feed_started", liveRoomFeedStatus(key));
 
-  void txlineStreams.startScores(key, { fixtureId: key }).catch((error) => {
-    feed.lastError = error.message || "scores_stream_start_failed";
-  });
-  void txlineStreams.startOdds(key, { fixtureId: key }).catch((error) => {
-    feed.lastError = error.message || "odds_stream_start_failed";
-  });
-
   const pollOnce = async () => {
     try {
       feed.pollCount += 1;
       feed.lastPollAt = new Date().toISOString();
-      await Promise.allSettled([
-        applyLatestScoreSnapshot(key, "room-score-poll"),
+      const results = await Promise.allSettled([
+        applyScoreUpdates(key, feed, "room-score-poll"),
         applyLatestOddsSnapshot(key, "room-odds-poll"),
       ]);
-      feed.status = "running";
+      const failures = results.filter((result) => result.status === "rejected");
+      feed.status = failures.length ? "degraded" : "running";
+      feed.lastError = failures.length ? failures.map((result) => result.reason?.message ?? "feed_poll_failed").join(";") : null;
     } catch (error) {
       feed.status = "degraded";
       feed.lastError = error.message || "room_feed_poll_failed";
@@ -381,7 +417,14 @@ function startRoomLiveFeed(roomId) {
   feed.interval = setInterval(() => {
     void pollOnce();
   }, TXLINE_ROOM_POLL_MS);
-  void pollOnce();
+  void (async () => {
+    await pollOnce();
+    await Promise.allSettled([
+      txlineStreams.startScores(key, { fixtureId: key }),
+      txlineStreams.startOdds(key, { fixtureId: key }),
+    ]);
+    await pollOnce();
+  })();
   return liveRoomFeedStatus(key);
 }
 

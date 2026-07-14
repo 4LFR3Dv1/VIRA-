@@ -66,11 +66,26 @@ function canReuseContext(previous, match, referenceTime) {
 
 function shouldPreservePreviousContext(previous, next) {
   if (!previous?.context || !next) return false;
+  if (next.fixtureState?.status === "finished" && previous.context?.fixtureState?.status !== "finished") return false;
   const previousMarkets = availability(previous.context).marketCount;
   const nextMarkets = availability(next).marketCount;
   if (previousMarkets <= 0 || nextMarkets > 0) return false;
   const oddsHealthy = next.endpoints?.odds?.ok === true || next.endpoints?.oddsUpdates?.ok === true;
   return !oddsHealthy;
+}
+
+export function reconcileMatchWithTxlineContext(match, context) {
+  const state = context?.fixtureState;
+  if (state?.status !== "finished") return match;
+  return {
+    ...match,
+    status: "finished",
+    reportedStatus: match.status,
+    lifecycleResolution: state.authority ?? "txline_game_finalised",
+    homeScore: Number.isFinite(Number(state.score?.home)) ? Number(state.score.home) : match.homeScore,
+    awayScore: Number.isFinite(Number(state.score?.away)) ? Number(state.score.away) : match.awayScore,
+    terminalProviderSequence: state.providerSequence ?? null,
+  };
 }
 
 export function createTxlineCatalogCache({
@@ -138,21 +153,28 @@ export function createTxlineCatalogCache({
           const previous = snapshot?.matches?.find((item) => String(item.fixtureId) === String(match.fixtureId));
           if (canReuseContext(previous, match, now())) {
             contextsReused += 1;
-            configureMatch(match, previous.context);
-            return { ...match, context: previous.context, availability: availability(previous.context) };
+            const effectiveMatch = reconcileMatchWithTxlineContext(match, previous.context);
+            configureMatch(effectiveMatch, previous.context);
+            return { ...effectiveMatch, context: previous.context, availability: availability(previous.context) };
           }
           try {
             const context = await loadContext(match);
             if (shouldPreservePreviousContext(previous, context)) {
               contextsReused += 1;
-              configureMatch(match, previous.context);
-              return { ...match, context: previous.context, availability: { ...availability(previous.context), contextStatus: "stale" }, contextError: "degraded_refresh_preserved_previous" };
+              const effectiveMatch = reconcileMatchWithTxlineContext(match, previous.context);
+              configureMatch(effectiveMatch, previous.context);
+              return { ...effectiveMatch, context: previous.context, availability: { ...availability(previous.context), contextStatus: "stale" }, contextError: "degraded_refresh_preserved_previous" };
             }
             contextsRefreshed += 1;
-            configureMatch(match, context);
-            return { ...match, context, availability: availability(context) };
+            const effectiveMatch = reconcileMatchWithTxlineContext(match, context);
+            configureMatch(effectiveMatch, context);
+            return { ...effectiveMatch, context, availability: availability(context) };
           } catch (error) {
-            if (previous?.context) return { ...match, context: previous.context, availability: { ...availability(previous.context), contextStatus: "stale" } };
+            if (previous?.context) {
+              const effectiveMatch = reconcileMatchWithTxlineContext(match, previous.context);
+              configureMatch(effectiveMatch, previous.context);
+              return { ...effectiveMatch, context: previous.context, availability: { ...availability(previous.context), contextStatus: "stale" } };
+            }
             configureMatch(match);
             return { ...match, context: null, availability: { ...availability(null), contextStatus: "unavailable" }, contextError: error?.message ?? "context_unavailable" };
           }

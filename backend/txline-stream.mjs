@@ -54,7 +54,7 @@ async function* readSseMessages(response) {
   }
 }
 
-export function createTxlineStreamManager({ config, runtime }) {
+export function createTxlineStreamManager({ config, runtime, fetchImpl = fetch, reconnectDelay = (attempt) => Math.min(30_000, 1_000 * (2 ** Math.min(attempt, 5))) }) {
   const streams = new Map();
 
   function streamKey(roomId, kind) {
@@ -81,6 +81,8 @@ export function createTxlineStreamManager({ config, runtime }) {
       lastMessageAt: stream.lastMessageAt,
       lastError: stream.lastError,
       startedAt: stream.startedAt,
+      reconnectAttempts: stream.reconnectAttempts ?? 0,
+      reconnectAt: stream.reconnectAt ?? null,
     };
   }
 
@@ -100,6 +102,7 @@ export function createTxlineStreamManager({ config, runtime }) {
     const stream = streams.get(key);
     if (!stream) return singleStatus(roomId, kind);
     stream.status = "stopped";
+    if (stream.reconnectTimer) clearTimeout(stream.reconnectTimer);
     stream.controller.abort();
     streams.delete(key);
     runtime.emit(roomId, "txline.stream_stopped", { roomId, kind });
@@ -111,6 +114,7 @@ export function createTxlineStreamManager({ config, runtime }) {
     fixtureId = config.fixtureId,
     endpointPath,
     normalize,
+    resumeState = null,
   }) {
     if (!hasTxlineCredentials(config)) {
       const error = new Error("missing_txline_credentials");
@@ -126,27 +130,32 @@ export function createTxlineStreamManager({ config, runtime }) {
     const endpoint = `${config.origin}${endpointPath}`;
     const streamState = {
       kind,
-      status: "running",
+      status: "connecting",
       fixtureId: fixtureId || null,
       endpoint,
       controller,
       startedAt: new Date().toISOString(),
-      lastMessageAt: null,
+      lastMessageAt: resumeState?.lastMessageAt ?? null,
       lastError: null,
-      acceptedMessages: 0,
-      ignoredMessages: 0,
+      acceptedMessages: resumeState?.acceptedMessages ?? 0,
+      ignoredMessages: resumeState?.ignoredMessages ?? 0,
+      lastEventId: resumeState?.lastEventId ?? null,
+      reconnectAttempts: resumeState?.reconnectAttempts ?? 0,
+      reconnectAt: null,
+      reconnectTimer: null,
     };
     streams.set(key, streamState);
     runtime.emit(roomId, "txline.stream_started", singleStatus(roomId, kind));
 
     void (async () => {
       try {
-        const response = await fetch(endpoint, {
+        const response = await fetchImpl(endpoint, {
           headers: {
             Authorization: `Bearer ${config.jwt}`,
             "X-Api-Token": config.apiToken,
             Accept: "text/event-stream",
             "Cache-Control": "no-cache",
+            ...(streamState.lastEventId ? { "Last-Event-ID": streamState.lastEventId } : {}),
           },
           signal: controller.signal,
         });
@@ -154,10 +163,14 @@ export function createTxlineStreamManager({ config, runtime }) {
         if (!response.ok) {
           throw new Error(`txline_${kind}_stream_failed:${response.status}`);
         }
+        streamState.status = "running";
+        streamState.lastError = null;
+        runtime.emit(roomId, "txline.stream_started", singleStatus(roomId, kind));
 
         for await (const message of readSseMessages(response)) {
           if (streamState.status !== "running") break;
           const parsed = parseSseData(message.data);
+          if (message.id) streamState.lastEventId = message.id;
           const events = Array.isArray(parsed) ? parsed : [parsed];
           for (const rawEvent of events) {
             if (!rawEvent || typeof rawEvent !== "object") continue;
@@ -182,11 +195,27 @@ export function createTxlineStreamManager({ config, runtime }) {
             });
           }
         }
+        if (streamState.status === "running") throw new Error(`txline_${kind}_stream_ended`);
       } catch (error) {
         if (streamState.status !== "stopped") {
-          streamState.status = "failed";
+          streamState.status = "reconnecting";
           streamState.lastError = error.message || "txline_stream_error";
+          streamState.reconnectAttempts += 1;
+          const delay = reconnectDelay(streamState.reconnectAttempts);
+          streamState.reconnectAt = new Date(Date.now() + delay).toISOString();
           runtime.emit(roomId, "txline.stream_failed", singleStatus(roomId, kind));
+          streamState.reconnectTimer = setTimeout(() => {
+            if (streamState.status === "stopped") return;
+            streams.delete(key);
+            void startStream(roomId, {
+              kind,
+              fixtureId,
+              endpointPath,
+              normalize,
+              resumeState: streamState,
+            }).catch(() => undefined);
+          }, delay);
+          streamState.reconnectTimer.unref?.();
         }
       }
     })();

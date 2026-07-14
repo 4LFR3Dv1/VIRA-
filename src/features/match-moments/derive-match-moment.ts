@@ -35,9 +35,10 @@ function playerName(event: NormalizedMatchEvent) {
 function baseMoment<K extends Exclude<MatchMomentKind, "pressure">>(event: NormalizedMatchEvent, match: Match, kind: K): Omit<MatchMoment, "kind"> & { kind: K } {
   const config = direction[kind];
   const side = event.participantSide ?? undefined;
+  const sourceActionId = event.sourceActionId ?? event.providerActionId ?? event.id;
   return {
-    id: `moment:${event.id}:${kind}`,
-    sourceActionId: event.sourceActionId ?? event.id,
+    id: `moment:${sourceActionId}:${kind}`,
+    sourceActionId,
     fixtureId: event.matchId,
     kind,
     presentation: config.presentation,
