@@ -9,6 +9,7 @@
 
   [![Live App](https://img.shields.io/badge/Live_app-Open_VIRA-9EF01A?style=for-the-badge&labelColor=050814)](https://vira.snelabs.space/?lang=en)
   [![Demo](https://img.shields.io/badge/Demo-3%3A40_on_YouTube-FF0033?style=for-the-badge&labelColor=050814)](https://www.youtube.com/watch?v=eqe9e5TZ02k)
+  [![Commercial Pitch](https://img.shields.io/badge/Pitch-Commercial_PDF-9EF01A?style=for-the-badge&labelColor=050814)](docs/VIRA_Synchronized_Football_Engagement.pdf)
   [![Judge Walkthrough](https://img.shields.io/badge/Judges-3_minute_walkthrough-FFFFFF?style=for-the-badge&labelColor=050814)](https://vira.snelabs.space/help?lang=en)
   [![Verify](https://github.com/4LFR3Dv1/VIRA-/actions/workflows/verify.yml/badge.svg)](https://github.com/4LFR3Dv1/VIRA-/actions/workflows/verify.yml)
 
@@ -149,6 +150,8 @@ share created → invite opened → guest joined → live answer
 ```
 
 Commercial reporting can price and optimize distribution around qualified joins, answer rate, return rate, share conversion and repeat participation — not merely logo impressions.
+
+The [VIRA commercial pitch](docs/VIRA_Synchronized_Football_Engagement.pdf) presents the product positioning, TxLINE-powered architecture, measurable engagement funnel, partner value and revenue paths in a concise five-page deck.
 
 ## Production evidence
 
@@ -355,6 +358,7 @@ VIRA addresses these points through a server-side Consumer projection, explicit 
 | [Social Share Layer](docs/SOCIAL_SHARE_LAYER.md) | Invitations, predictions, Mini Leagues and privacy. |
 | [PWA Cache Policy](docs/pwa-cache-policy.md) | Why competitive state is never served stale. |
 | [Solana Subscription Evidence](docs/TXLINE_SOLANA_SUBSCRIPTION_EVIDENCE.md) | Secret-free TxLINE activation record. |
+| [Commercial Pitch](docs/VIRA_Synchronized_Football_Engagement.pdf) | Five-page product, architecture, partner value and monetization overview. |
 
 ## Known limits
 
@@ -369,6 +373,7 @@ VIRA addresses these points through a server-side Consumer projection, explicit 
 - **Live app:** https://vira.snelabs.space/?lang=en
 - **PT-BR app:** https://vira.snelabs.space/?lang=pt-BR
 - **Demo:** https://www.youtube.com/watch?v=eqe9e5TZ02k
+- **Commercial pitch:** [VIRA — Synchronized Football Engagement](docs/VIRA_Synchronized_Football_Engagement.pdf)
 - **Judge walkthrough:** https://vira.snelabs.space/help?lang=en
 - **Public repository at submission:** https://github.com/4LFR3Dv1/VIRA-
 
