@@ -68,7 +68,7 @@ function stateFromSnapshot(base: ReplayState, incomingSnapshot: RoomSnapshot, pa
       ? snapshot.lastResolution.wasCurrentUserCorrect ? "resolved_success" : "resolved_failure"
       : effectiveAnswerState === "submitted"
         ? "awaiting_resolution"
-        : snapshot.currentRound?.state === "awaiting_event"
+        : snapshot.currentRound?.state === "locked"
           ? "awaiting_resolution"
           : "prediction_open";
 

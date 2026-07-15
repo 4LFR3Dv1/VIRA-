@@ -256,6 +256,8 @@ test("football team_scores condition resolves yes on score increase and no on co
     const noSnapshot = runtime.snapshot("football-no", noPlayer.participant.id);
     assert.equal(noSnapshot.lastResolution.winningOptionId, "no");
     assert.equal(noSnapshot.lastResolution.resolutionReason, "window_expired");
+    assert.equal(noSnapshot.lastResolution.condition.state, "expired");
+    assert.equal(noSnapshot.currentRound.resolution.condition.state, "expired");
     assert.equal(noSnapshot.leaderboard[0].points, 100);
     const noVerification = await runtime.verifyRoom("football-no");
     const noReplay = await runtime.verifiedRoundReplay("football-no", noRoundId);
@@ -263,6 +265,7 @@ test("football team_scores condition resolves yes on score increase and no on co
     assert.equal(noReplay.resolutionDomain, "football");
     assert.deepEqual(noReplay.opening.score, { home: 0, away: 0 });
     assert.deepEqual(noReplay.resolution.score, { home: 0, away: 0 });
+    assert.equal(noReplay.condition.state, "expired");
     assert.equal(noReplay.proof.determinismValid, true);
     assert.equal(noVerification.projectionMatches, true);
 
@@ -273,6 +276,7 @@ test("football team_scores condition resolves yes on score increase and no on co
     const restoredNo = restoredRuntime.authenticatedSnapshot("football-no", noPlayer.participant.id, noPlayer.sessionToken);
     assert.ok(restoredNo.lastResolution);
     assert.equal(restoredNo.lastResolution.winningOptionId, "no");
+    assert.equal(restoredNo.lastResolution.condition.state, "expired");
     const restoredNoReplay = await restoredRuntime.verifiedRoundReplay("football-no", noRoundId);
     assert.equal(restoredNoReplay.replayHash, noReplay.replayHash);
     assert.equal((await restoredRuntime.verifiedRoundReplay("football-yes", yesRoundId)).schemaVersion, 2);

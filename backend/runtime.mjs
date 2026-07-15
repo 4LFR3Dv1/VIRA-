@@ -861,7 +861,8 @@ export function createRoomRuntime({ eventStore = null, commitmentPublisher = nul
 
   function footballConditionEvaluation(round, event) {
     const condition = round?.resolution?.condition ?? {};
-    if (!["tracking", "candidate_met", "confirmed"].includes(condition.state)) {
+    const terminalRepair = condition.state === "expired" && event.type === "match_end";
+    if (!["tracking", "candidate_met", "confirmed"].includes(condition.state) && !terminalRepair) {
       return { winningOptionId: null, reason: "condition_not_tracking", expression: "football condition awaiting lock" };
     }
     if (condition.kind === "team_shot_on_target") {
@@ -1300,9 +1301,10 @@ export function createRoomRuntime({ eventStore = null, commitmentPublisher = nul
     };
   }
 
-  function resolveCurrentRound(room, event) {
+  function resolveCurrentRound(room, event, options = {}) {
     const round = room.currentRound;
-    if (!round || round.state !== "locked") return null;
+    const repairingExpiredRound = options.repairExpiredRound === true && round?.state === "expired";
+    if (!round || (round.state !== "locked" && !repairingExpiredRound)) return null;
     const answersForRound = room.answersByRound[round.id] ?? {};
     const fallbackScore = room.lastAuthoritativeScoreObservation;
     let resolutionEvent = round.resolution?.domain === "football"
@@ -1351,7 +1353,15 @@ export function createRoomRuntime({ eventStore = null, commitmentPublisher = nul
       return { ...entry, points: entry.points + delta, delta, streak };
     });
     room.leaderboard = rankLeaderboard(room.leaderboard);
-    const resolvedRound = { ...round, state: "resolved", version: (Number(round.version) || 1) + 1 };
+    const resolvedCondition = footballEvaluation?.reason === "window_expired"
+      ? { ...round.resolution?.condition, state: "expired" }
+      : round.resolution?.condition ?? null;
+    const resolvedRound = {
+      ...round,
+      state: "resolved",
+      version: (Number(round.version) || 1) + 1,
+      resolution: resolvedCondition ? { ...round.resolution, condition: resolvedCondition } : round.resolution,
+    };
     room.currentRound = resolvedRound;
     room.roundHistory.push({ roundId: round.id, family: round.resolution?.condition?.kind ?? "market", targetSide: round.resolution?.condition?.targetSide ?? null, openedAtClockSec: round.opensAtClockSec });
     room.lastResolution = {
@@ -1365,7 +1375,7 @@ export function createRoomRuntime({ eventStore = null, commitmentPublisher = nul
       resolvedBy: footballEvaluation?.reason === "match_finished" ? "match_state" : footballEvaluation?.reason === "window_expired" || round.resolution.mode === "window_elapsed" ? "window" : "event",
       resolutionDomain: round.resolution?.domain ?? "market",
       resolutionReason: footballEvaluation?.reason ?? null,
-      condition: round.resolution?.condition ?? null,
+      condition: resolvedCondition,
       event: resolutionEvent,
       answersEvaluated,
       answersCorrect,
@@ -1564,9 +1574,13 @@ export function createRoomRuntime({ eventStore = null, commitmentPublisher = nul
   function finishMatch(room, event) {
     room.match.status = "finished";
     if (room.currentRound && room.currentRound.state !== "resolved") {
+      const condition = room.currentRound.resolution?.condition;
       room.currentRound = {
         ...room.currentRound,
         state: "expired",
+        resolution: condition
+          ? { ...room.currentRound.resolution, condition: { ...condition, state: "expired" } }
+          : room.currentRound.resolution,
       };
     }
     pushTimeline(room, {
@@ -1754,9 +1768,19 @@ export function createRoomRuntime({ eventStore = null, commitmentPublisher = nul
       }
       case "football.condition.candidate_met":
       case "football.condition.candidate_revoked":
-      case "football.condition.confirmed": {
+      case "football.condition.confirmed":
+      case "football.condition.expired": {
         if (!room.currentRound || room.currentRound.id !== payload.roundId || !payload.condition) break;
         room.currentRound = { ...room.currentRound, resolution: { ...room.currentRound.resolution, domain: "football", condition: payload.condition } };
+        break;
+      }
+      case "round.terminal_repair_started": {
+        if (!room.currentRound || room.currentRound.id !== payload.roundId || !payload.condition) break;
+        room.currentRound = {
+          ...room.currentRound,
+          state: "expired",
+          resolution: { ...room.currentRound.resolution, domain: "football", condition: payload.condition },
+        };
         break;
       }
       case "txline.event.accepted": {
@@ -1812,7 +1836,14 @@ export function createRoomRuntime({ eventStore = null, commitmentPublisher = nul
         });
         room.leaderboard = rankLeaderboard(room.leaderboard);
         if (room.currentRound?.id === roundId) {
-          room.currentRound = { ...room.currentRound, state: "resolved", version: payload.roundVersion ?? (Number(room.currentRound.version) || 1) + 1 };
+          room.currentRound = {
+            ...room.currentRound,
+            state: "resolved",
+            version: payload.roundVersion ?? (Number(room.currentRound.version) || 1) + 1,
+            resolution: payload.condition
+              ? { ...room.currentRound.resolution, condition: payload.condition }
+              : room.currentRound.resolution,
+          };
         }
         room.lastResolution = {
           roundId,
@@ -1899,8 +1930,45 @@ export function createRoomRuntime({ eventStore = null, commitmentPublisher = nul
     for (const repair of terminalRepairs) {
       const room = getRoom(repair.roomId);
       if (room.currentRound?.id !== repair.roundId) continue;
-      if (room.currentRound.state === "expired") room.currentRound = { ...room.currentRound, state: "open" };
       const matchClockSec = Math.max(Number(room.match.matchClockSec) || 0, 90 * 60);
+      const conditionSeed = room.currentRound.resolution?.condition ?? {};
+      const repairCondition = {
+        ...conditionSeed,
+        state: "expired",
+        startsAtClockSec: Number.isFinite(Number(conditionSeed.startsAtClockSec)) ? Number(conditionSeed.startsAtClockSec) : matchClockSec,
+        endsAtClockSec: Number.isFinite(Number(conditionSeed.endsAtClockSec))
+          ? Number(conditionSeed.endsAtClockSec)
+          : matchClockSec + Number(conditionSeed.durationSec ?? (conditionSeed.kind === "team_shot_on_target" ? 300 : 600)),
+        openingObservation: conditionSeed.openingObservation ?? (conditionSeed.kind === "team_shot_on_target"
+          ? {
+              eventId: room.matchStats.sourceEventId,
+              providerSequence: room.lastNormalizedEvent?.providerSequence ?? null,
+              shotsOnTarget: room.matchStats[conditionSeed.targetSide === "away" ? "away" : "home"].shotsOnTarget,
+              matchClockSec,
+              observedAt: room.lastNormalizedEvent?.occurredAt ?? nowIso(),
+            }
+          : {
+              eventId: room.lastNormalizedEvent?.id ?? null,
+              providerSequence: room.lastNormalizedEvent?.providerSequence ?? null,
+              homeScore: room.match.homeScore,
+              awayScore: room.match.awayScore,
+              matchClockSec,
+              observedAt: room.lastNormalizedEvent?.occurredAt ?? nowIso(),
+            }),
+      };
+      room.currentRound = {
+        ...room.currentRound,
+        state: "expired",
+        resolution: { ...room.currentRound.resolution, condition: repairCondition },
+      };
+      await appendDomainEvents(room, [domainEvent(room, "round.terminal_repair_started", {
+        roundId: repair.roundId,
+        fromState: room.currentRound.state,
+        reason: "finished_match_missing_round_resolution",
+        condition: repairCondition,
+      }, {
+        idempotencyKey: `round-terminal-repair:${repair.roomId}:${repair.roundId}`,
+      })]);
       await applyNormalizedEvent(repair.roomId, {
         id: `terminal-repair:${repair.roomId}:${repair.roundId}`,
         matchId: repair.roomId,
@@ -1911,7 +1979,10 @@ export function createRoomRuntime({ eventStore = null, commitmentPublisher = nul
         absoluteScore: { home: room.match.homeScore, away: room.match.awayScore },
         payload: { Status: "finished", authority: "verified_ledger_repair" },
         source: "verified-playback",
-      }, { acquisitionOrigin: "verified_playback" });
+      }, {
+        acquisitionOrigin: "verified_playback",
+        terminalRepairRoundId: repair.roundId,
+      });
     }
     return { rooms: streamIds.size, events: eventCount };
   }
@@ -2348,7 +2419,12 @@ export function createRoomRuntime({ eventStore = null, commitmentPublisher = nul
         await lockCurrentRound(room, event.type === "match_end" ? "match_finished" : "deadline_elapsed", { causationId: event.id, correlationId });
       }
     }
-    const resolution = event.stateReconciliationOnly ? null : resolveCurrentRound(room, evaluationEvent);
+    const repairExpiredRound = acquisition.terminalRepairRoundId === room.currentRound?.id
+      && event.type === "match_end"
+      && event.acquisitionOrigin === "verified_playback";
+    const resolution = event.stateReconciliationOnly
+      ? null
+      : resolveCurrentRound(room, evaluationEvent, { repairExpiredRound });
     const directedRound = event.stateReconciliationOnly || resolution || event.type === "match_end" ? null : maybeOpenDirectedFootballRound(room, evaluationEvent);
     if (resolution) {
       await appendDomainEvents(room, [

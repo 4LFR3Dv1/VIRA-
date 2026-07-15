@@ -51,7 +51,7 @@ export function deriveViraCompanionViewModel(state: ReplayState, participantId: 
   if (snapshot.connectionState === "offline") companionState = "offline";
   else if (snapshot.connectionState === "reconnecting" || snapshot.connectionState === "connecting") companionState = "reconnecting";
   else if (resolution) companionState = "resolved";
-  else if (round?.state === "locked" || round?.state === "awaiting_event") companionState = "locked";
+  else if (round?.state === "locked") companionState = "locked";
   else if (round?.state === "open" && answerConfirmed) companionState = "answer_confirmed";
   else if (round?.state === "open") companionState = "round_open";
   else if (snapshot.match.status === "scheduled") companionState = "upcoming";
