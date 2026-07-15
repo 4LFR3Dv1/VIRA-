@@ -12,7 +12,7 @@ const fixture = Object.freeze({ fixtureId: "fixture-picks", homeTeam: "Brazil", 
 const identity = Object.freeze({ publicId: "player_public_only", displayName: "Ana" });
 const observedAt = "2026-07-19T19:50:00.000Z";
 const market = (marketType, priceNames, marketParameters = null, suffix = marketType, marketPeriod = null) => ({ id: suffix, messageId: suffix, fixtureId: fixture.fixtureId, signature: `${fixture.fixtureId}|${marketType}|${marketParameters ?? "default"}`, marketType, marketParameters, marketPeriod, inRunning: false, capturedAt: observedAt, sourceEndpoint: `/api/odds/snapshot/${fixture.fixtureId}`, sequence: 11, options: priceNames.map((priceName, index) => ({ priceName, pct: [51, 25, 24][index] ?? 49, price: 1.8 + index })) });
-const context = (markets) => ({ generatedAt: observedAt, availableMarkets: markets, endpoints: { odds: { endpoint: `/api/odds/snapshot/${fixture.fixtureId}`, receivedAt: "2026-07-19T19:50:01.000Z" } } });
+const context = (markets, receivedAt = "2026-07-19T19:50:01.000Z") => ({ generatedAt: observedAt, availableMarkets: markets, endpoints: { odds: { endpoint: `/api/odds/snapshot/${fixture.fixtureId}`, receivedAt, ok: true } } });
 const selections = Object.freeze([
   Object.freeze({ kind: "match_result", period: "regular_time", selection: "home", resolverVersion: 1 }),
   Object.freeze({ kind: "total_goals", period: "regular_time", line: 2.5, selection: "over", resolverVersion: 1 }),
@@ -36,7 +36,8 @@ test("market snapshots reject stale, missing options, wrong line and ambiguity",
   assert.equal(buildMarketSnapshotForSelection({ ...base, context: context([market("OVERUNDER_PARTICIPANT_GOALS", ["over"], "line=2.5")]) }).reason, "market_options_invalid");
   assert.equal(buildMarketSnapshotForSelection({ ...base, context: context([market("OVERUNDER_PARTICIPANT_GOALS", ["over", "under"], "line=3.5")]) }).reason, "market_missing");
   assert.equal(buildMarketSnapshotForSelection({ ...base, context: context([market("OVERUNDER_PARTICIPANT_GOALS", ["over", "under"], "line=2.5", "a"), market("OVERUNDER_PARTICIPANT_GOALS", ["over", "under"], "line=2.5", "b")]) }).reason, "market_ambiguous");
-  assert.equal(buildMarketSnapshotForSelection({ ...base, now: Date.parse("2026-07-19T20:10:00.000Z"), context: context([market("OVERUNDER_PARTICIPANT_GOALS", ["over", "under"], "line=2.5")]) }).reason, "market_stale");
+  const oldNow = Date.parse("2026-07-20T02:00:00.000Z");
+  assert.equal(buildMarketSnapshotForSelection({ ...base, now: oldNow, context: context([market("OVERUNDER_PARTICIPANT_GOALS", ["over", "under"], "line=2.5")], new Date(oldNow).toISOString()) }).reason, "market_stale");
 });
 
 test("confirmation is immutable, idempotent, server-locked and private until shared", () => withStore(async (dataDir) => {

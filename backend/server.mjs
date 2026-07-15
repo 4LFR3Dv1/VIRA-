@@ -496,11 +496,11 @@ async function ensureRoomConfiguredFromTxline(roomId) {
   return match;
 }
 
-async function loadMatchTxlineContext(match) {
+async function loadMatchTxlineContext(match, { force = false } = {}) {
   const fixtureId = String(match.fixtureId);
   const cached = txlineContextCache.get(fixtureId);
   const now = Date.now();
-  if (cached && now - cached.cachedAtMs < TXLINE_CONTEXT_CACHE_TTL_MS) {
+  if (!force && cached && now - cached.cachedAtMs < TXLINE_CONTEXT_CACHE_TTL_MS) {
     return {
       ...cached.context,
       cache: {
@@ -762,7 +762,8 @@ async function handleRequest(request, response) {
       const fixture = catalog.matches.find((item) => String(item.fixtureId) === fixtureId);
       if (!fixture) throw Object.assign(new Error("fixture_not_found"), { status: 404 });
       await synchronizePicksFixtureLifecycle(fixture);
-      const questions = buildPicksCatalog({ fixture, context: fixture.context, now: Date.now() });
+      const context = hasTxlineCredentials(txlineConfig) ? await loadMatchTxlineContext(fixture) : fixture.context;
+      const questions = buildPicksCatalog({ fixture, context, now: Date.now() });
       sendJson(response, 200, { schemaVersion: 1, enabled: true, fixture: { fixtureId, homeTeam: fixture.homeTeam, awayTeam: fixture.awayTeam, kickoffAt: fixture.startTime, status: fixture.status }, questions });
       return;
     }
@@ -773,10 +774,11 @@ async function handleRequest(request, response) {
       if (!identity) throw Object.assign(new Error("public_identity_required"), { status: 401 });
       const catalog = await txlineCatalogCache.get(); const fixture = catalog.matches.find((item) => String(item.fixtureId) === String(body.fixtureId));
       if (!fixture) throw Object.assign(new Error("fixture_not_found"), { status: 404 });
+      const confirmationContext = hasTxlineCredentials(txlineConfig) ? await loadMatchTxlineContext(fixture, { force: true }) : fixture.context;
       const selections = (body.selectionIds ?? []).map(selectionFromCanonicalId);
       if (selections.some((selection) => selection.kind === "both_teams_score")) throw Object.assign(new Error("picks_market_unavailable:provider_market_type_unverified"), { status: 409 });
       const snapshots = selections.map((selection) => {
-        const result = buildMarketSnapshotForSelection({ fixture, context: fixture.context, selection, now: Date.now() });
+        const result = buildMarketSnapshotForSelection({ fixture, context: confirmationContext, selection, now: Date.now() });
         if (!result.available) { picksRejections.marketUnavailable += 1; throw Object.assign(new Error(`picks_market_unavailable:${result.reason}`), { status: 409 }); }
         return result.snapshot;
       });

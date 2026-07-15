@@ -1,7 +1,8 @@
 import crypto from "node:crypto";
 import { canonicalSelectionId, cloneFrozen } from "./vira-picks-contracts.mjs";
 
-const DEFAULT_FRESH_MS = 5 * 60 * 1000;
+const DEFAULT_OBSERVATION_FRESH_MS = 6 * 60 * 60 * 1000;
+const DEFAULT_ACQUISITION_FRESH_MS = 2 * 60 * 1000;
 export const PROVEN_MARKET_TYPES = Object.freeze({
   match_result: Object.freeze(["1X2_PARTICIPANT_RESULT"]),
   total_goals: Object.freeze(["OVERUNDER_PARTICIPANT_GOALS"]),
@@ -41,12 +42,11 @@ function hasExactOptions(kind, market) {
   const canonical = raw.map((option) => canonicalOption(kind, option));
   return canonical.every(Boolean) && new Set(canonical).size === expected.length && expected.every((name) => canonical.includes(name));
 }
-function receivedAtFor(context, market) {
-  const endpoint = Object.values(context?.endpoints ?? {}).find((item) => item?.endpoint === market.sourceEndpoint || String(item?.endpoint ?? "").includes(market.sourceEndpoint?.split("/").at(-2) ?? "__none__"));
-  return endpoint?.receivedAt ?? context?.generatedAt ?? null;
+function endpointFor(context, market) {
+  return Object.values(context?.endpoints ?? {}).find((item) => item?.endpoint === market.sourceEndpoint || String(item?.endpoint ?? "").includes(market.sourceEndpoint?.split("/").at(-2) ?? "__none__")) ?? null;
 }
 
-export function buildMarketSnapshotForSelection({ fixture, context, selection, now = Date.now(), freshMs = Number(process.env.VIRA_PICKS_MARKET_FRESH_MS || DEFAULT_FRESH_MS) }) {
+export function buildMarketSnapshotForSelection({ fixture, context, selection, now = Date.now(), freshMs = Number(process.env.VIRA_PICKS_MARKET_OBSERVATION_FRESH_MS || process.env.VIRA_PICKS_MARKET_FRESH_MS || DEFAULT_OBSERVATION_FRESH_MS), receivedFreshMs = Number(process.env.VIRA_PICKS_MARKET_ACQUISITION_FRESH_MS || DEFAULT_ACQUISITION_FRESH_MS) }) {
   const markets = Array.isArray(context?.availableMarkets) ? context.availableMarkets : [];
   const allowedTypes = configuredTypes(selection.kind);
   if (!allowedTypes.length) return { available: false, reason: "provider_market_type_unverified" };
@@ -55,11 +55,16 @@ export function buildMarketSnapshotForSelection({ fixture, context, selection, n
   if (!candidates.length) return { available: false, reason: "market_missing" };
   if (candidates.length !== 1) return { available: false, reason: "market_ambiguous" };
   const market = candidates[0];
-  const observedAt = market.capturedAt; const receivedAt = receivedAtFor(context, market);
+  const endpoint = endpointFor(context, market);
+  const observedAt = market.capturedAt; const receivedAt = endpoint?.receivedAt ?? null;
   if (!observedAt || !receivedAt) return { available: false, reason: "market_authority_insufficient" };
-  const age = now - Date.parse(observedAt);
-  if (!Number.isFinite(age)) return { available: false, reason: "market_freshness_unknown" };
-  if (age > freshMs || age < -60_000) return { available: false, reason: "market_stale" };
+  if (endpoint.ok !== true) return { available: false, reason: "market_endpoint_unavailable" };
+  const acquisitionAge = now - Date.parse(receivedAt);
+  if (!Number.isFinite(acquisitionAge)) return { available: false, reason: "market_freshness_unknown" };
+  if (acquisitionAge > receivedFreshMs || acquisitionAge < -60_000) return { available: false, reason: "market_acquisition_stale" };
+  const observationAge = now - Date.parse(observedAt);
+  if (!Number.isFinite(observationAge)) return { available: false, reason: "market_freshness_unknown" };
+  if (observationAge > freshMs || observationAge < -60_000) return { available: false, reason: "market_stale" };
   if (!hasExactOptions(selection.kind, market)) return { available: false, reason: "market_options_invalid" };
   const options = EXPECTED_OPTIONS[selection.kind].map((canonical) => ({ canonical, option: market.options.find((item) => canonicalOption(selection.kind, item) === canonical) }));
   const expected = EXPECTED_OPTIONS[selection.kind];

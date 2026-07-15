@@ -5,7 +5,7 @@ import { OVERUNDER_2_5_OBSERVED_SANITIZED as vector } from "./test-fixtures/txli
 
 const selection = Object.freeze({ kind: "total_goals", period: "regular_time", line: 2.5, selection: "over", resolverVersion: 1 });
 const fixture = Object.freeze({ fixtureId: "18241006" });
-const contextFor = (market) => ({ availableMarkets: [market], endpoints: { odds: { endpoint: vector.capturedFrom, receivedAt: vector.receivedAt } } });
+const contextFor = (market, receivedAt = vector.receivedAt, ok = true) => ({ availableMarkets: [market], endpoints: { odds: { endpoint: vector.capturedFrom, receivedAt, ok } } });
 
 test("observed Over/Under 2.5 vector is deeply frozen and produces stable signature and SHA-256", () => {
   assert.equal(Object.isFrozen(vector), true);
@@ -33,4 +33,16 @@ test("line parser consumes the entire value and mapping rejects approximate, dup
     [vector.market.options[0], { priceName: "push", pct: 1 }],
     [...vector.market.options, { priceName: "push", pct: 1 }],
   ]) assert.equal(buildMarketSnapshotForSelection({ fixture, context: contextFor(mutate({ options })), selection, now: Date.parse("2026-07-15T17:03:00.000Z") }).reason, "market_options_invalid");
+});
+
+test("fresh acquisition keeps a stable pre-match observation available while stale acquisition and old observation fail closed", () => {
+  const stableNow = Date.parse("2026-07-15T17:12:00.000Z");
+  const stable = buildMarketSnapshotForSelection({ fixture, context: contextFor(vector.market, "2026-07-15T17:11:58.000Z"), selection, now: stableNow });
+  assert.equal(stable.available, true);
+  assert.equal(stable.snapshot.observedAt, vector.market.capturedAt);
+  assert.equal(stable.snapshot.receivedAt, "2026-07-15T17:11:58.000Z");
+
+  assert.equal(buildMarketSnapshotForSelection({ fixture, context: contextFor(vector.market, "2026-07-15T17:03:03.840Z"), selection, now: stableNow }).reason, "market_acquisition_stale");
+  assert.equal(buildMarketSnapshotForSelection({ fixture, context: contextFor(vector.market, "2026-07-15T17:11:58.000Z", false), selection, now: stableNow }).reason, "market_endpoint_unavailable");
+  assert.equal(buildMarketSnapshotForSelection({ fixture, context: contextFor(vector.market, "2026-07-16T00:00:00.000Z"), selection, now: Date.parse("2026-07-16T00:00:00.000Z") }).reason, "market_stale");
 });
