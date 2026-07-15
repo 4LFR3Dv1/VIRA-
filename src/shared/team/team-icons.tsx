@@ -71,15 +71,15 @@ export function getTeamFlagUrl(name: string) {
 interface TeamIconProps {
   name: string;
   side?: "home" | "away" | "neutral";
-  size?: "sm" | "md" | "lg";
+  size?: "sm" | "md" | "lg" | "xl";
 }
 
 export function TeamIcon({ name, side = "neutral", size = "md" }: TeamIconProps) {
   const [failed, setFailed] = useState(false);
   const flagUrl = failed ? null : getTeamFlagUrl(name);
-  const wrapperClass = size === "lg" ? "h-10 w-14" : size === "sm" ? "h-5 w-7" : "h-7 w-10";
+  const wrapperClass = size === "xl" ? "h-12 w-[4.25rem]" : size === "lg" ? "h-10 w-14" : size === "sm" ? "h-5 w-7" : "h-7 w-10";
   const imageClass = "h-full w-full";
-  const textReplacementClass = size === "lg" ? "text-lg" : size === "sm" ? "text-[10px]" : "text-xs";
+  const textReplacementClass = size === "xl" ? "text-xl" : size === "lg" ? "text-lg" : size === "sm" ? "text-[10px]" : "text-xs";
   const textReplacementTone = side === "away" ? "text-amber-200" : side === "home" ? "text-primary" : "text-foreground";
 
   return (

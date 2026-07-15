@@ -161,6 +161,11 @@ export type TranslationMessages = {
   "lobby.homeSide": undefined;
   "lobby.awaySide": undefined;
   "lobby.marketScore": undefined;
+  "lobby.kickoff.days": { count: number };
+  "lobby.kickoff.hours": { count: number };
+  "lobby.kickoff.minutes": { count: number };
+  "lobby.predictionsOpen": undefined;
+  "lobby.predictionsLater": undefined;
   "lobby.fetchingSignal": undefined;
   "lobby.waitingSignal": undefined;
   "lobby.noSubstitute": undefined;
