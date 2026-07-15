@@ -322,6 +322,13 @@ test("startup reconciles legacy finished rooms with an unresolved football round
     assert.equal(repaired.lastResolution.winningOptionId, "no");
     assert.equal(repaired.lastResolution.resolutionReason, "match_finished");
     assert.equal(repaired.lastResolution.wasCurrentUserCorrect, true);
+    const repairedEvents = [];
+    for await (const event of restartedStore.readStream(roomId)) repairedEvents.push(event);
+    const repairStarted = repairedEvents.find((event) => event.type === "round.terminal_repair_started");
+    assert.ok(repairStarted);
+    assert.equal(repairStarted.payload.fromState, "expired");
+    assert.equal(repairStarted.payload.roundId, round.id);
+    assert.equal(repairedEvents.some((event) => event.type === "round.opened" && event.streamVersion > repairStarted.streamVersion), false);
     assert.equal((await restarted.verifyRoom(roomId)).projectionMatches, true);
   } finally {
     await rm(dataDir, { recursive: true, force: true });

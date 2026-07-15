@@ -148,7 +148,11 @@ export function deriveVerifiedRoundReplay(events, roundId, verification) {
 
   const lockedRound = lockPayload.round ?? round;
   if (lockedRound.resolution?.domain === "football") {
-    const condition = lockedRound.resolution.condition ?? {};
+    const expiredConditionEvent = ordered.find((event) => event.type === "football.condition.expired" && String(eventPayload(event).roundId) === String(roundId));
+    const condition = resolvedPayload.condition
+      ?? eventPayload(expiredConditionEvent).condition
+      ?? lockedRound.resolution.condition
+      ?? {};
     const resolutionObservation = resolvedPayload.event ?? {};
     const acceptedEvent = ordered.find((event) => event.type === "txline.event.accepted" && String(eventPayload(event).providerEventId) === String(resolutionObservation.id ?? resolvedPayload.causedByTxlineEventId ?? ""));
     const origin = normalizedOrigin(resolvedPayload, eventPayload(acceptedEvent));

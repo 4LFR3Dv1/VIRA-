@@ -48,10 +48,8 @@ export function PredictionCard({
   const isSubmitted = answerState === "submitted" || answerState === "correct" || answerState === "incorrect";
   const isLocked = isMatchFinished || !round || round.state !== "open" || isSubmitted;
   const answerCount = Object.values(answerSummary).reduce((sum, value) => sum + value, 0);
-  const statusLabel = round?.state === "awaiting_event"
-    ? "Aguardando evento"
-    : round?.state === "locked"
-      ? "Rodada travada"
+  const statusLabel = round?.state === "locked"
+    ? "Rodada travada"
       : round?.state === "resolved"
         ? "Rodada resolvida"
         : isMatchFinished

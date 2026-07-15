@@ -2,7 +2,7 @@ export type ConnectionState = "connecting" | "live" | "replaying" | "reconnectin
 
 export type MatchState = "scheduled" | "live" | "paused" | "postponed" | "cancelled" | "finished" | "unknown";
 
-export type RoundState = "scheduled" | "open" | "locked" | "awaiting_event" | "resolved" | "expired";
+export type RoundState = "scheduled" | "open" | "locked" | "resolved" | "expired";
 
 export type UserAnswerState = "not_answered" | "selected" | "submitted" | "correct" | "incorrect" | "late";
 
@@ -25,7 +25,7 @@ export interface TeamScoresCondition {
   kind: "team_scores";
   targetSide: "home" | "away";
   durationSec: number;
-  state: "awaiting_lock" | "tracking" | "candidate_met" | "confirmed";
+  state: "awaiting_lock" | "tracking" | "candidate_met" | "confirmed" | "expired";
   startsAtClockSec?: number;
   endsAtClockSec?: number;
   openingObservation?: {
@@ -60,7 +60,7 @@ export interface TeamShotOnTargetCondition {
   kind: "team_shot_on_target";
   targetSide: "home" | "away";
   durationSec: number;
-  state: "awaiting_lock" | "tracking" | "candidate_met" | "confirmed";
+  state: "awaiting_lock" | "tracking" | "candidate_met" | "confirmed" | "expired";
   startsAtClockSec?: number;
   endsAtClockSec?: number;
   openingObservation?: {
