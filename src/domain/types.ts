@@ -17,6 +17,13 @@ export type MatchRoomUiState =
 
 export type NormalizedMatchEventType = "goal" | "shot" | "corner" | "penalty" | "card" | "possession" | "var" | "reliability" | "action_amended" | "action_discarded" | "score_adjustment" | "period" | "odds_shift" | "match_end";
 
+export type PossessionPhase = "neutral" | "safe" | "attack" | "danger" | "high_danger";
+
+export interface PossessionSignal {
+  phase: PossessionPhase;
+  intensity: 0 | 1 | 2 | 3 | 4;
+}
+
 export type EventSource = "txline-live" | "txline-snapshot" | "txline-history";
 
 export type ResolutionMode = "first_matching_event" | "window_elapsed" | "match_state" | "football_condition";
@@ -198,6 +205,7 @@ export interface NormalizedMatchEvent {
   teamId?: string;
   playerId?: string;
   participantSide?: "home" | "away" | null;
+  possession?: PossessionSignal;
   absoluteScore?: { home: number; away: number } | null;
   confirmed?: boolean;
   confirmationState?: "candidate" | "confirmed" | "not_required";

@@ -3,8 +3,11 @@ import test from "node:test";
 
 import { matchMomentDirectorReducer } from "../src/features/match-moments/match-moment-reducer.ts";
 import { deriveMatchMoment } from "../src/features/match-moments/derive-match-moment.ts";
+import { advancePressureEpisode, initialPressureEpisodeState } from "../src/features/match-moments/derive-pressure-episode.ts";
 import { initialMatchMomentDirectorState } from "../src/features/match-moments/match-moment-types.ts";
 import { normalizeTxlineScore } from "./txline-client.mjs";
+import { createRoomRuntime } from "./runtime.mjs";
+import { ENGLAND_ARGENTINA_POSSESSION_OBSERVED } from "./test-fixtures/txline/england-argentina-possession-observed.mjs";
 
 function moment(id, kind, presentation, priority, sourceActionId = id) {
   return {
@@ -84,4 +87,101 @@ test("dismiss promotes the highest priority queued scene", () => {
   state = matchMomentDirectorReducer(state, { type: "enqueue", moment: card });
   state = matchMomentDirectorReducer(state, { type: "dismiss" });
   assert.equal(state.active?.id, "card");
+});
+
+test("observed TxLINE possession actions map to exact canonical phases", () => {
+  assert.equal(Object.isFrozen(ENGLAND_ARGENTINA_POSSESSION_OBSERVED), true);
+  assert.equal(Object.isFrozen(ENGLAND_ARGENTINA_POSSESSION_OBSERVED.records), true);
+  const normalized = ENGLAND_ARGENTINA_POSSESSION_OBSERVED.records.map((record) => normalizeTxlineScore(record));
+  assert.deepEqual(normalized.map((event) => event.type), normalized.map(() => "possession"));
+  assert.deepEqual(normalized.map((event) => event.possession), [
+    { phase: "neutral", intensity: 0 },
+    { phase: "safe", intensity: 1 },
+    { phase: "attack", intensity: 2 },
+    { phase: "attack", intensity: 2 },
+    { phase: "danger", intensity: 3 },
+    { phase: "high_danger", intensity: 4 },
+  ]);
+  assert.equal(normalized[0].participantSide, "away");
+  assert.equal(normalized[2].participantSide, "home");
+
+  for (const Action of ["defense_possession", "possession_attack", "very_high_danger_possession"]) {
+    const unknown = normalizeTxlineScore({ FixtureId: 18241006, Id: Action, Seq: 999, Action, Participant: 1, Clock: { Seconds: 500 } });
+    assert.equal(unknown.type, "period");
+    assert.equal(unknown.possession, undefined);
+  }
+});
+
+test("pressure episodes coalesce sustained attacks, promote danger and clear on safe possession", () => {
+  const match = { homeTeam: { name: "England" }, awayTeam: { name: "Argentina" } };
+  const events = ENGLAND_ARGENTINA_POSSESSION_OBSERVED.records.map((record) => normalizeTxlineScore(record));
+  let tracker = initialPressureEpisodeState;
+
+  let derived = advancePressureEpisode(tracker, events[2], match);
+  tracker = derived.state;
+  assert.equal(derived.command, null);
+
+  derived = advancePressureEpisode(tracker, events[3], match);
+  tracker = derived.state;
+  assert.equal(derived.command?.type, "set_ambient");
+  assert.equal(derived.command?.moment.level, "building");
+  assert.equal(derived.command?.moment.signalCount, 2);
+  const episodeId = derived.command?.moment.id;
+
+  derived = advancePressureEpisode(tracker, { ...events[3], id: "attack-third", sequence: 27, matchClockSec: 50 }, match);
+  tracker = derived.state;
+  assert.equal(derived.command?.type, "set_ambient");
+  assert.equal(derived.command?.moment.id, episodeId);
+
+  derived = advancePressureEpisode(tracker, events[4], match);
+  tracker = derived.state;
+  assert.equal(derived.command?.type, "clear_ambient");
+
+  derived = advancePressureEpisode(tracker, events[5], match);
+  tracker = derived.state;
+  assert.equal(derived.command?.type, "set_ambient");
+  assert.equal(derived.command?.moment.level, "high");
+
+  derived = advancePressureEpisode(tracker, events[1], match);
+  assert.equal(derived.command?.type, "clear_ambient");
+  assert.equal(derived.state.visible, false);
+});
+
+test("ambient pressure never enters the competitive banner queue", () => {
+  const pressure = {
+    ...moment("pressure-1", "pressure", "ambient", 10),
+    level: "danger",
+    phase: "danger",
+    signalCount: 2,
+  };
+  const state = matchMomentDirectorReducer(initialMatchMomentDirectorState, { type: "set_ambient", moment: pressure });
+  assert.equal(state.ambient?.id, "pressure-1");
+  assert.equal(state.active, null);
+  assert.deepEqual(state.queue, []);
+});
+
+test("runtime emits possession to match moments without adding a competitive timeline item", async () => {
+  const runtime = createRoomRuntime();
+  const roomId = ENGLAND_ARGENTINA_POSSESSION_OBSERVED.fixtureId;
+  runtime.configureMatch({ fixtureId: roomId, title: "England vs Argentina", status: "live", homeTeam: "England", awayTeam: "Argentina" });
+  const roundBefore = structuredClone(runtime.getRoom(roomId).currentRound);
+  const statsBefore = structuredClone(runtime.getRoom(roomId).matchStats);
+  const writes = [];
+  let close = () => {};
+  runtime.attachClient(roomId, {
+    write(value) { writes.push(String(value)); },
+    on(event, handler) { if (event === "close") close = handler; },
+  });
+  try {
+    const attack = normalizeTxlineScore(ENGLAND_ARGENTINA_POSSESSION_OBSERVED.records[2]);
+    await runtime.applyNormalizedEvent(roomId, attack);
+    const output = writes.join("");
+    assert.match(output, /event: match\.event_received/);
+    assert.match(output, /"phase":"attack","intensity":2/);
+    assert.deepEqual(runtime.getRoom(roomId).currentRound, roundBefore);
+    assert.deepEqual(runtime.getRoom(roomId).matchStats, statsBefore);
+    assert.equal(runtime.getRoom(roomId).timeline.some((entry) => /possession/i.test(entry.description)), false);
+  } finally {
+    close();
+  }
 });

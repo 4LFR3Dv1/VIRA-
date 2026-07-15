@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "r
 
 import type { Match, NormalizedMatchEvent } from "../../domain/types";
 import { deriveMatchMoment } from "./derive-match-moment";
+import { advancePressureEpisode, initialPressureEpisodeState } from "./derive-pressure-episode";
 import { matchMomentDirectorReducer } from "./match-moment-reducer";
 import { initialMatchMomentDirectorState, type MotionPreference } from "./match-moment-types";
 
@@ -59,9 +60,19 @@ export function useMatchMomentDirector(fixtureId: string, match: Match, events: 
   });
   const [preferences, setPreferences] = useState(readPreferences);
   const consumedRef = useRef(new Set(persistedSeen));
+  const processedEventIdsRef = useRef(new Set<string>());
+  const pressureRef = useRef(initialPressureEpisodeState);
 
   useEffect(() => {
     for (const event of events) {
+      if (processedEventIdsRef.current.has(event.id)) continue;
+      processedEventIdsRef.current.add(event.id);
+      if (event.type === "possession") {
+        const pressure = advancePressureEpisode(pressureRef.current, event, match);
+        pressureRef.current = pressure.state;
+        if (pressure.command) dispatch(pressure.command);
+        continue;
+      }
       const command = deriveMatchMoment(event, match);
       if (!command) continue;
       if ((command.type === "enqueue" || command.type === "replace") && consumedRef.current.has(command.moment.id)) continue;
@@ -86,7 +97,7 @@ export function useMatchMomentDirector(fixtureId: string, match: Match, events: 
     if (!state.ambient) return undefined;
     const timer = window.setTimeout(() => dispatch({ type: "expire_ambient", momentId: state.ambient?.id ?? "" }), state.ambient.durationMs);
     return () => window.clearTimeout(timer);
-  }, [state.ambient?.id]);
+  }, [state.ambient?.id, state.ambient?.sourceEvent.id]);
 
   const updatePreferences = useCallback((next: Partial<typeof preferences>) => {
     setPreferences((current) => {

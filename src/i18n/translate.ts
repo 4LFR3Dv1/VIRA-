@@ -526,6 +526,9 @@ export type TranslationMessages = {
   "moment.penalty": undefined;
   "moment.varReview": undefined;
   "moment.match": undefined;
+  "moment.pressureBuilding": undefined;
+  "moment.dangerGrowing": undefined;
+  "moment.highDanger": undefined;
   "share.action": undefined;
   "share.creatingInvite": undefined;
   "share.linkCopied": undefined;

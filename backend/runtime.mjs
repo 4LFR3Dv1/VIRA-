@@ -1436,7 +1436,7 @@ export function createRoomRuntime({ eventStore = null, commitmentPublisher = nul
   }
 
   function applyFootballEventStats(room, event, correlationId = null, emitEvents = true) {
-    const relevant = new Set(["shot", "corner", "penalty", "card", "possession", "var", "reliability", "action_amended", "action_discarded"]);
+    const relevant = new Set(["shot", "corner", "penalty", "card", "var", "reliability", "action_amended", "action_discarded"]);
     if (!relevant.has(event.type) && !event.cumulativeStats) return [];
     const before = JSON.stringify(room.matchStats);
     const side = event.participantSide === "away" ? "away" : "home";
@@ -2331,6 +2331,8 @@ export function createRoomRuntime({ eventStore = null, commitmentPublisher = nul
     const footballConditionEvents = event.stateReconciliationOnly ? [] : advanceFootballCondition(room, evaluationEvent, correlationId);
     if (footballConditionEvents.length) await appendDomainEvents(room, footballConditionEvents);
     const consumerEventVisible = consumeConsumerVisibleMatchEvent(room, event) && event.consumerPresentationSuppressed !== true;
+    const matchMomentEventVisible = consumerEventVisible
+      || (event.type === "possession" && Boolean(event.possession) && event.consumerPresentationSuppressed !== true);
     const timelineEntryId = event.type === "match_end" ? `timeline-match-finished-${event.id}` : `timeline-${event.id}`;
     if (event.type !== "match_end" && consumerEventVisible) {
       pushTimeline(room, {
@@ -2440,7 +2442,7 @@ export function createRoomRuntime({ eventStore = null, commitmentPublisher = nul
         currentVersion: room.version,
       },
     ];
-    if (consumerEventVisible) {
+    if (matchMomentEventVisible) {
       const eventEmit = emit(roomId, "match.event_received", event);
       outputs.push({ type: "sse.emitted", eventId: eventEmit.eventId, eventName: "match.event_received", clientCount: eventEmit.clientCount });
     }
