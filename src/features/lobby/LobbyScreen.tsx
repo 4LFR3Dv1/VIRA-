@@ -1,5 +1,5 @@
 import { Signal } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router";
 
 import type { MatchCatalogEntry, MatchSummary, MatchTxlineContext, TxlineProbeKind, TxlineProbeResult } from "../../runtime/api";
@@ -11,15 +11,12 @@ import { openOfficialReview } from "../../app/shell/shell-events";
 import { FeaturedMatchStage } from "./FeaturedMatchStage";
 import { FixtureAgenda } from "./FixtureAgenda";
 import { createFeaturedMatchModel } from "./featured-match-model";
+import { selectCatalogMatch, selectSuggestedMatch } from "./fixture-selection";
 import { TxlineTechnicalInspector } from "./TxlineTechnicalInspector";
 import { TxlineVerificationRail } from "./TxlineVerificationRail";
 import { fixtureAccent, useShellAtmosphere } from "../../app/shell/use-shell-atmosphere";
 import { useLocale } from "../../i18n/locale-context.tsx";
 import { competitionDisplayName } from "../../i18n/semantic-copy.ts";
-
-function selectSuggestedMatch(matches: MatchSummary[]) {
-  return [...matches].sort((left, right) => Number(right.consumerProjection?.editorial.priority ?? -Infinity) - Number(left.consumerProjection?.editorial.priority ?? -Infinity) || left.fixtureId.localeCompare(right.fixtureId))[0] ?? null;
-}
 
 export function LobbyScreen() {
   const navigate = useNavigate();
@@ -36,6 +33,7 @@ export function LobbyScreen() {
   const [probe, setProbe] = useState<TxlineProbeResult | null>(null);
   const [technicalOpen, setTechnicalOpen] = useState(false);
   const [competitionFilter, setCompetitionFilter] = useState("world_cup");
+  const manuallySelectedMatchId = useRef<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -44,7 +42,7 @@ export function LobbyScreen() {
         const nextMatches = response.matches;
         setMatches(nextMatches);
         setSource(response.source);
-        setSelectedMatchId((current) => nextMatches.some((match) => match.fixtureId === current) ? current : response.featuredFixtureId ?? selectSuggestedMatch(nextMatches)?.fixtureId ?? null);
+        setSelectedMatchId((current) => selectCatalogMatch(nextMatches, current, response.featuredFixtureId, manuallySelectedMatchId.current));
         setFixtureContexts(Object.fromEntries(response.matches.map((match) => [match.fixtureId, match.context])));
         setFixtureContextStates(Object.fromEntries(response.matches.map((match) => [match.fixtureId, match.availability.contextStatus === "unavailable" ? "error" : "ready"])));
         setLoadState("ready");
@@ -159,7 +157,7 @@ export function LobbyScreen() {
 
           {loadState === "ready" && selectedMatch ? (
             <>
-              <nav aria-label={t("lobby.filterLabel")} className="mb-7 flex gap-2 overflow-x-auto pb-2"><button type="button" onClick={() => setCompetitionFilter("all")} aria-pressed={activeCompetitionId === "all"} className={`min-h-10 shrink-0 border px-4 font-['DM_Mono'] text-[9px] font-black uppercase ${activeCompetitionId === "all" ? "border-primary bg-primary text-[#050814]" : "border-white/15 text-white/50"}`}>{t("lobby.filterAll")}</button>{competitionFilters.map((competition) => <button key={competition.id} type="button" onClick={() => { setCompetitionFilter(competition.kind === "world_cup" ? "world_cup" : competition.id); setSelectedMatchId(null); }} aria-pressed={activeCompetitionId === competition.id || (activeCompetitionId === "world_cup" && competition.kind === "world_cup")} className={`min-h-10 shrink-0 border px-4 font-['DM_Mono'] text-[9px] font-black uppercase ${(activeCompetitionId === competition.id || (activeCompetitionId === "world_cup" && competition.kind === "world_cup")) ? "border-primary bg-primary text-[#050814]" : "border-white/15 text-white/50"}`}>{competition.label}</button>)}</nav>
+              <nav aria-label={t("lobby.filterLabel")} className="mb-7 flex gap-2 overflow-x-auto pb-2"><button type="button" onClick={() => { manuallySelectedMatchId.current = null; setCompetitionFilter("all"); setSelectedMatchId(null); }} aria-pressed={activeCompetitionId === "all"} className={`min-h-10 shrink-0 border px-4 font-['DM_Mono'] text-[9px] font-black uppercase ${activeCompetitionId === "all" ? "border-primary bg-primary text-[#050814]" : "border-white/15 text-white/50"}`}>{t("lobby.filterAll")}</button>{competitionFilters.map((competition) => <button key={competition.id} type="button" onClick={() => { manuallySelectedMatchId.current = null; setCompetitionFilter(competition.kind === "world_cup" ? "world_cup" : competition.id); setSelectedMatchId(null); }} aria-pressed={activeCompetitionId === competition.id || (activeCompetitionId === "world_cup" && competition.kind === "world_cup")} className={`min-h-10 shrink-0 border px-4 font-['DM_Mono'] text-[9px] font-black uppercase ${(activeCompetitionId === competition.id || (activeCompetitionId === "world_cup" && competition.kind === "world_cup")) ? "border-primary bg-primary text-[#050814]" : "border-white/15 text-white/50"}`}>{competition.label}</button>)}</nav>
               {featuredModel ? <FeaturedMatchStage model={featuredModel} onOpen={() => openPreview()} /> : null}
 
               <FixtureAgenda
@@ -168,7 +166,7 @@ export function LobbyScreen() {
                 selectedContext={selectedContext}
                 contexts={fixtureContexts}
                 contextStates={fixtureContextStates}
-                onSelect={setSelectedMatchId}
+                onSelect={(fixtureId) => { manuallySelectedMatchId.current = fixtureId; setSelectedMatchId(fixtureId); }}
                 onOpen={openPreview}
               />
 

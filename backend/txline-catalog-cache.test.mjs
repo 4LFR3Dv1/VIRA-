@@ -130,3 +130,22 @@ test("game_finalised context closes a stale live fixture and promotes the next e
   assert.equal(home.editorial.fixture.fixtureId, "next");
   assert.notEqual(home.editorial.kind, "join_live_room");
 });
+
+test("finished fixture rotates to the next World Cup fixture before predictions open", async () => {
+  const evaluatedAt = "2026-07-15T22:24:00.000Z";
+  const closed = { ...match, fixtureId: "semi-final", status: "finished", startTime: "2026-07-15T19:00:00.000Z", competition: { kind: "world_cup", mapped: true } };
+  const friendly = { ...match, fixtureId: "friendly", status: "scheduled", startTime: "2026-07-18T12:00:00.000Z", competition: { kind: "friendly", mapped: true } };
+  const thirdPlace = { ...match, fixtureId: "third-place", status: "scheduled", startTime: "2026-07-18T21:00:00.000Z", competition: { kind: "world_cup", mapped: true } };
+  const marketContext = { generatedAt: evaluatedAt, availableMarkets: [{ id: "market" }], canonical1X2: { marketSignature: "fixture|1x2", snapshotId: "market", providerSequence: 1, observedAt: evaluatedAt, selections: { home: 45, draw: 30, away: 25 } } };
+  const cache = createTxlineCatalogCache({
+    loadMatches: async () => ({ source: "txline", matches: [closed, friendly, thirdPlace] }),
+    loadContext: async () => marketContext,
+    now: () => Date.parse(evaluatedAt),
+  });
+
+  const catalog = await cache.get();
+  const selected = catalog.matches.find((fixture) => fixture.fixtureId === catalog.featuredFixtureId);
+  assert.equal(catalog.featuredFixtureId, "third-place");
+  assert.equal(selected.consumerProjection.availability.canFeature, true);
+  assert.equal(selected.consumerProjection.availability.canPredict, false);
+});

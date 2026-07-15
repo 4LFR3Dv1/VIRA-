@@ -37,6 +37,8 @@ function projectedAvailability(projection, context, contextStatus = null) {
     canonical1X2Available: Boolean(projection.market.canonical1X2),
     hasPlayablePrediction: projection.availability.canPredict,
     canPredict: projection.availability.canPredict,
+    canFeature: projection.availability.canFeature,
+    featureReason: projection.availability.featureReason,
     canEnterRoom: projection.availability.canEnterRoom,
     canShowMarket: projection.availability.canShowMarket,
     canMakeDirectionalClaim: projection.availability.canMakeDirectionalClaim,
@@ -185,7 +187,7 @@ export function createTxlineCatalogCache({
           return { ...match, consumerProjection, availability: projectedAvailability(consumerProjection, match.context, match.availability?.contextStatus) };
         });
         const ranked = rankFixtureConsumerProjections(projected.map((match) => match.consumerProjection));
-        const featuredFixtureId = ranked.find((projection) => Number.isFinite(projection.editorial.priority))?.fixture.fixtureId ?? ranked[0]?.fixture.fixtureId ?? null;
+        const featuredFixtureId = ranked.find((projection) => projection.availability.canFeature)?.fixture.fixtureId ?? ranked[0]?.fixture.fixtureId ?? null;
         const next = { version: SNAPSHOT_VERSION, source: "txline", cacheSource: "server", generatedAt, featuredFixtureId, refreshReason: reason, materialization: { contextsRefreshed, contextsReused, concurrency }, matches: projected };
         snapshot = next;
         lastError = null;

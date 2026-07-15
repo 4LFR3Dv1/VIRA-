@@ -71,3 +71,16 @@ test("a resolved or expired round returns the room to preparation instead of sta
   resolved.lastResolution = null;
   assert.equal(deriveRoomExperience(resolved), "live_waiting_for_round");
 });
+
+test("a finished match overrides stale round and transport states", () => {
+  const finished = roomState("reconnecting");
+  finished.snapshot.match.status = "finished";
+  finished.snapshot.currentRound = { id: "round-stale", state: "open", resolution: { domain: "football" } };
+  finished.lastResolution = { roundId: "round-previous" };
+  finished.currentUiState = "prediction_open";
+
+  assert.equal(deriveRoomExperience(finished), "finished");
+
+  finished.snapshot.connectionState = "connecting";
+  assert.equal(deriveRoomExperience(finished), "finished");
+});

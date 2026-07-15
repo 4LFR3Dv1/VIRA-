@@ -1,5 +1,5 @@
 import { fixturePredictionCopy, resolveEditorialLocaleContext } from "../shared/editorial-domain.mjs";
-import { deriveFixtureConsumerProjection } from "../shared/fixture-consumer-projection.mjs";
+import { deriveFixtureConsumerProjection, rankFixtureConsumerProjections } from "../shared/fixture-consumer-projection.mjs";
 
 function normalizedStatus(value) { return deriveFixtureConsumerProjection({ fixture: { status: value } }).fixture.status; }
 
@@ -28,7 +28,10 @@ export function deriveHomeProjection({ catalog, player = null, predictions = {},
   const resolved = candidates.find((item) => item.prediction?.status === "resolved");
   const live = candidates.find((item) => item.fixture.status === "live");
   const predictable = candidates.filter((item) => item.eligibility.eligible).sort((a, b) => b.rank.score - a.rank.score || a.temporal.minutesUntilKickoff - b.temporal.minutesUntilKickoff)[0] ?? null;
-  const selected = resolved ?? live ?? predictable ?? candidates.find((item) => item.fixture.status !== "finished") ?? candidates[0] ?? null;
+  const rankedForFeature = rankFixtureConsumerProjections(candidates.map((item) => item.consumerProjection));
+  const featuredProjection = rankedForFeature.find((item) => item.availability.canFeature) ?? rankedForFeature[0] ?? null;
+  const featured = featuredProjection ? candidates.find((item) => item.fixture.fixtureId === featuredProjection.fixture.fixtureId) ?? null : null;
+  const selected = resolved ?? live ?? predictable ?? featured ?? candidates[0] ?? null;
   let editorial;
   if (resolved) editorial = { kind: "result_available", authority: "official_match_state", fixture: fixtureSummary(resolved.fixture, resolved.market, resolved.temporal, resolved.consumerProjection), prediction: resolved.prediction, sourceSnapshotIds: [], generatedAt: evaluatedAt, expiresAt: null };
   else if (live) editorial = { kind: "join_live_room", authority: "official_match_state", fixture: fixtureSummary(live.fixture, live.market, live.temporal, live.consumerProjection), prediction: live.prediction, sourceSnapshotIds: [], generatedAt: evaluatedAt, expiresAt: null };

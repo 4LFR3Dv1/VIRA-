@@ -28,7 +28,18 @@ export function HomeScreen() {
     setStatus("ready");
     void trackHome("home.editorial_viewed", projection.editorial.kind, projection.editorial.fixture?.fixtureId).catch(() => undefined);
   }).catch(() => setStatus("error")), [locale, timeZone]);
-  useEffect(load, [load]);
+  useEffect(() => {
+    load();
+    const interval = window.setInterval(load, 15_000);
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === "visible") load();
+    };
+    document.addEventListener("visibilitychange", refreshWhenVisible);
+    return () => {
+      window.clearInterval(interval);
+      document.removeEventListener("visibilitychange", refreshWhenVisible);
+    };
+  }, [load]);
 
   const fixture = home?.editorial.fixture ?? null;
   const projection = fixture?.consumerProjection ?? null;
@@ -82,7 +93,7 @@ export function HomeScreen() {
 
     {editorial.kind === "result_available" && fixture && editorial.prediction ? <div className="grid gap-10 py-14 lg:grid-cols-[1fr_400px] lg:items-end"><div><p className="font-['DM_Mono'] text-[10px] font-black uppercase text-primary">{t("home.result.official")}</p><h1 className="mt-5 font-['Chakra_Petch'] text-[clamp(4rem,11vw,9rem)] font-black uppercase leading-[.76]">{editorial.prediction.correct ? t("home.result.correct") : t("home.result.defined")}</h1><p className="mt-7 text-xl font-black uppercase">{fixture.homeTeam} {editorial.prediction.finalScore?.home} × {editorial.prediction.finalScore?.away} {fixture.awayTeam}</p><p className="mt-3 text-sm text-white/45">{t("home.result.yourPick", { selection: labels[editorial.prediction.choice] })}</p></div><div><button type="button" onClick={() => void share()} className="flex min-h-16 w-full items-center justify-between bg-primary px-6 font-black uppercase text-[#050814]">{t("home.result.share")} <Share2 className="size-5" /></button><button type="button" onClick={() => go(`/match/${fixture.fixtureId}/preview`)} className="mt-2 flex min-h-14 w-full items-center justify-between border border-white/20 px-6 font-black uppercase">{t("home.result.view")} <ArrowRight className="size-4" /></button></div></div> : null}
 
-    {editorial.kind === "open_calendar" ? <div className="py-16"><p className="font-['DM_Mono'] text-[10px] font-black uppercase text-primary">{t("home.calendar.kicker")}</p><h1 className="mt-5 max-w-5xl font-['Chakra_Petch'] text-[clamp(3.5rem,9vw,8rem)] font-black uppercase leading-[.8]">{t("home.calendar.headline")}</h1><button type="button" onClick={() => go("/matches")} className="mt-9 inline-flex min-h-16 items-center gap-4 bg-primary px-7 font-black uppercase text-[#050814]">{t("home.calendar.open")} <CalendarDays className="size-5" /></button></div> : null}
+    {editorial.kind === "open_calendar" ? fixture ? <div className="py-14"><p className="font-['DM_Mono'] text-[10px] font-black uppercase text-primary">{t("home.calendar.nextFixture")}</p><h1 className="mt-5 max-w-6xl font-['Chakra_Petch'] text-[clamp(3.5rem,9vw,8rem)] font-black uppercase leading-[.8]">{fixture.homeTeam}<br /><span className="text-primary">×</span> {fixture.awayTeam}</h1><div className="mt-8 flex flex-wrap items-center gap-4"><TeamIcon name={fixture.homeTeam} size="lg" /><span className="font-['DM_Mono'] text-xs font-black uppercase text-white/60">{formattedKickoff ?? t("home.timeToConfirm")}</span><TeamIcon name={fixture.awayTeam} size="lg" /></div><p className="mt-5 max-w-xl text-sm leading-6 text-white/45">{t("home.calendar.predictionsLater")}</p><div className="mt-9 flex flex-wrap gap-3"><button type="button" onClick={() => go(`/match/${fixture.fixtureId}/preview`)} className="inline-flex min-h-16 items-center gap-4 bg-primary px-7 font-black uppercase text-[#050814]">{t("home.calendar.viewFixture")} <ArrowRight className="size-5" /></button><button type="button" onClick={() => go("/matches")} className="inline-flex min-h-16 items-center gap-4 border border-white/20 px-7 font-black uppercase">{t("home.calendar.open")} <CalendarDays className="size-5" /></button></div></div> : <div className="py-16"><p className="font-['DM_Mono'] text-[10px] font-black uppercase text-primary">{t("home.calendar.kicker")}</p><h1 className="mt-5 max-w-5xl font-['Chakra_Petch'] text-[clamp(3.5rem,9vw,8rem)] font-black uppercase leading-[.8]">{t("home.calendar.headline")}</h1><button type="button" onClick={() => go("/matches")} className="mt-9 inline-flex min-h-16 items-center gap-4 bg-primary px-7 font-black uppercase text-[#050814]">{t("home.calendar.open")} <CalendarDays className="size-5" /></button></div> : null}
 
     <footer className="grid gap-4 border-t border-white/12 pt-5 sm:grid-cols-3"><Footer label={t("home.footer.authority")} value={editorial.authority === "txline_fixture_market" ? t("home.footer.fixtureMarket") : t("home.footer.officialState")} /><Footer label={t("home.footer.yourGroup")} value={home.player?.miniLeagues.length ? t("home.footer.miniLeagues", { count: home.player.miniLeagues.length }) : t("home.footer.noGroup")} icon={<Users className="size-4 text-primary" />} /><Footer label={t("home.footer.champion")} value={t("home.footer.outrightUnavailable")} icon={<Trophy className="size-4" />} /></footer>
   </section>;

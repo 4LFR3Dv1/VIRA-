@@ -84,6 +84,12 @@ function marketProjection(fixture, context, evaluatedAt) {
 
 function availabilityFor(status, temporal, market, competition) {
   const eligibility = deriveFixtureEditorialEligibility({ fixture: { status, competition }, market, temporal });
+  const competitionCanFeature = !["unknown", "unidentified"].includes(String(competition?.kind ?? "unknown"));
+  const futureFixtureCanFeature = status === "scheduled"
+    && Boolean(temporal?.kickoffAt)
+    && Number(temporal?.minutesUntilKickoff) > 0
+    && competitionCanFeature;
+  const canFeature = status === "live" || status === "paused" || futureFixtureCanFeature;
   const roomMode = status === "finished" ? "read_only" : status === "live" || status === "paused" ? "live" : status === "scheduled" ? "pre_match" : "unavailable";
   const canEnterRoom = roomMode !== "unavailable";
   const canShowMarket = market.canonical1X2 !== null && market.freshness.currentForDisplay;
@@ -99,7 +105,10 @@ function availabilityFor(status, temporal, market, competition) {
   else if (!market.canonical1X2) reason = "market_missing";
   else if (!market.freshness.usableForPrediction) reason = "market_stale";
   else if (!eligibility.insidePromotionWindow) reason = "outside_prediction_window";
-  return { canPredict, canEnterRoom, roomMode, canShowMarket, canMakeDirectionalClaim, reason, eligibility };
+  const featureReason = status === "live" || status === "paused" ? "fixture_active"
+    : futureFixtureCanFeature ? (canPredict ? "prediction_open" : "upcoming_fixture")
+      : status === "finished" ? "fixture_finished" : "fixture_not_featureable";
+  return { canFeature, featureReason, canPredict, canEnterRoom, roomMode, canShowMarket, canMakeDirectionalClaim, reason, eligibility };
 }
 
 function editorialFor(status, temporal, market, availability, fixture, prediction = null) {
@@ -162,8 +171,21 @@ export function deriveFixtureConsumerProjection({ fixture, txlineContext = fixtu
 
 export function rankFixtureConsumerProjections(projections) {
   return [...projections].sort((left, right) => {
+    const tier = (projection) => {
+      const status = projection.fixture.status;
+      if (status === "live") return 6;
+      if (status === "paused") return 5;
+      if (status === "scheduled" && projection.availability.canPredict) return 4;
+      if (status === "scheduled" && projection.availability.canFeature) return 3;
+      if (status === "finished") return 2;
+      return 1;
+    };
+    const tierDifference = tier(right) - tier(left);
+    if (tierDifference) return tierDifference;
     const priority = Number(right.editorial.priority) - Number(left.editorial.priority);
-    if (priority) return priority;
+    if (Number.isFinite(priority) && priority) return priority;
+    const worldCup = Number(right.fixture.competition?.kind === "world_cup") - Number(left.fixture.competition?.kind === "world_cup");
+    if (worldCup) return worldCup;
     const leftKickoff = Date.parse(left.fixture.kickoffAt ?? "") || Number.POSITIVE_INFINITY;
     const rightKickoff = Date.parse(right.fixture.kickoffAt ?? "") || Number.POSITIVE_INFINITY;
     return leftKickoff - rightKickoff || left.fixture.fixtureId.localeCompare(right.fixture.fixtureId);

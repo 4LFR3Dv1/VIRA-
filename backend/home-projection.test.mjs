@@ -39,6 +39,17 @@ test("a fixture outside the promotion window cannot win through competition weig
   assert.equal(projection.editorial.kind, "open_calendar");
 });
 
+test("open calendar still points at the next World Cup fixture outside the prediction window", () => {
+  const friendly = fixture({ fixtureId: "friendly", competition: { kind: "friendly" }, startTime: "2026-07-18T12:00:00.000Z" });
+  const worldCup = fixture({ fixtureId: "third-place", startTime: "2026-07-18T21:00:00.000Z" });
+  const projection = deriveHomeProjection({ catalog: { matches: [friendly, worldCup] }, now });
+
+  assert.equal(projection.editorial.kind, "open_calendar");
+  assert.equal(projection.editorial.fixture.fixtureId, "third-place");
+  assert.equal(projection.editorial.fixture.consumerProjection.availability.canFeature, true);
+  assert.equal(projection.editorial.fixture.consumerProjection.availability.canPredict, false);
+});
+
 test("home projection freezes evaluation time and uses civil temporal copy", () => {
   const projection = deriveHomeProjection({ catalog: { matches: [fixture({ startTime: "2026-07-14T10:00:00.000Z" })] }, now, localeContext: { locale: "pt-BR", timeZone: "America/Sao_Paulo", source: "viewer" } });
   assert.equal(projection.version, 2);

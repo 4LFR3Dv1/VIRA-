@@ -78,7 +78,8 @@ export function MatchRoomScreen() {
 
   const currentRound = state.snapshot.currentRound;
   const experience = deriveRoomExperience(state);
-  const competitiveStage = experience === "round_open" || experience === "answer_locked" || experience === "resolving" || experience === "finished";
+  const matchFinished = state.snapshot.match.status === "finished";
+  const competitiveStage = experience === "round_open" || experience === "answer_locked" || experience === "resolving";
   const previewChoice = searchParams.get("choice");
   const inviteCode = searchParams.get("invite");
   const companionParams = new URLSearchParams(searchParams);
@@ -179,10 +180,19 @@ export function MatchRoomScreen() {
       <MatchHeader state={state} onBack={() => navigate(localizedHref("/matches"))} />
       <TournamentLifecycleRail model={experienceModel} />
       <main className="mx-auto w-full max-w-[1440px] px-4 pb-24 pt-5 md:px-7 lg:px-10 lg:pb-12">
-        {participantId && sessionToken ? <div className="flex flex-wrap justify-end gap-2"><MatchAlertsControl roomId={matchId} fixtureId={state.snapshot.match.id} participantId={participantId} sessionToken={sessionToken} locale={locale} timeZone={timeZone} inviteCode={inviteCode} /><ViraShareButton label={t("room.invite")} create={() => createRoomShare({ kind: "room", roomId: matchId, participantId, sessionToken, displayName: state.snapshot.currentParticipant?.displayName ?? playerName }, { locale, timeZone })} /></div> : null}
-        {VIRA_VISUAL_COMPANION_ENABLED && participantId && sessionToken ? <VisualCompanionFeature state={state} participantId={participantId} sessionToken={sessionToken} matchId={matchId} locale={locale} timeZone={timeZone} inviteCode={inviteCode} companionHref={companionHref} onFallbackNavigate={navigate} /> : null}
+        {!matchFinished && participantId && sessionToken ? <div className="flex flex-wrap justify-end gap-2"><MatchAlertsControl roomId={matchId} fixtureId={state.snapshot.match.id} participantId={participantId} sessionToken={sessionToken} locale={locale} timeZone={timeZone} inviteCode={inviteCode} /><ViraShareButton label={t("room.invite")} create={() => createRoomShare({ kind: "room", roomId: matchId, participantId, sessionToken, displayName: state.snapshot.currentParticipant?.displayName ?? playerName }, { locale, timeZone })} /></div> : null}
+        {!matchFinished && VIRA_VISUAL_COMPANION_ENABLED && participantId && sessionToken ? <VisualCompanionFeature state={state} participantId={participantId} sessionToken={sessionToken} matchId={matchId} locale={locale} timeZone={timeZone} inviteCode={inviteCode} companionHref={companionHref} onFallbackNavigate={navigate} /> : null}
         {competitiveStage ? <LiveDecisionCapsule state={state} latestPresentationEvent={latestPresentationEvent} /> : null}
 
+        {matchFinished ? <ReplayFinishedPanel
+          open
+          match={state.snapshot.match}
+          leaderboard={state.snapshot.leaderboard}
+          verification={verification}
+          onBack={() => navigate(localizedHref("/matches"))}
+          onReview={openOfficialReview}
+          shareAction={participantId && sessionToken ? <ViraShareButton label={t("room.shareResult")} create={() => createRoomShare({ kind: "result", roomId: matchId, participantId, sessionToken, displayName: state.snapshot.currentParticipant?.displayName ?? playerName }, { locale, timeZone })} /> : undefined}
+        /> : <>
         <section className={`mt-5 grid gap-5 lg:items-start ${competitiveStage ? "lg:grid-cols-[minmax(0,1fr)_19rem] xl:grid-cols-[minmax(0,1fr)_22rem]" : "grid-cols-1"}`}>
           <RoomStage
             state={state}
@@ -201,16 +211,7 @@ export function MatchRoomScreen() {
 
         {competitiveStage ? <CausalityRail state={state} latestPresentationEvent={latestPresentationEvent} verification={verification} /> : null}
         <MatchJourney journey={experienceModel.journey} />
-
-        <ReplayFinishedPanel
-          open={state.currentUiState === "match_finished"}
-          leaderboard={state.snapshot.leaderboard}
-          onRestart={() => {
-            setResolutionOpen(false);
-            setResolutionRequested(false);
-            controls.restart();
-          }}
-        />
+        </>}
       </main>
 
       <MatchMomentDirector
@@ -221,11 +222,11 @@ export function MatchRoomScreen() {
         onDismiss={matchDirection.dismiss}
         onMotionChange={(motion) => matchDirection.updatePreferences({ motion })}
         onSoundChange={(sound) => matchDirection.updatePreferences({ sound })}
-        visible={!resolutionOpen && !inspect && !joinDialogOpen}
+        visible={!matchFinished && !resolutionOpen && !inspect && !joinDialogOpen}
       />
 
       <ResolutionOverlay
-        open={resolutionOpen}
+        open={resolutionOpen && !matchFinished}
         result={state.lastResolution}
         presentationEvent={latestPresentationEvent}
         onClose={() => setResolutionOpen(false)}
@@ -251,7 +252,7 @@ export function MatchRoomScreen() {
       <JoinRoomDialog
         name={playerName}
         subtitle={state.snapshot.match.title}
-        open={joinDialogOpen}
+        open={joinDialogOpen && !matchFinished}
         onClose={() => navigate(localizedHref("/matches"))}
         onChangeName={setPlayerName}
         onConfirm={confirmPlayerName}

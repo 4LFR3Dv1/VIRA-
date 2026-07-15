@@ -48,6 +48,8 @@ export interface MatchSummary {
   status: string;
   homeTeam: string;
   awayTeam: string;
+  homeScore?: number;
+  awayScore?: number;
   source: string;
   consumerProjection?: FixtureConsumerProjection;
 }
@@ -84,7 +86,7 @@ export interface FixtureConsumerProjection {
     };
     freshness: { evaluatedAt: string; ageSeconds: number | null; usableForPrediction: boolean; currentForDisplay: boolean; currentForDirectionalClaim: boolean; reason: string };
   };
-  availability: { canPredict: boolean; canEnterRoom: boolean; roomMode: "pre_match" | "live" | "read_only" | "unavailable"; canShowMarket: boolean; canMakeDirectionalClaim: boolean; reason: string };
+  availability: { canFeature: boolean; featureReason: string; canPredict: boolean; canEnterRoom: boolean; roomMode: "pre_match" | "live" | "read_only" | "unavailable"; canShowMarket: boolean; canMakeDirectionalClaim: boolean; reason: string };
   editorial: { priority: number; priorityReasons: string[]; headlineIntent: string; scheduleIntent: string; marketStatementIntent: "directional_current" | "last_observed" | "market_unavailable" };
 }
 
@@ -101,6 +103,8 @@ export interface MatchCatalogEntry extends MatchSummary {
     canonical1X2Available: boolean;
     hasMarket: boolean;
     hasPlayablePrediction: boolean;
+    canFeature: boolean;
+    featureReason: string;
     canPredict: boolean;
     canEnterRoom: boolean;
     canShowMarket: boolean;
@@ -254,6 +258,12 @@ export interface MatchTxlineContext {
   canonical1X2: CanonicalFixture1X2 | null;
   marketTaxonomy: { observed: number; inFocus: number; canonical: number };
   suggestedPrediction: TxlineSuggestedPrediction | null;
+  fixtureState?: {
+    status: "finished";
+    authority: string;
+    providerSequence: number | null;
+    score: { home: number; away: number } | null;
+  } | null;
 }
 
 export type TxlineProbeKind = "scores" | "updates" | "historical" | "odds";

@@ -27,6 +27,8 @@ function hasMarketSignal(state: ReplayState) {
 
 export function deriveRoomExperience(state: ReplayState): MatchExperienceState {
   const { snapshot } = state;
+  // A terminal fixture stays terminal while the transport hydrates or reconnects.
+  if (snapshot.match.status === "finished") return "finished";
   if (snapshot.connectionState === "connecting") return "connecting";
   const hasMarket = hasMarketSignal(state);
   const currentRoundHasResolution = resolutionBelongsToCurrentRound(snapshot.currentRound?.id, state.lastResolution?.roundId);
