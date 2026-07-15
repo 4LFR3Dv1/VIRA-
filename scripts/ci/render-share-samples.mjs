@@ -35,6 +35,21 @@ const samples = [
     metadata: { title: "Ana read the match right", description: "France vs Spain" },
     payload: { homeTeam: "France", awayTeam: "Spain", homeScore: 2, awayScore: 1, points: 100, rank: 1, correct: true, verified: true },
   },
+  {
+    ...base,
+    publicCode: "visual-picks-en",
+    kind: "picks",
+    metadata: { title: "Ana · VIRA Picks", description: "Social predictions. No money involved." },
+    payload: { displayName: "Ana", homeTeam: "France", awayTeam: "Spain", selections: [{ kind: "match_result", selection: "home" }, { kind: "total_goals", selection: "over" }, { kind: "both_teams_score", selection: "yes" }] },
+  },
+  {
+    ...base,
+    publicCode: "visual-picks-result-pt",
+    kind: "picks_result",
+    editorialContext: { ...base.editorialContext, locale: "pt-BR" },
+    metadata: { title: "Ana · 2/3", description: "Previsões sociais. Sem dinheiro envolvido." },
+    payload: { displayName: "Ana", homeTeam: "França", awayTeam: "Espanha", homeScore: 2, awayScore: 1, selections: [{ kind: "match_result", selection: "home" }, { kind: "total_goals", selection: "over" }, { kind: "both_teams_score", selection: "no" }], results: [{ status: "correct" }, { status: "correct" }, { status: "missed" }] },
+  },
 ];
 
 for (const sample of samples) {

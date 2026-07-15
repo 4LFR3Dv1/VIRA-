@@ -356,6 +356,7 @@ VIRA addresses these points through a server-side Consumer projection, explicit 
 | [Football Moment Engine](docs/FOOTBALL_MOMENT_ENGINE.md) | Normalized football actions and round conditions. |
 | [Consumer Cadence](docs/CONSUMER_CADENCE.md) | Meaningful-round limits and cooldown policy. |
 | [Social Share Layer](docs/SOCIAL_SHARE_LAYER.md) | Invitations, predictions, Mini Leagues and privacy. |
+| [VIRA Picks V1](docs/VIRA_PICKS.md) | Isolated pre-match Picks architecture, authority, flags and known limits. |
 | [PWA Cache Policy](docs/pwa-cache-policy.md) | Why competitive state is never served stale. |
 | [Solana Subscription Evidence](docs/TXLINE_SOLANA_SUBSCRIPTION_EVIDENCE.md) | Secret-free TxLINE activation record. |
 | [Commercial Pitch](docs/VIRA_Synchronized_Football_Engagement.pdf) | Five-page product, architecture, partner value and monetization overview. |

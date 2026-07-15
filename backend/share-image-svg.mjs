@@ -40,9 +40,9 @@ function textLines(value, x, y, { limit = 24, maxLines = 3, size = 64, lineHeigh
 
 function dictionary(locale) {
   return locale === "en" ? {
-    prediction: "MATCH PICK", invite: "LIVE ROOM", result: "MATCH RESULT", noGate: "NO ACCOUNT · NO X · NO WALLET", powered: "SPORTS DATA BY TxLINE", kickoff: "KICKOFF", players: "PLAYERS IN", join: "JOIN NOW", correct: "CORRECT", missed: "MISSED", points: "POINTS", rank: "RANK", verified: "REPRODUCIBLE RESULT", pick: "PICK",
+    prediction: "MATCH PICK", invite: "LIVE ROOM", result: "MATCH RESULT", picks: "VIRA PICKS", picksResult: "PICKS RESULT", socialCard: "SOCIAL CARD", noMoney: "NO MONEY INVOLVED", makePicks: "MAKE YOUR PICKS", locks: "LOCKS AT KICKOFF", noGate: "NO ACCOUNT · NO X · NO WALLET", powered: "SPORTS DATA BY TxLINE", kickoff: "KICKOFF", players: "PLAYERS IN", join: "JOIN NOW", correct: "CORRECT", missed: "MISSED", void: "VOID", pending: "PENDING", points: "POINTS", rank: "RANK", verified: "REPRODUCIBLE RESULT", pick: "PICK",
   } : {
-    prediction: "PALPITE", invite: "SALA AO VIVO", result: "RESULTADO", noGate: "SEM CONTA · SEM X · SEM WALLET", powered: "DADOS ESPORTIVOS TxLINE", kickoff: "INÍCIO", players: "NA SALA", join: "ENTRE AGORA", correct: "ACERTOU", missed: "ERROU", points: "PONTOS", rank: "POSIÇÃO", verified: "RESULTADO REPRODUZÍVEL", pick: "ESCOLHA",
+    prediction: "PALPITE", invite: "SALA AO VIVO", result: "RESULTADO", picks: "VIRA PICKS", picksResult: "RESULTADO PICKS", socialCard: "CARD SOCIAL", noMoney: "SEM DINHEIRO ENVOLVIDO", makePicks: "FAÇA SUAS PREVISÕES", locks: "FECHA NO INÍCIO", noGate: "SEM CONTA · SEM X · SEM WALLET", powered: "DADOS ESPORTIVOS TxLINE", kickoff: "INÍCIO", players: "NA SALA", join: "ENTRE AGORA", correct: "CORRETA", missed: "INCORRETA", void: "ANULADA", pending: "PENDENTE", points: "PONTOS", rank: "POSIÇÃO", verified: "RESULTADO REPRODUZÍVEL", pick: "ESCOLHA",
   };
 }
 
@@ -81,10 +81,33 @@ function resultCard(share, copy) {
   return `${base(copy.result)}<rect x="50" y="136" width="420" height="430" fill="${correct ? COLORS.lime : COLORS.white}"/><text x="84" y="210" fill="${COLORS.midnight}" font-family="Arial" font-size="18" font-weight="800" letter-spacing="3">${correct ? copy.correct : copy.missed}</text><text x="84" y="340" fill="${COLORS.midnight}" font-family="Arial" font-size="102" font-weight="900">${Number(payload.points ?? 0) > 0 ? "+" : ""}${Number(payload.points ?? 0)}</text><text x="84" y="380" fill="${COLORS.midnight}" font-family="Arial" font-size="18" font-weight="800" letter-spacing="3">${copy.points}</text><text x="84" y="508" fill="${COLORS.midnight}" font-family="Arial" font-size="18" font-weight="800">#${payload.rank ?? "—"} ${copy.rank}</text><rect x="490" y="136" width="660" height="430" fill="${COLORS.panel}" stroke="#F5F7F2" stroke-opacity=".14"/>${textLines(share.metadata.title, 530, 230, { limit: 22, maxLines: 2, size: 58 })}<text x="530" y="394" fill="${COLORS.white}" font-family="Arial" font-size="29" font-weight="800">${escapeXml(score)}</text><path d="M530 438H1106" stroke="#F5F7F2" stroke-opacity=".14"/><text x="530" y="492" fill="${COLORS.lime}" font-family="Arial" font-size="17" font-weight="800" letter-spacing="2">${payload.verified ? copy.verified : copy.powered}</text>`;
 }
 
+function pickLabel(selection, locale) {
+  const en = locale === "en";
+  if (selection.kind === "match_result") return selection.selection === "home" ? (en ? "Home" : "Casa") : selection.selection === "away" ? (en ? "Away" : "Visitante") : (en ? "Draw" : "Empate");
+  if (selection.kind === "total_goals") return selection.selection === "over" ? (en ? "Over 2.5" : "Mais de 2,5") : (en ? "Under 2.5" : "Menos de 2,5");
+  return selection.selection === "yes" ? (en ? "Both score: Yes" : "Ambas marcam: Sim") : (en ? "Both score: No" : "Ambas marcam: Não");
+}
+
+function picksRows(payload, copy, locale, resultMode) {
+  return (payload.selections ?? []).slice(0, 3).map((selection, index) => {
+    const y = 268 + index * 82; const status = payload.results?.[index]?.status ?? "pending";
+    const statusLabel = status === "correct" ? copy.correct : status === "missed" ? copy.missed : status === "void" ? copy.void : copy.pending;
+    const statusColor = status === "correct" ? COLORS.lime : status === "missed" ? "#FF8A8A" : COLORS.muted;
+    return `<text x="82" y="${y}" fill="${COLORS.white}" font-family="Arial" font-size="27" font-weight="800">${escapeXml(pickLabel(selection, locale))}</text>${resultMode ? `<text x="760" y="${y}" fill="${statusColor}" font-family="Arial" font-size="17" font-weight="800" letter-spacing="2">${statusLabel}</text>` : ""}<path d="M82 ${y + 28}H820" stroke="#F5F7F2" stroke-opacity=".12"/>`;
+  }).join("");
+}
+
+function picksCard(share, copy, locale, resultMode = false) {
+  const payload = share.payload ?? {}; const matchup = `${payload.homeTeam ?? ""} × ${payload.awayTeam ?? ""}`;
+  const correct = (payload.results ?? []).filter((item) => item.status === "correct").length; const total = (payload.selections ?? []).length;
+  const score = Number.isFinite(payload.homeScore) && Number.isFinite(payload.awayScore) ? `${payload.homeTeam} ${payload.homeScore} : ${payload.awayScore} ${payload.awayTeam}` : matchup;
+  return `${base(resultMode ? copy.picksResult : copy.picks)}<rect x="50" y="136" width="800" height="430" fill="${COLORS.panel}" stroke="#F5F7F2" stroke-opacity=".14"/><rect x="870" y="136" width="280" height="430" fill="${resultMode ? COLORS.white : COLORS.lime}"/><text x="82" y="190" fill="${COLORS.muted}" font-family="Arial" font-size="17" font-weight="800" letter-spacing="2">${escapeXml(payload.displayName ?? "VIRA FAN")}</text><text x="82" y="226" fill="${COLORS.white}" font-family="Arial" font-size="23" font-weight="800">${escapeXml(resultMode ? score : matchup)}</text>${picksRows(payload, copy, locale, resultMode)}<text x="82" y="538" fill="${COLORS.lime}" font-family="Arial" font-size="14" font-weight="800" letter-spacing="2">${resultMode ? copy.verified : copy.locks}</text><text x="906" y="198" fill="${COLORS.midnight}" font-family="Arial" font-size="15" font-weight="800" letter-spacing="2">${resultMode ? copy.result : copy.socialCard}</text><text x="906" y="330" fill="${COLORS.midnight}" font-family="Arial" font-size="${resultMode ? 76 : 22}" font-weight="900" letter-spacing="${resultMode ? 0 : 1}">${resultMode ? `${correct}/${total}` : copy.makePicks}</text><text x="906" y="520" fill="${COLORS.midnight}" font-family="Arial" font-size="14" font-weight="800" letter-spacing="1">${copy.noMoney}</text>`;
+}
+
 export function renderShareSvg(share) {
   const { locale } = resolveShareLocaleContext(share);
   const copy = dictionary(locale);
-  const content = share.kind === "prediction" ? predictionCard(share, copy) : share.kind === "room" ? inviteCard(share, copy) : resultCard(share, copy);
+  const content = share.kind === "prediction" ? predictionCard(share, copy) : share.kind === "room" ? inviteCard(share, copy) : share.kind === "picks" ? picksCard(share, copy, locale) : share.kind === "picks_result" ? picksCard(share, copy, locale, true) : resultCard(share, copy);
   const brandOverlay = share.kind === "room" ? brandLogo() : "";
   return `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">${defs()}${content}${brandOverlay}</svg>`;
 }

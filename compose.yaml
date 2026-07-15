@@ -1,6 +1,9 @@
 services:
   vira:
-    build: .
+    build:
+      context: .
+      args:
+        VITE_VIRA_PICKS_ENABLED: ${VITE_VIRA_PICKS_ENABLED:-true}
     restart: unless-stopped
     ports:
       - "8787:8787"
@@ -8,6 +11,7 @@ services:
       PORT: "8787"
       VIRA_DATA_DIR: /var/lib/vira
       VIRA_INTERNAL_INGEST_ENABLED: "false"
+      VIRA_PICKS_ENABLED: ${VIRA_PICKS_ENABLED:-true}
       VIRA_REQUIRE_TXLINE_CREDENTIALS: ${VIRA_REQUIRE_TXLINE_CREDENTIALS:-true}
       VIRA_ADMIN_TOKEN: ${VIRA_ADMIN_TOKEN:-}
       VIRA_ALLOWED_ORIGINS: ${VIRA_ALLOWED_ORIGINS:-http://localhost:8787}

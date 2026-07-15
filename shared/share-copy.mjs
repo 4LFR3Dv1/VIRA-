@@ -26,7 +26,7 @@ function dictionary(locale) {
     correct: "was right", played: "played", yes: "YES", no: "NO", won: "won", points: (value) => `+${value} points`, recorded: "result recorded",
     resultTitle: (name, action) => `${name} ${action} on VIRA`, resultBody: (winner, result) => `${winner} won · ${result}.`, predictionResultTitle: (name, correct) => `${name} ${correct ? "was right" : "made a prediction"}`,
     predictionResultBody: (home, homeScore, awayScore, away, choice) => `${home} ${homeScore} x ${awayScore} ${away} · pick: ${choice}.`,
-    kinds: { room: "ROOM", result: "RESULT", prediction: "PREDICTION" },
+    kinds: { room: "ROOM", result: "RESULT", prediction: "PREDICTION", picks: "PICKS", picks_result: "PICKS RESULT" },
   } : {
     draw: "Empate", timePending: "horário a confirmar", at: "às", predictionCta: "Fazer meu palpite", resultCta: "Ver resultado", roomCta: "Entrar na sala", roomResultCta: "Ver resultado do grupo", nextCta: "Jogar a próxima", matchCta: "Ver partida",
     live: "Partida ao vivo", roomOpen: "Sala aberta", inRoom: (count) => `${count} na sala`, joinBody: "Entre para jogar junto.",
@@ -35,7 +35,7 @@ function dictionary(locale) {
     correct: "acertou", played: "jogou", yes: "SIM", no: "NÃO", won: "venceu", points: (value) => `+${value} pontos`, recorded: "resultado registrado",
     resultTitle: (name, action) => `${name} ${action} no VIRA`, resultBody: (winner, result) => `${winner} venceu · ${result}.`, predictionResultTitle: (name, correct) => `${name} ${correct ? "acertou" : "fez seu palpite"}`,
     predictionResultBody: (home, homeScore, awayScore, away, choice) => `${home} ${homeScore} x ${awayScore} ${away} · escolha: ${choice}.`,
-    kinds: { room: "SALA", result: "RESULTADO", prediction: "PALPITE" },
+    kinds: { room: "SALA", result: "RESULTADO", prediction: "PALPITE", picks: "PICKS", picks_result: "RESULTADO PICKS" },
   };
 }
 

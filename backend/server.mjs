@@ -10,6 +10,10 @@ import { deriveHomeProjection } from "./home-projection.mjs";
 import { createRoomRuntime } from "./runtime.mjs";
 import { createSolanaCommitmentPublisherFromEnv } from "./solana-commitment-publisher.mjs";
 import { createShareStore } from "./share-store.mjs";
+import { createViraPicksStore } from "./vira-picks-store.mjs";
+import { buildMarketSnapshotForSelection, buildPicksCatalog } from "./vira-picks-market.mjs";
+import { selectionFromCanonicalId } from "./vira-picks-contracts.mjs";
+import { deriveRegularTimeScoreAuthorityV1 } from "./vira-picks-regular-time-authority.mjs";
 import { createCompanionSubscriptionStore } from "./companion-subscription-store.mjs";
 import { createWebPushPublisherFromEnv } from "./web-push-publisher.mjs";
 import { createAttentionOrchestrator } from "./attention-orchestrator.mjs";
@@ -46,6 +50,7 @@ const e2eMode = e2eModeFromEnv();
 
 const eventStore = await createFileEventStore();
 const shareStore = await createShareStore();
+const picksStore = await createViraPicksStore();
 const companionSubscriptionStore = await createCompanionSubscriptionStore();
 const commitmentPublisher = createSolanaCommitmentPublisherFromEnv();
 const runtime = createRoomRuntime({ eventStore, commitmentPublisher });
@@ -86,6 +91,8 @@ const liveRoomFeeds = new Map();
 const internalIngestEnabled = String(process.env.VIRA_INTERNAL_INGEST_ENABLED || "false").toLowerCase() === "true";
 const requireTxlineCredentials = String(process.env.VIRA_REQUIRE_TXLINE_CREDENTIALS || "false").toLowerCase() === "true";
 const adminToken = String(process.env.VIRA_ADMIN_TOKEN || "");
+const picksEnabled = String(process.env.VIRA_PICKS_ENABLED ?? "true").toLowerCase() === "true";
+const picksRejections = { marketUnavailable: 0, deadline: 0 };
 const allowedOrigins = new Set(String(process.env.VIRA_ALLOWED_ORIGINS || "http://localhost:5173,http://127.0.0.1:5173").split(",").map((value) => value.trim()).filter(Boolean));
 const distDirectory = path.resolve(process.env.VIRA_DIST_DIR || fileURLToPath(new URL("../dist/", import.meta.url)));
 const staticMimeTypes = new Map([[".css", "text/css; charset=utf-8"], [".html", "text/html; charset=utf-8"], [".ico", "image/x-icon"], [".js", "text/javascript; charset=utf-8"], [".json", "application/json; charset=utf-8"], [".png", "image/png"], [".svg", "image/svg+xml"], [".webp", "image/webp"], [".woff2", "font/woff2"]]);
@@ -93,6 +100,8 @@ let eventLoopLagMs = 0;
 let lagProbeAt = Date.now();
 const lagProbe = setInterval(() => { const now = Date.now(); eventLoopLagMs = Math.max(0, now - lagProbeAt - 1_000); lagProbeAt = now; }, 1_000);
 lagProbe.unref?.();
+const picksLockProbe = picksEnabled ? setInterval(() => { void picksStore.lockDueCards().catch(() => undefined); }, 1_000) : null;
+picksLockProbe?.unref?.();
 
 function cryptoRandomId() {
   return randomUUID().slice(0, 8);
@@ -295,6 +304,17 @@ async function applyLatestScoreSnapshot(roomId, reason = "room-live-feed") {
       acquisitionOrigin: "txline_snapshot",
     },
   );
+}
+
+async function synchronizePicksFixtureLifecycle(fixture) {
+  const status = String(fixture?.status ?? "unknown").toLowerCase();
+  if (["cancelled", "canceled", "postponed", "abandoned"].includes(status)) return picksStore.voidFixture(fixture.fixtureId, status === "canceled" ? "cancelled" : status);
+  if (["live", "finished", "final"].includes(status) || (fixture?.startTime && Date.now() >= Date.parse(fixture.startTime))) {
+    const locked = await picksStore.lockFixture(fixture.fixtureId, new Date().toISOString());
+    if (["finished", "final"].includes(status) && fixture?.context?.regularTimeScoreAuthority) return { ...locked, ...(await picksStore.resolveFixture(fixture.fixtureId, fixture.context.regularTimeScoreAuthority)) };
+    return locked;
+  }
+  return { synchronized: false };
 }
 
 async function applyScoreUpdates(roomId, feed, reason = "room-live-feed") {
@@ -545,6 +565,15 @@ async function handleRequest(request, response) {
       const authorization = authorizeE2eRequest(e2eMode, request);
       if (!authorization.ok) { sendJson(response, authorization.status, { error: authorization.error }); return; }
       if (request.method !== "POST" || Number(request.headers["content-length"] ?? 0) > 0) { sendJson(response, 405, { error: "fixed_scenario_actions_only" }); return; }
+      const picksScenarioRoute = url.pathname.match(/^\/__e2e\/picks\/([a-z0-9-]{8,64})\/(lock|resolve)$/);
+      if (picksScenarioRoute) {
+        if (!picksEnabled) { sendJson(response, 404, { error: "picks_feature_disabled" }); return; }
+        const fixtureId = picksScenarioRoute[1];
+        if (picksScenarioRoute[2] === "lock") { sendJson(response, 200, await picksStore.lockFixture(fixtureId, new Date(Date.now() + 24 * 60 * 60_000).toISOString())); return; }
+        const observedAt = new Date().toISOString();
+        const authority = deriveRegularTimeScoreAuthorityV1({ fixtureId, historyComplete: true, freshness: "fresh", receivedAt: observedAt, acquisitionOrigin: "captured_txline_test_fixture", records: [{ RevId: 9001, Ts: observedAt, Action: "status", Data: { StatusId: 5, Score: { AbsoluteScore: { Participant1: 2, Participant2: 1 } } } }] });
+        sendJson(response, 200, await picksStore.resolveFixture(fixtureId, authority)); return;
+      }
       const scenarioRoute = url.pathname.match(/^\/__e2e\/scenario\/([a-z0-9-]{8,64})\/(start|resolve)$/);
       if (!scenarioRoute) { sendJson(response, 404, { error: "not_found" }); return; }
       const roomId = `e2e-${scenarioRoute[1]}`;
@@ -591,6 +620,7 @@ async function handleRequest(request, response) {
           catalog: txlineCatalogCache.status(),
         },
         companion: { webPushConfigured: webPushPublisher.enabled, activeSubscriptions: companionSubscriptionStore.activeSubscriptions().length },
+        picks: { enabled: picksEnabled, persistence: "single_writer_atomic_file" },
       });
       return;
     }
@@ -673,6 +703,7 @@ async function handleRequest(request, response) {
         runtime: runtime.operationalMetrics(),
         ledger: { globalPosition: store.globalPosition, streamCount: store.streamCount },
         txline: { catalog: txlineCatalogCache.status(), feeds: { total: feeds.length, degraded: feeds.filter((feed) => feed.status !== "running").length, lastEventAt: feeds.map((feed) => feed.lastPollAt).filter(Boolean).sort().at(-1) ?? null } },
+        picks: { ...picksStore.metrics(), marketUnavailableFailures: picksRejections.marketUnavailable, deadlineRejections: picksRejections.deadline },
         disk: disk ? { freeBytes: Number(disk.bavail) * Number(disk.bsize), totalBytes: Number(disk.blocks) * Number(disk.bsize) } : null,
       });
       return;
@@ -701,6 +732,81 @@ async function handleRequest(request, response) {
       const body = await readJson(request);
       sendJson(response, 200, await shareStore.ensureIdentity(publicToken(request, body), body.displayName));
       return;
+    }
+
+    const picksCatalogRoute = url.pathname.match(/^\/picks\/fixtures\/([^/]+)\/catalog$/);
+    if (request.method === "GET" && picksCatalogRoute) {
+      if (!picksEnabled) { sendJson(response, 200, { schemaVersion: 1, enabled: false }); return; }
+      const fixtureId = decodeURIComponent(picksCatalogRoute[1]); const catalog = await txlineCatalogCache.get();
+      const fixture = catalog.matches.find((item) => String(item.fixtureId) === fixtureId);
+      if (!fixture) throw Object.assign(new Error("fixture_not_found"), { status: 404 });
+      await synchronizePicksFixtureLifecycle(fixture);
+      const questions = buildPicksCatalog({ fixture, context: fixture.context, now: Date.now() });
+      sendJson(response, 200, { schemaVersion: 1, enabled: true, fixture: { fixtureId, homeTeam: fixture.homeTeam, awayTeam: fixture.awayTeam, kickoffAt: fixture.startTime, status: fixture.status }, questions });
+      return;
+    }
+
+    if (request.method === "POST" && url.pathname === "/picks/cards") {
+      if (!picksEnabled) throw Object.assign(new Error("picks_feature_disabled"), { status: 404 });
+      const body = await readJson(request, 16_384); const token = publicToken(request, body); const identity = shareStore.homePlayer(token);
+      if (!identity) throw Object.assign(new Error("public_identity_required"), { status: 401 });
+      const catalog = await txlineCatalogCache.get(); const fixture = catalog.matches.find((item) => String(item.fixtureId) === String(body.fixtureId));
+      if (!fixture) throw Object.assign(new Error("fixture_not_found"), { status: 404 });
+      const selections = (body.selectionIds ?? []).map(selectionFromCanonicalId);
+      if (selections.some((selection) => selection.kind === "both_teams_score")) throw Object.assign(new Error("picks_market_unavailable:provider_market_type_unverified"), { status: 409 });
+      const snapshots = selections.map((selection) => {
+        const result = buildMarketSnapshotForSelection({ fixture, context: fixture.context, selection, now: Date.now() });
+        if (!result.available) { picksRejections.marketUnavailable += 1; throw Object.assign(new Error(`picks_market_unavailable:${result.reason}`), { status: 409 }); }
+        return result.snapshot;
+      });
+      const editorialContext = requestEditorialLocale(request, "picks_owner");
+      let card;
+      try { card = await picksStore.confirm({ fixture, identity, selectionIds: body.selectionIds, idempotencyKey: body.idempotencyKey, locale: editorialContext.locale, timeZone: editorialContext.timeZone, snapshots }); }
+      catch (cause) { if (["picks_deadline_passed", "fixture_not_open_for_picks"].includes(cause.message)) picksRejections.deadline += 1; throw cause; }
+      sendJson(response, 201, { card }); return;
+    }
+
+    const picksOwnerRoute = url.pathname.match(/^\/picks\/fixtures\/([^/]+)\/me$/);
+    if (request.method === "GET" && picksOwnerRoute) {
+      if (!picksEnabled) throw Object.assign(new Error("picks_feature_disabled"), { status: 404 });
+      const identity = shareStore.homePlayer(publicToken(request)); if (!identity) throw Object.assign(new Error("public_identity_required"), { status: 401 });
+      const catalog = await txlineCatalogCache.get(); const fixture = catalog.matches.find((item) => String(item.fixtureId) === decodeURIComponent(picksOwnerRoute[1])); if (fixture) await synchronizePicksFixtureLifecycle(fixture);
+      sendJson(response, 200, { card: picksStore.owner(identity.publicId, decodeURIComponent(picksOwnerRoute[1])) }); return;
+    }
+
+    const picksPublicRoute = url.pathname.match(/^\/picks\/cards\/public\/([^/]+)$/);
+    if (request.method === "GET" && picksPublicRoute) {
+      if (!picksEnabled) throw Object.assign(new Error("picks_feature_disabled"), { status: 404 });
+      const card = picksStore.public(decodeURIComponent(picksPublicRoute[1])); if (!card) throw Object.assign(new Error("picks_card_not_found"), { status: 404 });
+      const catalog = await txlineCatalogCache.get(); const fixture = catalog.matches.find((item) => String(item.fixtureId) === card.fixtureId);
+      sendJson(response, 200, { card, fixture: fixture ? { homeTeam: fixture.homeTeam, awayTeam: fixture.awayTeam, kickoffAt: fixture.startTime, status: fixture.status } : null }); return;
+    }
+
+    const picksShareRoute = url.pathname.match(/^\/picks\/cards\/([^/]+)\/share$/);
+    if (request.method === "POST" && picksShareRoute) {
+      if (!picksEnabled) throw Object.assign(new Error("picks_feature_disabled"), { status: 404 });
+      const identity = shareStore.homePlayer(publicToken(request)); if (!identity) throw Object.assign(new Error("public_identity_required"), { status: 401 });
+      const card = await picksStore.markShared(decodeURIComponent(picksShareRoute[1]), identity.publicId);
+      if (card.selections.some((selection) => selection.kind === "both_teams_score")) throw Object.assign(new Error("picks_selection_not_shareable"), { status: 409 });
+      const catalog = await txlineCatalogCache.get(); const fixture = catalog.matches.find((item) => String(item.fixtureId) === card.fixtureId);
+      if (!fixture) throw Object.assign(new Error("fixture_not_found"), { status: 404 });
+      const resultCount = card.results?.filter((item) => item.status === "correct").length ?? 0; const isResult = card.status === "resolved" || card.status === "void";
+      const share = await shareStore.createShare({
+        kind: isResult ? "picks_result" : "picks", createdByPublicId: identity.publicId, expiresAt: isResult ? null : card.locksAt,
+        metadata: { title: isResult ? `${identity.displayName} · ${resultCount}/${card.selections.length}` : `${identity.displayName} · VIRA Picks`, description: card.locale === "pt-BR" ? "Previsões sociais. Sem dinheiro envolvido." : "Social predictions. No money involved." },
+        destination: { path: `/picks/${encodeURIComponent(card.fixtureId)}?card=${encodeURIComponent(card.publicCode)}`, ctaLabel: card.locale === "pt-BR" ? "Faça suas previsões" : "Make your picks" },
+        attribution: { source: "picks", campaign: isResult ? "picks_result" : "picks_card" },
+        payload: { fixtureId: card.fixtureId, picksCardId: card.id, picksPublicCode: card.publicCode, displayName: card.displayName, selections: card.selections, results: card.results, homeTeam: fixture.homeTeam, awayTeam: fixture.awayTeam, kickoffAt: fixture.startTime, homeScore: card.finalScore?.home, awayScore: card.finalScore?.away },
+        editorialContext: { locale: card.locale, timeZone: card.timeZone, source: "picks_owner", kickoffAt: card.locksAt },
+      });
+      sendJson(response, 201, { share, url: `${publicBaseUrl(request)}/s/${share.publicCode}` }); return;
+    }
+
+    const picksOpenRoute = url.pathname.match(/^\/picks\/cards\/public\/([^/]+)\/open$/);
+    if (request.method === "POST" && picksOpenRoute) {
+      if (!picksEnabled) throw Object.assign(new Error("picks_feature_disabled"), { status: 404 });
+      const player = shareStore.homePlayer(publicToken(request));
+      sendJson(response, 202, await picksStore.markOpened(decodeURIComponent(picksOpenRoute[1]), { publicId: player?.publicId })); return;
     }
 
     if (request.method === "POST" && url.pathname === "/shares") {

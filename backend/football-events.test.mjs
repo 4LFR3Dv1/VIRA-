@@ -10,6 +10,7 @@ import { createRoomRuntime } from "./runtime.mjs";
 import { applyFixtureLifecycleTimeout, normalizeTxlineScore } from "./txline-client.mjs";
 import { txlineContextInternals } from "./txline-context.mjs";
 import { planScoreUpdateReconciliation } from "./txline-score-reconciler.mjs";
+import { FRANCE_SPAIN_REGULAR_TIME_AUTHORITY_OBSERVED as observedRegularTime } from "./test-fixtures/txline/france-spain-regular-time-authority-observed.mjs";
 
 const capturedFranceSpain = JSON.parse(readFileSync(new URL("./test-fixtures/txline/france-spain-2026-sanitized.json", import.meta.url), "utf8"));
 
@@ -66,6 +67,25 @@ test("TxLINE context exposes game_finalised as the shared terminal fixture autho
   assert.equal(projected.terminal.authority, "txline_game_finalised");
   assert.equal(projected.terminal.providerSequence, 1026);
   assert.deepEqual(projected.terminal.score, { home: 0, away: 2 });
+});
+
+test("Match Room keeps status 5 non-terminal and finishes only on observed game_finalised 100", async () => {
+  const runtime = createRoomRuntime();
+  const roomId = observedRegularTime.fixtureId;
+  runtime.configureMatch({ fixtureId: roomId, title: "France vs Spain", status: "live", homeTeam: "France", awayTeam: "Spain" });
+  const statusFive = observedRegularTime.records.find((record) => record.Action === "status" && record.StatusId === 5);
+  const gameFinalised = observedRegularTime.records.find((record) => record.Action === "game_finalised");
+  const normalizedStatus = normalizeTxlineScore(statusFive, { matchId: roomId, source: "txline-historical" });
+  assert.equal(normalizedStatus.type, "period");
+  await runtime.applyNormalizedEvent(roomId, normalizedStatus, { reconciliationOnly: true, suppressConsumerPresentation: true });
+  assert.equal(runtime.snapshot(roomId).match.status, "live");
+  const normalizedFinal = normalizeTxlineScore(gameFinalised, { matchId: roomId, source: "txline-historical" });
+  assert.equal(normalizedFinal.type, "match_end");
+  assert.deepEqual(normalizedFinal.absoluteScore, { home: 0, away: 2 });
+  await runtime.applyNormalizedEvent(roomId, normalizedFinal, { reconciliationOnly: true, suppressConsumerPresentation: true });
+  const snapshot = runtime.snapshot(roomId);
+  assert.equal(snapshot.match.status, "finished");
+  assert.deepEqual([snapshot.match.homeScore, snapshot.match.awayScore], [0, 2]);
 });
 
 test("poll reconciliation establishes one baseline then applies every later provider revision", () => {

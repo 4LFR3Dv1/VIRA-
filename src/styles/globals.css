@@ -1,0 +1,6 @@
+@media (max-width: 1023px) {
+  [data-vira-picks-builder] button,
+  [data-vira-picks-builder] input {
+    scroll-margin-bottom: calc(var(--shell-mobile-dock-height) + 6rem);
+  }
+}
