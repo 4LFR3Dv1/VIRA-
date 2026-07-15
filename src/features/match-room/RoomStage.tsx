@@ -10,6 +10,7 @@ import { ActiveRoundScene } from "./ActiveRoundScene";
 import type { ViraExperienceModel } from "./experience-model";
 import { useLocale } from "../../i18n/locale-context.tsx";
 import { roundOptionCopy } from "../../i18n/round-copy.ts";
+import { participantAwaitsCurrentRoundResolution } from "../match-experience/state-model.ts";
 
 interface RoomStageProps {
   state: ReplayState;
@@ -34,7 +35,7 @@ export function RoomStage({ state, model, answerSummary, latestPresentationEvent
   if (experience === "live_waiting_for_market") return <PreparingRoundStage state={state} kind="market" context={preMatchContext} />;
   if (experience === "live_waiting_for_round") return <PreparingRoundStage state={state} kind="round" context={preMatchContext} />;
 
-  if (round && state.currentAnswerState === "submitted") {
+  if (round && participantAwaitsCurrentRoundResolution(round.state, state.currentAnswerState)) {
     return <WaitingSignalStage state={state} latestPresentationEvent={latestPresentationEvent} />;
   }
 
@@ -201,7 +202,7 @@ function WaitingSignalStage({ state, latestPresentationEvent }: { state: ReplayS
   const target = typeof predicate.pctGte === "number" ? predicate.pctGte : null;
   const { remainingMs } = useServerClock(state.snapshot.serverTime, round.locksAt);
   const remainingSec = Math.max(0, Math.ceil((remainingMs ?? 0) / 1_000));
-  const answersClosed = round.state === "locked";
+  const answersClosed = round.state === "locked" || round.state === "awaiting_event";
   const football = round.resolution.domain === "football" ? round.resolution.condition : null;
   const targetTeam = football?.targetSide === "away" ? state.snapshot.match.awayTeam : state.snapshot.match.homeTeam;
   const shotOnTarget = football?.kind === "team_shot_on_target";

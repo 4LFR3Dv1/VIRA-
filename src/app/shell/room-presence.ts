@@ -1,16 +1,17 @@
 import type { ReplayState } from "../../domain/types";
 import type { PersistedRoomReference, ShellActiveRoom, ShellRoomPhase } from "./shell-experience";
-import { deriveCanonicalExperienceState, experienceCopy } from "../../features/match-experience/state-model";
+import { deriveCanonicalExperienceState, experienceCopy, resolutionBelongsToCurrentRound } from "../../features/match-experience/state-model";
 
 export const SHELL_ROOM_PRESENCE_EVENT = "vira:shell-room-presence";
 export const SHELL_ROOM_REFERENCE_KEY = "vira:shell:active-room";
 
 function mapPhase(state: ReplayState): { phase: ShellRoomPhase; label: string } {
-  const canonical = deriveCanonicalExperienceState({ matchStatus: state.snapshot.match.status, roomExists: true, roundState: state.snapshot.currentRound?.state, answerState: state.currentAnswerState, hasResolution: Boolean(state.lastResolution), hasSignal: Object.values(state.snapshot.marketDistribution).some((value) => Number.isFinite(value) && value > 0), connectionState: state.snapshot.connectionState });
+  const currentRoundHasResolution = resolutionBelongsToCurrentRound(state.snapshot.currentRound?.id, state.lastResolution?.roundId);
+  const canonical = deriveCanonicalExperienceState({ matchStatus: state.snapshot.match.status, roomExists: true, roundState: state.snapshot.currentRound?.state, currentRoundHasResolution, hasSignal: Object.values(state.snapshot.marketDistribution).some((value) => Number.isFinite(value) && value > 0), connectionState: state.snapshot.connectionState });
   if (canonical.match === "finished") return { phase: "finished", label: experienceCopy.room.finished };
   if (canonical.round === "resolved") return { phase: "result_available", label: experienceCopy.round.resolved };
-  if (canonical.round === "locked") return { phase: "answer_confirmed", label: experienceCopy.round.locked };
-  if (canonical.round === "open") return { phase: "action_required", label: experienceCopy.round.open };
+  if (canonical.round === "locked") return state.currentAnswerState === "submitted" ? { phase: "answer_confirmed", label: experienceCopy.round.locked } : { phase: "waiting", label: experienceCopy.signal.waiting };
+  if (canonical.round === "open") return state.currentAnswerState === "submitted" ? { phase: "answer_confirmed", label: experienceCopy.round.locked } : { phase: "action_required", label: experienceCopy.round.open };
   return { phase: "waiting", label: canonical.match === "scheduled" ? `${experienceCopy.room.open} · ${experienceCopy.match.scheduled}` : experienceCopy.signal.waiting };
 }
 
