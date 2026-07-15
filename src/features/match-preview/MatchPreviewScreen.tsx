@@ -25,6 +25,7 @@ import { fixtureAccent, useShellAtmosphere } from "../../app/shell/use-shell-atm
 import { useLocale } from "../../i18n/locale-context.tsx";
 import type { StaticTranslationKey, TranslateFunction } from "../../i18n/translate.ts";
 import { competitionDisplayName } from "../../i18n/semantic-copy.ts";
+import { VIRA_PICKS_ENABLED } from "../picks/feature-flags.ts";
 
 type ContextState = "idle" | "loading" | "ready" | "empty" | "error";
 const CONTEXT_CACHE_TTL_MS = 60_000;
@@ -280,6 +281,7 @@ export function MatchPreviewScreen() {
 
             <div className="mt-7 flex flex-wrap gap-3">
               <a href="#pre-match-prediction" className="inline-flex min-h-14 items-center border border-white/20 px-5 font-['Chakra_Petch'] text-xs font-black uppercase hover:border-primary hover:text-primary">{t("preview.predictBeforeMatch")}</a>
+              {VIRA_PICKS_ENABLED ? <Link to={localizedHref(`/picks/${match.fixtureId}`)} className="inline-flex min-h-14 items-center gap-3 bg-primary px-5 font-['Chakra_Petch'] text-xs font-black uppercase text-[#070a13]">VIRA Picks <ArrowRight className="size-4" /></Link> : null}
             </div>
           </div>
 

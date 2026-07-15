@@ -1,5 +1,9 @@
 /// <reference types="vite/client" />
 
+interface ImportMetaEnv {
+  readonly VITE_VIRA_PICKS_ENABLED?: string;
+}
+
 declare module "react-dom" {
   import type { ReactNode } from "react";
   export function createPortal(children: ReactNode, container: Element | DocumentFragment): ReactNode;
