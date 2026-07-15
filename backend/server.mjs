@@ -574,7 +574,7 @@ async function handleRequest(request, response) {
         const authority = deriveRegularTimeScoreAuthorityV1({ fixtureId, historyComplete: true, freshness: "fresh", receivedAt: observedAt, acquisitionOrigin: "captured_txline_test_fixture", records: [{ RevId: 9001, Ts: observedAt, Action: "status", Data: { StatusId: 5, Score: { AbsoluteScore: { Participant1: 2, Participant2: 1 } } } }] });
         sendJson(response, 200, await picksStore.resolveFixture(fixtureId, authority)); return;
       }
-      const scenarioRoute = url.pathname.match(/^\/__e2e\/scenario\/([a-z0-9-]{8,64})\/(start|resolve)$/);
+      const scenarioRoute = url.pathname.match(/^\/__e2e\/scenario\/([a-z0-9-]{8,64})\/(start|pressure|resolve)$/);
       if (!scenarioRoute) { sendJson(response, 404, { error: "not_found" }); return; }
       const roomId = `e2e-${scenarioRoute[1]}`;
       if (scenarioRoute[2] === "start") {
@@ -597,6 +597,27 @@ async function handleRequest(request, response) {
         const scoreEvent = (suffix, seq, clock) => ({ id: `captured-e2e-score-${suffix}-${seq}`, matchId: roomId, sequence: seq, occurredAt: new Date().toISOString(), matchClockSec: clock, type: "period", source: "verified-playback", absoluteScore: { home: 1, away: 0 }, payload: { FixtureId: roomId, Seq: seq, Action: "score_adjustment", Clock: { Running: true, Seconds: clock }, Score: { Participant1: { Total: { Goals: 1 } }, Participant2: { Total: { Goals: 0 } } } } });
         await runtime.applyNormalizedEvent(roomId, scoreEvent("candidate", sequence, 600), { acquisitionOrigin: "captured_txline_test_fixture" });
         const snapshot = await runtime.applyNormalizedEvent(roomId, scoreEvent("confirmed", sequence + 1, 601), { acquisitionOrigin: "captured_txline_test_fixture" });
+        sendJson(response, 200, { inputAuthority: e2eMode.inputAuthority, roomId, state: snapshot.currentRound?.state, streamVersion: snapshot.ledger.streamVersion });
+        return;
+      }
+      if (scenarioRoute[2] === "pressure") {
+        const before = runtime.snapshot(roomId, null);
+        if (before.match.status !== "live") { sendJson(response, 409, { error: "match_not_live", status: before.match.status }); return; }
+        const sequence = Number(before.ledger.streamVersion) + 100;
+        const pressureEvent = (suffix, seq, clock) => ({
+          id: `captured-e2e-pressure-${suffix}-${seq}`,
+          matchId: roomId,
+          sequence: seq,
+          occurredAt: new Date().toISOString(),
+          matchClockSec: clock,
+          type: "possession",
+          participantSide: "home",
+          possession: { phase: "attack", intensity: 2 },
+          source: "verified-playback",
+          payload: { FixtureId: roomId, Seq: seq, Action: "attack_possession", Participant: 1, Participant1IsHome: true, Clock: { Running: true, Seconds: clock } },
+        });
+        await runtime.applyNormalizedEvent(roomId, pressureEvent("one", sequence, 330), { acquisitionOrigin: "captured_txline_test_fixture" });
+        const snapshot = await runtime.applyNormalizedEvent(roomId, pressureEvent("two", sequence + 1, 340), { acquisitionOrigin: "captured_txline_test_fixture" });
         sendJson(response, 200, { inputAuthority: e2eMode.inputAuthority, roomId, state: snapshot.currentRound?.state, streamVersion: snapshot.ledger.streamVersion });
         return;
       }

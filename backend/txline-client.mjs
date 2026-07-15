@@ -335,6 +335,13 @@ function normalizeFixtureStatus(rawStatus) {
 }
 
 const MATCH_END_ACTIONS = new Set(["end", "match_end", "full_time", "fulltime", "game_finalised", "game_finalized"]);
+const POSSESSION_ACTIONS = new Map([
+  ["possession", { phase: "neutral", intensity: 0 }],
+  ["safe_possession", { phase: "safe", intensity: 1 }],
+  ["attack_possession", { phase: "attack", intensity: 2 }],
+  ["danger_possession", { phase: "danger", intensity: 3 }],
+  ["high_danger_possession", { phase: "high_danger", intensity: 4 }],
+]);
 
 export function classifyTxlineScoreAction(value, data = {}) {
   const action = String(value ?? "period").toLowerCase().replaceAll("-", "_");
@@ -345,7 +352,7 @@ export function classifyTxlineScoreAction(value, data = {}) {
   if (action === "penalty" || action.startsWith("penalty_")) return "penalty";
   if (action === "corner" || action.startsWith("corner_")) return "corner";
   if (action === "shot" || action.startsWith("shot_")) return "shot";
-  if (action === "possession" || action.startsWith("possession_")) return "possession";
+  if (POSSESSION_ACTIONS.has(action)) return "possession";
   if (action === "var" || action === "var_end" || action.startsWith("video_assistant")) return "var";
   if (action === "yellow_card" || action === "red_card" || action === "card" || action.endsWith("_card")) return "card";
   if (action === "score_adjustment") return "score_adjustment";
@@ -369,6 +376,7 @@ export function normalizeTxlineScore(raw, { matchId, sequenceFallback = 0, sourc
   const eventType = String(raw?.type ?? raw?.eventType ?? raw?.EventType ?? raw?.Action ?? raw?.action ?? raw?.gameState ?? raw?.GameState ?? "period").toLowerCase();
   const action = eventType.replaceAll("-", "_");
   const type = classifyTxlineScoreAction(action, raw?.Data);
+  const possession = type === "possession" ? POSSESSION_ACTIONS.get(action) : undefined;
   const isAmendment = type === "action_amended";
   const amendedRawAction = isAmendment
     ? raw?.Data?.Action ?? action.replace(/^amend(?:ed)?_/, "")
@@ -433,6 +441,7 @@ export function normalizeTxlineScore(raw, { matchId, sequenceFallback = 0, sourc
       : participant === 2
         ? (participant1IsHome ? "away" : "home")
         : null,
+    possession: possession ? { ...possession } : undefined,
     absoluteScore,
     confirmed,
     confirmationState: explicitConfirmation === false ? "candidate" : explicitConfirmation === true ? "confirmed" : "not_required",

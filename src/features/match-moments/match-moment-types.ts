@@ -42,7 +42,9 @@ export interface GoalMoment extends MatchMomentBase {
 export interface PressureMoment extends MatchMomentBase {
   kind: "pressure";
   presentation: "ambient";
-  level: "danger" | "high";
+  level: "building" | "danger" | "high";
+  phase: "attack" | "danger" | "high_danger";
+  signalCount: number;
 }
 
 export interface StandardMatchMoment extends MatchMomentBase {
@@ -54,6 +56,8 @@ export type MatchMoment = GoalMoment | PressureMoment | StandardMatchMoment;
 export type MomentCommand =
   | { type: "enqueue"; moment: MatchMoment }
   | { type: "replace"; sourceMomentId: string; moment: MatchMoment }
+  | { type: "set_ambient"; moment: PressureMoment }
+  | { type: "clear_ambient"; fixtureId: string }
   | { type: "revoke"; sourceActionId: string }
   | { type: "dismiss"; momentId?: string }
   | { type: "expire_ambient"; momentId: string };

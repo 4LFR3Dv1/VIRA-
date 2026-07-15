@@ -28,13 +28,26 @@ export function MatchMomentDirector({ moment, ambient, motionPreference, sound, 
   const systemReduced = useReducedMotion();
   const reduced = Boolean(systemReduced) || motionPreference !== "full";
   const takeoverOpen = visible && moment?.presentation === "takeover";
+  const pressureLabel = ambient?.level === "high"
+    ? t("moment.highDanger")
+    : ambient?.level === "danger"
+      ? t("moment.dangerGrowing")
+      : t("moment.pressureBuilding");
   useEffect(() => {
     setShellOverlayState("match-moment", takeoverOpen);
     return () => setShellOverlayState("match-moment", false);
   }, [takeoverOpen]);
   if (!visible) return null;
   return <>
-    <div aria-hidden className="pointer-events-none fixed inset-0 z-[35] transition-opacity duration-700" style={{ opacity: ambient ? (ambient.level === "high" ? .58 : .34) : 0, background: ambient?.teamSide === "away" ? "linear-gradient(270deg, rgba(115,185,232,.24), transparent 58%)" : "linear-gradient(90deg, rgba(199,255,24,.2), transparent 58%)" }} />
+    <div aria-hidden className={`pointer-events-none fixed inset-0 z-[35] ${reduced ? "" : "transition-opacity duration-700"}`} style={{ opacity: ambient ? (ambient.level === "high" ? .58 : ambient.level === "danger" ? .34 : .2) : 0, background: ambient?.teamSide === "away" ? "linear-gradient(270deg, rgba(115,185,232,.24), transparent 58%)" : "linear-gradient(90deg, rgba(199,255,24,.2), transparent 58%)" }} />
+    <AnimatePresence>
+      {ambient ? <motion.aside key={ambient.id} role="status" aria-live="polite" aria-atomic="true" initial={{ opacity: 0, y: reduced ? 0 : -8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: reduced ? 0 : .28 }} className="pointer-events-none fixed left-1/2 top-[calc(env(safe-area-inset-top)+4.5rem)] z-[45] -translate-x-1/2 border border-white/12 bg-[#070b15]/88 px-3 py-2 shadow-xl backdrop-blur-md">
+        <div className="flex items-center gap-2.5 whitespace-nowrap">
+          <span aria-hidden className={`size-2 ${ambient.level === "high" ? "bg-rose-400" : ambient.level === "danger" ? "bg-amber-300" : "bg-primary"}`} />
+          <div className="leading-none"><strong className="font-['Chakra_Petch'] text-xs font-black uppercase">{ambient.teamName ?? t("moment.match")}</strong><span className="ml-2 font-['DM_Mono'] text-[9px] uppercase tracking-[.12em] text-white/55">{pressureLabel}</span></div>
+        </div>
+      </motion.aside> : null}
+    </AnimatePresence>
     <div className="fixed right-16 top-4 z-[72] hidden border border-white/10 bg-[#050814]/90 backdrop-blur sm:flex">
       <button type="button" onClick={() => onSoundChange(!sound)} className="grid size-9 place-items-center text-white/55 hover:text-primary" title={sound ? t("moment.mute") : t("moment.enableSound")}>{sound ? <Volume2 className="size-4" /> : <VolumeX className="size-4" />}</button>
       <button type="button" onClick={() => onMotionChange(motionPreference === "full" ? "reduced" : motionPreference === "reduced" ? "off" : "full")} className="relative grid size-9 place-items-center border-l border-white/10 text-white/55 hover:text-primary" title={t("moment.motion", { preference: motionPreference })}><Activity className="size-4" /><span className={`absolute bottom-1 right-1 size-1.5 ${motionPreference === "off" ? "bg-white/25" : motionPreference === "reduced" ? "bg-amber-300" : "bg-primary"}`} /></button>

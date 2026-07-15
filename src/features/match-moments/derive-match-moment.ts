@@ -1,5 +1,5 @@
 import type { Match, NormalizedMatchEvent } from "../../domain/types";
-import type { MatchMoment, MatchMomentKind, MomentCommand, PressureMoment } from "./match-moment-types";
+import type { MatchMoment, MatchMomentKind, MomentCommand } from "./match-moment-types";
 
 const direction: Record<Exclude<MatchMomentKind, "pressure">, { presentation: "banner" | "takeover"; priority: number; durationMs: number; interruptible: boolean }> = {
   goal: { presentation: "takeover", priority: 100, durationMs: 6_500, interruptible: false },
@@ -88,20 +88,5 @@ export function deriveMatchMoment(event: NormalizedMatchEvent, match: Match): Mo
     return { type: "enqueue", moment: baseMoment(event, match, kind) };
   }
   if (event.type === "match_end") return { type: "enqueue", moment: baseMoment(event, match, "full_time") };
-  if (event.type === "possession" && /danger|attack|pressure/.test(raw)) {
-    const side = event.participantSide ?? undefined;
-    const moment: PressureMoment = {
-      ...baseMoment(event, match, "corner"),
-      id: `moment:${event.id}:pressure`,
-      kind: "pressure",
-      presentation: "ambient",
-      teamSide: side,
-      priority: 10,
-      durationMs: 8_000,
-      interruptible: true,
-      level: /high|very/.test(raw) ? "high" : "danger",
-    };
-    return { type: "enqueue", moment };
-  }
   return null;
 }

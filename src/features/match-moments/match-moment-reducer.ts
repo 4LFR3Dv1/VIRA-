@@ -10,6 +10,16 @@ function promote(state: MatchMomentDirectorState): MatchMomentDirectorState {
 }
 
 export function matchMomentDirectorReducer(state: MatchMomentDirectorState, command: MomentCommand): MatchMomentDirectorState {
+  if (command.type === "clear_ambient") {
+    return state.ambient?.fixtureId === command.fixtureId ? { ...state, ambient: null } : state;
+  }
+  if (command.type === "set_ambient") {
+    return {
+      ...state,
+      ambient: command.moment,
+      seenIds: remember(state.seenIds, command.moment.id),
+    };
+  }
   if (command.type === "dismiss") {
     if (command.momentId && state.active?.id !== command.momentId) return state;
     return promote({ ...state, active: null });
@@ -50,4 +60,3 @@ export function matchMomentDirectorReducer(state: MatchMomentDirectorState, comm
   if (shouldPreempt) return { ...next, active: moment, queue: next.queue.filter((item) => item.id !== moment.id), seenIds };
   return { ...next, queue: sortQueue([...next.queue.filter((item) => item.id !== moment.id), moment]).slice(0, 8), seenIds };
 }
-
