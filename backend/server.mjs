@@ -550,6 +550,13 @@ async function handleRequest(request, response) {
       const authorization = authorizeE2eRequest(e2eMode, request);
       if (!authorization.ok) { sendJson(response, authorization.status, { error: authorization.error }); return; }
       if (request.method !== "POST" || Number(request.headers["content-length"] ?? 0) > 0) { sendJson(response, 405, { error: "fixed_scenario_actions_only" }); return; }
+      const picksScenarioRoute = url.pathname.match(/^\/__e2e\/picks\/([a-z0-9-]{8,64})\/(lock|resolve)$/);
+      if (picksScenarioRoute) {
+        if (!picksEnabled) { sendJson(response, 404, { error: "picks_feature_disabled" }); return; }
+        const fixtureId = picksScenarioRoute[1];
+        if (picksScenarioRoute[2] === "lock") { sendJson(response, 200, await picksStore.lockFixture(fixtureId, new Date(Date.now() + 24 * 60 * 60_000).toISOString())); return; }
+        sendJson(response, 200, await picksStore.resolveFixture(fixtureId, { status: "final", freshness: "fresh", authority: "txline_game_finalised", regularTimeScore: { home: 2, away: 1 }, providerSequence: 9001, observedAt: new Date().toISOString(), receivedAt: new Date().toISOString(), acquisitionOrigin: "captured_txline_test_fixture" })); return;
+      }
       const scenarioRoute = url.pathname.match(/^\/__e2e\/scenario\/([a-z0-9-]{8,64})\/(start|resolve)$/);
       if (!scenarioRoute) { sendJson(response, 404, { error: "not_found" }); return; }
       const roomId = `e2e-${scenarioRoute[1]}`;
