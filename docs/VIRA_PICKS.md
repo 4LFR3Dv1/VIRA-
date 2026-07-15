@@ -59,7 +59,7 @@ The frozen sanitized vector `overunder-2-5-observed-sanitized.mjs` records the e
 - Cancelled, postponed and abandoned fixtures void their cards without migration.
 - Unknown or stale final data remains pending.
 
-Resolution requires a hashed `RegularTimeScoreAuthorityV1`, separate from the terminal score. Status 5 uses its structured final score. Status 10 and 13 require fresh, complete structured history (`scores?Ts=0`) and recover the last score at or before the first post-regular-time status. If reconnect history is incomplete or no authoritative 90-minute score exists, the card remains unresolved. Extra-time and shootout totals never command Picks resolution.
+Resolution requires a hashed `RegularTimeScoreAuthorityV1`, separate from the terminal score. The observed fixture `18237038` proves the regular-time path as two linked records: status 5 proves the phase ended in regulation, while the later `game_finalised` status 100 supplies the 0–2 terminal score. That score is accepted only when complete status history contains no transition into extra time or penalties. Status 10 and 13 require fresh, complete structured history and recover the last score at or before the first post-regular-time status. If reconnect history is incomplete or no authoritative 90-minute score exists, the card remains unresolved. Extra-time and shootout totals never command Picks resolution.
 
 ## Existing Consumer 1X2 audit
 

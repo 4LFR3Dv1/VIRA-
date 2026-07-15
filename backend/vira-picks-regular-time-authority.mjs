@@ -10,7 +10,7 @@ function statusIdOf(record) {
 }
 
 function sequenceOf(record, fallback) {
-  const value = record?.RevId ?? record?.RevisionId ?? record?.Sequence ?? record?.sequence;
+  const value = record?.RevId ?? record?.RevisionId ?? record?.Seq ?? record?.seq ?? record?.Sequence ?? record?.sequence;
   return Number.isFinite(Number(value)) ? Number(value) : fallback;
 }
 
@@ -21,10 +21,18 @@ function timestampOf(record) {
 }
 
 function scoreOf(record) {
-  const source = record?.Data?.Score?.AbsoluteScore ?? record?.Data?.AbsoluteScore ?? record?.absoluteScore ?? record?.score;
+  const source = record?.Data?.Score?.AbsoluteScore ?? record?.Data?.Score ?? record?.Data?.AbsoluteScore ?? record?.Score ?? record?.absoluteScore ?? record?.score;
   if (!source || typeof source !== "object") return null;
-  const home = source.Participant1 ?? source.Home ?? source.home;
-  const away = source.Participant2 ?? source.Away ?? source.away;
+  const participantGoals = (value) => {
+    if (Number.isInteger(Number(value))) return Number(value);
+    if (!value || typeof value !== "object") return null;
+    const total = value.Total ?? value.total;
+    if (!total || typeof total !== "object") return null;
+    const goals = total.Goals ?? total.goals ?? 0;
+    return Number.isInteger(Number(goals)) ? Number(goals) : null;
+  };
+  const home = participantGoals(source.Participant1 ?? source.Home ?? source.home);
+  const away = participantGoals(source.Participant2 ?? source.Away ?? source.away);
   if (!Number.isInteger(Number(home)) || !Number.isInteger(Number(away)) || Number(home) < 0 || Number(away) < 0) return null;
   return { home: Number(home), away: Number(away) };
 }
@@ -35,11 +43,16 @@ export function deriveRegularTimeScoreAuthorityV1({ fixtureId, records, historyC
   const terminal = [...ordered].reverse().find(({ record }) => TERMINAL_STATUS_IDS.has(statusIdOf(record)));
   if (!terminal) return null;
   const terminalStatusId = statusIdOf(terminal.record);
+  const gameFinalised = [...ordered].reverse().find(({ record }) => {
+    const recordFixtureId = record?.FixtureId ?? record?.fixtureId;
+    return String(record?.Action ?? record?.action ?? "").toLowerCase() === "game_finalised" && scoreOf(record) && (recordFixtureId === undefined || String(recordFixtureId) === String(fixtureId));
+  });
+  const terminalEvidence = gameFinalised && gameFinalised.sequence >= terminal.sequence ? gameFinalised : terminal;
   const boundary = ordered.find(({ record }) => REGULAR_TIME_BOUNDARY_STATUS_IDS.has(statusIdOf(record)));
   let scoreRecord;
   let path;
   if (terminalStatusId === 5 && !boundary) {
-    scoreRecord = terminal;
+    scoreRecord = terminalEvidence;
     path = "finished_in_regular_time";
   } else {
     if (!boundary) return null;
@@ -47,7 +60,7 @@ export function deriveRegularTimeScoreAuthorityV1({ fixtureId, records, historyC
     path = terminalStatusId === 13 ? "historical_before_penalties" : "historical_before_extra_time";
   }
   const regularTimeScore = scoreRecord ? scoreOf(scoreRecord.record) : null;
-  const observedAt = timestampOf(terminal.record);
+  const observedAt = timestampOf(terminalEvidence.record);
   if (!regularTimeScore || !observedAt || !receivedAt || !Number.isFinite(Date.parse(receivedAt))) return null;
   const body = {
     schemaVersion: 1,
@@ -59,7 +72,7 @@ export function deriveRegularTimeScoreAuthorityV1({ fixtureId, records, historyC
     terminalStatusId,
     scoreEventSequence: scoreRecord.sequence,
     boundaryEventSequence: boundary?.sequence ?? terminal.sequence,
-    providerSequence: terminal.sequence,
+    providerSequence: terminalEvidence.sequence,
     observedAt,
     receivedAt: new Date(receivedAt).toISOString(),
     acquisitionOrigin,
