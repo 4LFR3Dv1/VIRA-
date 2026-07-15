@@ -16,6 +16,7 @@
     "test:i18n": "node --experimental-strip-types --test src/i18n/i18n.test.mjs",
     "test:companion": "node --experimental-strip-types --test src/features/companion/companion.test.mjs backend/companion-push.test.mjs",
     "test:judge-playback": "node --test backend/football-events.test.mjs backend/verified-round-replay.test.mjs backend/http-security.test.mjs backend/verified-playback-seed.test.mjs",
+    "test:e2e:two-device": "npm run test:browser:consumer",
     "test:runtime:two-device-simulation": "node --test --test-name-pattern=\"domain ledger restores competitive room\" backend/event-sourcing.test.mjs",
     "certify:match": "node scripts/ci/certify-match.mjs",
     "soak:match": "node scripts/ci/soak-match.mjs",
