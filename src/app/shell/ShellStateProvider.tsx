@@ -6,7 +6,7 @@ import { matchCurrentRoute } from "../routing/route-manifest";
 import { ShellExperienceContext } from "./ShellContext";
 import { SHELL_ROOM_PRESENCE_EVENT, SHELL_ROOM_REFERENCE_KEY } from "./room-presence";
 import { deriveConnectionPresentation, type ActiveRoomPresenceState, type OfficialReviewAvailability, type PersistedRoomReference, type ShellActiveRoom, type ShellAtmosphereExperience, type ShellAtmosphereIntent, type ShellConnectivity, type ShellReadiness } from "./shell-experience";
-import { deriveCanonicalExperienceState, experienceCopy } from "../../features/match-experience/state-model";
+import { deriveCanonicalExperienceState, experienceCopy, resolutionBelongsToCurrentRound } from "../../features/match-experience/state-model";
 
 function readReference(): PersistedRoomReference | null {
   try {
@@ -99,8 +99,10 @@ export function ShellStateProvider({ children }: { children: ReactNode }) {
         return;
       }
       const answer = snapshot.answers[reference.participantId];
-      const canonical = deriveCanonicalExperienceState({ matchStatus: snapshot.match.status, roomExists: true, roundState: snapshot.currentRound?.state, answerState: answer?.state, hasResolution: Boolean(snapshot.lastResolution), hasSignal: Object.values(snapshot.marketDistribution).some((value) => Number.isFinite(value) && value > 0), connectionState: snapshot.connectionState });
-      const phase = canonical.match === "finished" ? "finished" : canonical.round === "resolved" ? "result_available" : canonical.round === "locked" ? "answer_confirmed" : canonical.round === "open" ? "action_required" : "waiting";
+      const currentRoundHasResolution = resolutionBelongsToCurrentRound(snapshot.currentRound?.id, snapshot.lastResolution?.roundId);
+      const canonical = deriveCanonicalExperienceState({ matchStatus: snapshot.match.status, roomExists: true, roundState: snapshot.currentRound?.state, currentRoundHasResolution, hasSignal: Object.values(snapshot.marketDistribution).some((value) => Number.isFinite(value) && value > 0), connectionState: snapshot.connectionState });
+      const answerConfirmed = answer?.state === "submitted" || answer?.state === "correct" || answer?.state === "incorrect";
+      const phase = canonical.match === "finished" ? "finished" : canonical.round === "resolved" ? "result_available" : canonical.round === "locked" ? answerConfirmed ? "answer_confirmed" : "waiting" : canonical.round === "open" ? answerConfirmed ? "answer_confirmed" : "action_required" : "waiting";
       const labels = { finished: experienceCopy.room.finished, result_available: experienceCopy.round.resolved, answer_confirmed: experienceCopy.round.locked, action_required: experienceCopy.round.open, waiting: canonical.match === "scheduled" ? `${experienceCopy.room.open} · ${experienceCopy.match.scheduled}` : experienceCopy.signal.waiting } as const;
       setPresence({ kind: "confirmed", room: {
         roomId: snapshot.roomId,

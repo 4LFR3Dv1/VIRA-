@@ -7,6 +7,7 @@ import { AnimatedNumber } from "../../shared/number/AnimatedNumber";
 import { useServerClock } from "../../runtime/use-server-clock";
 import { useLocale } from "../../i18n/locale-context.tsx";
 import { stableOptionLabel } from "../../i18n/round-copy.ts";
+import { participantAwaitsCurrentRoundResolution, resolutionBelongsToCurrentRound } from "../match-experience/state-model.ts";
 import type { TranslateFunction } from "../../i18n/translate.ts";
 
 interface LiveDecisionCapsuleProps {
@@ -31,7 +32,7 @@ function capsuleState(state: ReplayState, event: PresentationEvent | null | unde
     };
   }
 
-  if (event?.kind === "round_resolved") {
+  if (event?.kind === "round_resolved" && resolutionBelongsToCurrentRound(round?.id, event.roundId)) {
     return {
       tone: event.correct ? "success" : "danger",
       icon: Trophy,
@@ -42,8 +43,8 @@ function capsuleState(state: ReplayState, event: PresentationEvent | null | unde
     };
   }
 
-  if (event?.kind === "answer_registered" || state.currentAnswerState === "submitted") {
-    const closed = round?.state === "locked";
+  if ((event?.kind === "answer_registered" || state.currentAnswerState === "submitted") && participantAwaitsCurrentRoundResolution(round?.state, state.currentAnswerState)) {
+    const closed = round?.state === "locked" || round?.state === "awaiting_event";
     const football = round?.resolution.domain === "football" ? round.resolution.condition : null;
     return {
       tone: "registered",

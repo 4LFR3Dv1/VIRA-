@@ -1,6 +1,6 @@
 export type CanonicalMatchState = "scheduled" | "live" | "finished" | "unavailable";
 export type CanonicalRoomState = "closed" | "open" | "finished";
-export type CanonicalRoundState = "none" | "preparing" | "open" | "locked" | "resolved";
+export type CanonicalRoundState = "none" | "preparing" | "open" | "locked" | "resolved" | "expired";
 export type CanonicalSignalState = "unavailable" | "available" | "waiting" | "received";
 export type CanonicalConnectionState = "healthy" | "reconnecting" | "unavailable";
 
@@ -16,8 +16,7 @@ type CanonicalStateInput = {
   matchStatus?: string | null;
   roomExists?: boolean;
   roundState?: string | null;
-  answerState?: string | null;
-  hasResolution?: boolean;
+  currentRoundHasResolution?: boolean;
   hasSignal?: boolean;
   signalReceived?: boolean;
   connectionState?: string | null;
@@ -40,13 +39,12 @@ export function deriveCanonicalExperienceState(input: CanonicalStateInput): Cano
       : "healthy";
   const room: CanonicalRoomState = match === "finished" ? "finished" : input.roomExists === false ? "closed" : "open";
   let round: CanonicalRoundState = "none";
-  if (match === "finished" && input.hasResolution) round = "resolved";
-  else if (match === "live") {
-    if (input.hasResolution) round = "resolved";
-    else if (input.answerState === "submitted") round = "locked";
-    else if (input.roundState === "open") round = "open";
-    else if (input.hasSignal) round = "preparing";
-  }
+  if (input.roundState === "resolved") round = "resolved";
+  else if (input.roundState === "expired") round = "expired";
+  else if (input.roundState === "locked" || input.roundState === "awaiting_event") round = "locked";
+  else if (input.roundState === "open") round = "open";
+  else if (input.roundState === "scheduled" || (match === "live" && input.hasSignal)) round = "preparing";
+  else if (match === "finished" && input.currentRoundHasResolution) round = "resolved";
   const signal: CanonicalSignalState = input.signalReceived
     ? "received"
     : input.hasSignal
@@ -58,9 +56,17 @@ export function deriveCanonicalExperienceState(input: CanonicalStateInput): Cano
 export const experienceCopy = {
   match: { scheduled: "Pré-jogo", live: "Ao vivo", finished: "Final", unavailable: "Partida indisponível" },
   room: { closed: "Sala fechada", open: "Sala aberta", finished: "Sala encerrada" },
-  round: { none: "Sem rodada", preparing: "Preparando rodada", open: "Rodada aberta", locked: "Resposta confirmada", resolved: "Rodada resolvida" },
+  round: { none: "Sem rodada", preparing: "Preparando rodada", open: "Rodada aberta", locked: "Respostas encerradas", resolved: "Rodada resolvida", expired: "Rodada encerrada" },
   signal: { unavailable: "Aguardando mercado", available: "Mercado disponível", waiting: "Aguardando próximo sinal", received: "Sinal recebido" },
 } as const;
+
+export function resolutionBelongsToCurrentRound(currentRoundId?: string | null, resolutionRoundId?: string | null) {
+  return Boolean(currentRoundId && resolutionRoundId && currentRoundId === resolutionRoundId);
+}
+
+export function participantAwaitsCurrentRoundResolution(roundState?: string | null, answerState?: string | null) {
+  return answerState === "submitted" && ["open", "locked", "awaiting_event"].includes(String(roundState ?? ""));
+}
 
 export function formatMarketCount(count: number) {
   return `${count} ${count === 1 ? "mercado disponível" : "mercados disponíveis"}`;
