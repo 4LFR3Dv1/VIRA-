@@ -202,7 +202,7 @@ function WaitingSignalStage({ state, latestPresentationEvent }: { state: ReplayS
   const target = typeof predicate.pctGte === "number" ? predicate.pctGte : null;
   const { remainingMs } = useServerClock(state.snapshot.serverTime, round.locksAt);
   const remainingSec = Math.max(0, Math.ceil((remainingMs ?? 0) / 1_000));
-  const answersClosed = round.state === "locked" || round.state === "awaiting_event";
+  const answersClosed = round.state === "locked";
   const football = round.resolution.domain === "football" ? round.resolution.condition : null;
   const targetTeam = football?.targetSide === "away" ? state.snapshot.match.awayTeam : state.snapshot.match.homeTeam;
   const shotOnTarget = football?.kind === "team_shot_on_target";

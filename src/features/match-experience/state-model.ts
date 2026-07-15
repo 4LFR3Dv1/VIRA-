@@ -41,7 +41,7 @@ export function deriveCanonicalExperienceState(input: CanonicalStateInput): Cano
   let round: CanonicalRoundState = "none";
   if (input.roundState === "resolved") round = "resolved";
   else if (input.roundState === "expired") round = "expired";
-  else if (input.roundState === "locked" || input.roundState === "awaiting_event") round = "locked";
+  else if (input.roundState === "locked") round = "locked";
   else if (input.roundState === "open") round = "open";
   else if (input.roundState === "scheduled" || (match === "live" && input.hasSignal)) round = "preparing";
   else if (match === "finished" && input.currentRoundHasResolution) round = "resolved";
@@ -65,7 +65,7 @@ export function resolutionBelongsToCurrentRound(currentRoundId?: string | null, 
 }
 
 export function participantAwaitsCurrentRoundResolution(roundState?: string | null, answerState?: string | null) {
-  return answerState === "submitted" && ["open", "locked", "awaiting_event"].includes(String(roundState ?? ""));
+  return answerState === "submitted" && ["open", "locked"].includes(String(roundState ?? ""));
 }
 
 export function formatMarketCount(count: number) {

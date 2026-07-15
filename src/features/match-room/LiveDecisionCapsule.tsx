@@ -44,7 +44,7 @@ function capsuleState(state: ReplayState, event: PresentationEvent | null | unde
   }
 
   if ((event?.kind === "answer_registered" || state.currentAnswerState === "submitted") && participantAwaitsCurrentRoundResolution(round?.state, state.currentAnswerState)) {
-    const closed = round?.state === "locked" || round?.state === "awaiting_event";
+    const closed = round?.state === "locked";
     const football = round?.resolution.domain === "football" ? round.resolution.condition : null;
     return {
       tone: "registered",
