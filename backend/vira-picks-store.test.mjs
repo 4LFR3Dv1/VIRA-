@@ -47,7 +47,7 @@ test("confirmation is immutable, idempotent, server-locked and private until sha
   assert.deepEqual(store.public(first.publicCode).selections, []);
   await store.markShared(first.id, identity.publicId); assert.equal(store.public(first.publicCode).selections.length, 3);
   await assert.rejects(store.confirm({ ...input, selectionIds: ["match_result:away"], snapshots: [snapshots()[0]] }), /idempotency_conflict/);
-  now = Date.parse(fixture.startTime); await store.lockFixture(fixture.fixtureId); assert.equal(store.owner(identity.publicId, fixture.fixtureId).status, "locked");
+  now = Date.parse(fixture.startTime); await store.lockDueCards(); assert.equal(store.owner(identity.publicId, fixture.fixtureId).status, "locked");
   await assert.rejects(store.confirm({ ...input, idempotencyKey: "confirm-too-late" }), /picks_deadline_passed/);
 }));
 

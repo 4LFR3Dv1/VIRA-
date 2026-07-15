@@ -91,6 +91,7 @@ const internalIngestEnabled = String(process.env.VIRA_INTERNAL_INGEST_ENABLED ||
 const requireTxlineCredentials = String(process.env.VIRA_REQUIRE_TXLINE_CREDENTIALS || "false").toLowerCase() === "true";
 const adminToken = String(process.env.VIRA_ADMIN_TOKEN || "");
 const picksEnabled = String(process.env.VIRA_PICKS_ENABLED || "false").toLowerCase() === "true";
+const picksRejections = { marketUnavailable: 0, deadline: 0 };
 const allowedOrigins = new Set(String(process.env.VIRA_ALLOWED_ORIGINS || "http://localhost:5173,http://127.0.0.1:5173").split(",").map((value) => value.trim()).filter(Boolean));
 const distDirectory = path.resolve(process.env.VIRA_DIST_DIR || fileURLToPath(new URL("../dist/", import.meta.url)));
 const staticMimeTypes = new Map([[".css", "text/css; charset=utf-8"], [".html", "text/html; charset=utf-8"], [".ico", "image/x-icon"], [".js", "text/javascript; charset=utf-8"], [".json", "application/json; charset=utf-8"], [".png", "image/png"], [".svg", "image/svg+xml"], [".webp", "image/webp"], [".woff2", "font/woff2"]]);
@@ -98,6 +99,8 @@ let eventLoopLagMs = 0;
 let lagProbeAt = Date.now();
 const lagProbe = setInterval(() => { const now = Date.now(); eventLoopLagMs = Math.max(0, now - lagProbeAt - 1_000); lagProbeAt = now; }, 1_000);
 lagProbe.unref?.();
+const picksLockProbe = picksEnabled ? setInterval(() => { void picksStore.lockDueCards().catch(() => undefined); }, 1_000) : null;
+picksLockProbe?.unref?.();
 
 function cryptoRandomId() {
   return randomUUID().slice(0, 8);
@@ -300,6 +303,13 @@ async function applyLatestScoreSnapshot(roomId, reason = "room-live-feed") {
       acquisitionOrigin: "txline_snapshot",
     },
   );
+}
+
+async function synchronizePicksFixtureLifecycle(fixture) {
+  const status = String(fixture?.status ?? "unknown").toLowerCase();
+  if (["cancelled", "canceled", "postponed", "abandoned"].includes(status)) return picksStore.voidFixture(fixture.fixtureId, status === "canceled" ? "cancelled" : status);
+  if (["live", "finished", "final"].includes(status) || (fixture?.startTime && Date.now() >= Date.parse(fixture.startTime))) return picksStore.lockFixture(fixture.fixtureId, new Date().toISOString());
+  return { synchronized: false };
 }
 
 async function applyScoreUpdates(roomId, feed, reason = "room-live-feed") {
@@ -686,7 +696,7 @@ async function handleRequest(request, response) {
         runtime: runtime.operationalMetrics(),
         ledger: { globalPosition: store.globalPosition, streamCount: store.streamCount },
         txline: { catalog: txlineCatalogCache.status(), feeds: { total: feeds.length, degraded: feeds.filter((feed) => feed.status !== "running").length, lastEventAt: feeds.map((feed) => feed.lastPollAt).filter(Boolean).sort().at(-1) ?? null } },
-        picks: picksStore.metrics(),
+        picks: { ...picksStore.metrics(), marketUnavailableFailures: picksRejections.marketUnavailable, deadlineRejections: picksRejections.deadline },
         disk: disk ? { freeBytes: Number(disk.bavail) * Number(disk.bsize), totalBytes: Number(disk.blocks) * Number(disk.bsize) } : null,
       });
       return;
@@ -723,6 +733,7 @@ async function handleRequest(request, response) {
       const fixtureId = decodeURIComponent(picksCatalogRoute[1]); const catalog = await txlineCatalogCache.get();
       const fixture = catalog.matches.find((item) => String(item.fixtureId) === fixtureId);
       if (!fixture) throw Object.assign(new Error("fixture_not_found"), { status: 404 });
+      await synchronizePicksFixtureLifecycle(fixture);
       const questions = buildPicksCatalog({ fixture, context: fixture.context, now: Date.now() });
       sendJson(response, 200, { schemaVersion: 1, enabled: true, fixture: { fixtureId, homeTeam: fixture.homeTeam, awayTeam: fixture.awayTeam, kickoffAt: fixture.startTime, status: fixture.status }, questions });
       return;
@@ -737,11 +748,13 @@ async function handleRequest(request, response) {
       const selections = (body.selectionIds ?? []).map(selectionFromCanonicalId);
       const snapshots = selections.map((selection) => {
         const result = buildMarketSnapshotForSelection({ fixture, context: fixture.context, selection, now: Date.now() });
-        if (!result.available) throw Object.assign(new Error(`picks_market_unavailable:${result.reason}`), { status: 409 });
+        if (!result.available) { picksRejections.marketUnavailable += 1; throw Object.assign(new Error(`picks_market_unavailable:${result.reason}`), { status: 409 }); }
         return result.snapshot;
       });
       const editorialContext = requestEditorialLocale(request, "picks_owner");
-      const card = await picksStore.confirm({ fixture, identity, selectionIds: body.selectionIds, idempotencyKey: body.idempotencyKey, locale: editorialContext.locale, timeZone: editorialContext.timeZone, snapshots });
+      let card;
+      try { card = await picksStore.confirm({ fixture, identity, selectionIds: body.selectionIds, idempotencyKey: body.idempotencyKey, locale: editorialContext.locale, timeZone: editorialContext.timeZone, snapshots }); }
+      catch (cause) { if (["picks_deadline_passed", "fixture_not_open_for_picks"].includes(cause.message)) picksRejections.deadline += 1; throw cause; }
       sendJson(response, 201, { card }); return;
     }
 
@@ -749,6 +762,7 @@ async function handleRequest(request, response) {
     if (request.method === "GET" && picksOwnerRoute) {
       if (!picksEnabled) throw Object.assign(new Error("picks_feature_disabled"), { status: 404 });
       const identity = shareStore.homePlayer(publicToken(request)); if (!identity) throw Object.assign(new Error("public_identity_required"), { status: 401 });
+      const catalog = await txlineCatalogCache.get(); const fixture = catalog.matches.find((item) => String(item.fixtureId) === decodeURIComponent(picksOwnerRoute[1])); if (fixture) await synchronizePicksFixtureLifecycle(fixture);
       sendJson(response, 200, { card: picksStore.owner(identity.publicId, decodeURIComponent(picksOwnerRoute[1])) }); return;
     }
 
