@@ -20,6 +20,7 @@ export function ViraShellBackground({ paused = false }: { paused?: boolean }) {
     "--shell-fixture-focus": atmosphere.fixtureFocus,
   } as CSSProperties;
   return <div aria-hidden className="vira-shell-background" data-atmosphere={atmosphere.atmosphere} data-context={atmosphere.context} data-paused={paused || !visible ? "true" : "false"} style={style}>
+    <div className="vira-shell-background__carbon" />
     <div className="vira-shell-background__light" />
     <div className="vira-shell-background__pitch" />
     <div className="vira-shell-background__grain" />
