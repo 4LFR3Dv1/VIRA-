@@ -43,7 +43,7 @@ export function createExperienceModel(state: ReplayState, event: PresentationEve
   const eventValue = event?.kind === "round_resolved" ? event.resolutionValue : null;
   const currentValue = eventValue ?? openingValue;
   const baseScene = deriveRoomExperience(state);
-  const nonCompetitiveScene = baseScene === "scheduled_without_market" || baseScene === "scheduled_with_market" || baseScene === "no_live_fixture" || baseScene === "provider_unavailable";
+  const nonCompetitiveScene = baseScene === "connecting" || baseScene === "scheduled_without_market" || baseScene === "scheduled_with_market" || baseScene === "no_live_fixture" || baseScene === "provider_unavailable";
   const verified = Boolean(verification?.hashChainValid && verification.projectionMatches && verification.rankingMatches);
   const scene: ExperienceScene = nonCompetitiveScene
     ? baseScene

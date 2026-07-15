@@ -1,7 +1,8 @@
 import type { ReplayState } from "../../domain/types";
-import { deriveCanonicalExperienceState } from "../match-experience/state-model";
+import { deriveCanonicalExperienceState } from "../match-experience/state-model.ts";
 
 export type MatchExperienceState =
+  | "connecting"
   | "no_live_fixture"
   | "scheduled_without_market"
   | "scheduled_with_market"
@@ -26,6 +27,7 @@ function hasMarketSignal(state: ReplayState) {
 
 export function deriveRoomExperience(state: ReplayState): MatchExperienceState {
   const { snapshot } = state;
+  if (snapshot.connectionState === "connecting") return "connecting";
   const hasMarket = hasMarketSignal(state);
   const canonical = deriveCanonicalExperienceState({ matchStatus: snapshot.match.status, roomExists: true, roundState: snapshot.currentRound?.state, answerState: state.currentAnswerState, hasResolution: Boolean(state.lastResolution), hasSignal: hasMarket, signalReceived: snapshot.lastNormalizedEvent?.type === "odds_shift", connectionState: snapshot.connectionState });
   if (canonical.connection !== "healthy") return "provider_unavailable";

@@ -340,6 +340,10 @@ export type TranslationMessages = {
   "room.stage.observations": { count: number };
   "room.stage.noButtons": undefined;
   "room.stage.contractRequired": undefined;
+  "room.stage.connectingEyebrow": undefined;
+  "room.stage.connectingTitle": undefined;
+  "room.stage.connectingBody": undefined;
+  "room.stage.connectingStatus": undefined;
   "room.stage.providerEyebrow": undefined;
   "room.stage.providerTitle": undefined;
   "room.stage.providerBody": undefined;

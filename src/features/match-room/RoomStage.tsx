@@ -26,6 +26,7 @@ export function RoomStage({ state, model, answerSummary, latestPresentationEvent
   const round = state.snapshot.currentRound;
   const experience = model.scene;
 
+  if (experience === "connecting") return <OperationalStage state={state} kind="connecting" />;
   if (experience === "provider_unavailable") return <OperationalStage state={state} kind="provider" />;
   if (experience === "no_live_fixture") return <OperationalStage state={state} kind="no-fixture" />;
   if (experience === "scheduled_without_market") return <OperationalStage state={state} kind="scheduled-empty" context={preMatchContext} onFanPulse={onFanPulse} />;
@@ -83,7 +84,7 @@ function PreparingRoundStage({ state, kind, context }: { state: ReplayState; kin
   );
 }
 
-function OperationalStage({ state, kind, context = null, onFanPulse }: { state: ReplayState; kind: "provider" | "no-fixture" | "scheduled-empty" | "scheduled-ready"; context?: MatchTxlineContext | null; onFanPulse?: (side: "home" | "away") => Promise<void> }) {
+function OperationalStage({ state, kind, context = null, onFanPulse }: { state: ReplayState; kind: "connecting" | "provider" | "no-fixture" | "scheduled-empty" | "scheduled-ready"; context?: MatchTxlineContext | null; onFanPulse?: (side: "home" | "away") => Promise<void> }) {
   const { t } = useLocale();
   const match = state.snapshot.match;
   const scheduled = kind === "scheduled-empty" || kind === "scheduled-ready";
@@ -91,8 +92,10 @@ function OperationalStage({ state, kind, context = null, onFanPulse }: { state: 
   const temporal = context?.consumerProjection?.temporal;
   const kickoff = temporal?.localKickoffDate && temporal.localKickoffTime ? `${temporal.localKickoffDate} · ${temporal.localKickoffTime}` : t("room.stage.timeToConfirm");
   const countdown = remainingMs === null ? null : formatCountdown(remainingMs);
-  const copy = kind === "provider"
-    ? { eyebrow: t("room.stage.providerEyebrow"), title: t("room.stage.providerTitle"), body: t("room.stage.providerBody"), tone: "text-amber-300" }
+  const copy = kind === "connecting"
+    ? { eyebrow: t("room.stage.connectingEyebrow"), title: t("room.stage.connectingTitle"), body: t("room.stage.connectingBody"), tone: "text-primary" }
+    : kind === "provider"
+      ? { eyebrow: t("room.stage.providerEyebrow"), title: t("room.stage.providerTitle"), body: t("room.stage.providerBody"), tone: "text-amber-300" }
     : kind === "no-fixture"
       ? { eyebrow: t("room.stage.noFixtureEyebrow"), title: t("room.stage.noFixtureTitle"), body: t("room.stage.noFixtureBody"), tone: "text-primary" }
       : { eyebrow: t("room.stage.preMatchEyebrow"), title: countdown ? t("room.stage.startsIn", { countdown }) : t("room.stage.startsAt", { kickoff }), body: kind === "scheduled-ready" ? t("room.stage.marketReadyBody") : t("room.stage.marketWaitingBody"), tone: "text-primary" };
@@ -101,7 +104,7 @@ function OperationalStage({ state, kind, context = null, onFanPulse }: { state: 
     <section className="relative min-h-[31rem] overflow-hidden border-y border-white/15 bg-[#090d18]">
       <div className="absolute inset-0 opacity-20 [background-image:linear-gradient(rgba(255,255,255,.05)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,.04)_1px,transparent_1px)] [background-size:100%_72px,110px_100%]" />
       <div className={`relative grid min-h-[31rem] items-center gap-10 px-6 py-14 md:px-10 ${scheduled ? "lg:grid-cols-[minmax(0,1.15fr)_minmax(300px,.85fr)]" : ""}`}>
-        <div><p className={`font-['DM_Mono'] text-[10px] font-black uppercase tracking-[.2em] ${copy.tone}`}>{copy.eyebrow}</p><h1 className="mt-6 max-w-5xl font-['Chakra_Petch'] text-[clamp(2.6rem,6vw,6.2rem)] font-black uppercase leading-[.82]">{copy.title}</h1><p className="mt-8 max-w-xl text-sm leading-6 text-white/50 md:text-base">{copy.body}</p><div className="mt-10 flex flex-wrap gap-6 font-['DM_Mono'] text-[10px] uppercase tracking-[.12em] text-white/45">{scheduled ? <StatusMetric label={t("room.stage.waiting", { count: state.snapshot.roomPopulation })} /> : null}{kind === "provider" ? <StatusMetric active={false} label={t("room.stage.reconnectingAutomatically")} /> : <StatusMetric label={scheduled ? t("room.stage.openRoom") : t("room.stage.txlineSchedule")} />}{kind === "scheduled-ready" ? <StatusMetric label={t("room.stage.marketsAvailable")} /> : null}</div></div>
+        <div><p className={`font-['DM_Mono'] text-[10px] font-black uppercase tracking-[.2em] ${copy.tone}`}>{copy.eyebrow}</p><h1 className="mt-6 max-w-5xl font-['Chakra_Petch'] text-[clamp(2.6rem,6vw,6.2rem)] font-black uppercase leading-[.82]">{copy.title}</h1><p className="mt-8 max-w-xl text-sm leading-6 text-white/50 md:text-base">{copy.body}</p><div className="mt-10 flex flex-wrap gap-6 font-['DM_Mono'] text-[10px] uppercase tracking-[.12em] text-white/45">{scheduled ? <StatusMetric label={t("room.stage.waiting", { count: state.snapshot.roomPopulation })} /> : null}{kind === "connecting" ? <StatusMetric label={t("room.stage.connectingStatus")} /> : kind === "provider" ? <StatusMetric active={false} label={t("room.stage.reconnectingAutomatically")} /> : <StatusMetric label={scheduled ? t("room.stage.openRoom") : t("room.stage.txlineSchedule")} />}{kind === "scheduled-ready" ? <StatusMetric label={t("room.stage.marketsAvailable")} /> : null}</div></div>
         {scheduled ? <PreMatchMarketWatch state={state} context={context} participantCount={state.snapshot.roomPopulation} onFanPulse={onFanPulse} /> : null}
       </div>
     </section>
