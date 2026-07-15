@@ -28,7 +28,6 @@ import { competitionDisplayName } from "../../i18n/semantic-copy.ts";
 
 type ContextState = "idle" | "loading" | "ready" | "empty" | "error";
 const CONTEXT_CACHE_TTL_MS = 60_000;
-const matchStateKeys = { scheduled: "state.match.scheduled", live: "state.match.live", finished: "state.match.finished", unavailable: "state.match.unavailable" } as const satisfies Record<string, StaticTranslationKey>;
 const roomStateKeys = { closed: "state.room.closed", open: "state.room.open", finished: "state.room.finished" } as const satisfies Record<string, StaticTranslationKey>;
 
 function contextCacheKey(fixtureId: string) {
@@ -233,33 +232,35 @@ export function MatchPreviewScreen() {
     <AppShell>
       <main className="overflow-hidden bg-[#070a13]/55 text-white">
         <section style={{ viewTransitionName: "featured-match" } as CSSProperties} className="relative isolate overflow-hidden border-b border-white/15">
-          <div className="absolute inset-0 -z-10 grid grid-cols-2 opacity-80">
-            <div className="bg-[linear-gradient(135deg,#263d20_0%,#101a17_56%,#070a13_100%)]" />
-            <div className="bg-[linear-gradient(225deg,#24335c_0%,#11172a_56%,#070a13_100%)]" />
+          <div className="absolute inset-0 -z-10 overflow-hidden">
+            <div className="absolute inset-0 grid grid-cols-2 opacity-80">
+              <div className="bg-[linear-gradient(135deg,#263d20_0%,#101a17_56%,#070a13_100%)]" />
+              <div className="bg-[linear-gradient(225deg,#24335c_0%,#11172a_56%,#070a13_100%)]" />
+            </div>
+            <div className="absolute inset-0 bg-[url('/textures/vira-carbon.webp')] bg-[length:640px_640px] bg-center opacity-[.11] mix-blend-screen [mask-image:linear-gradient(to_bottom,black,rgba(0,0,0,.5))]" />
           </div>
           <div className="absolute inset-y-0 left-1/2 -z-10 w-px rotate-[14deg] bg-white/10" />
-          <div className="mx-auto max-w-[1440px] px-5 py-8 sm:px-8 lg:px-14 lg:py-12">
-            <div className="flex flex-wrap items-center justify-between gap-4 border-b border-white/15 pb-6">
-              <Link to={localizedHref("/matches")} className="inline-flex items-center gap-2 text-xs font-bold uppercase text-white/55 hover:text-primary"><ArrowLeft className="size-4" /> {t("preview.backToLobby")}</Link>
+          <div className="mx-auto max-w-[1440px] px-5 py-7 sm:px-8 lg:px-14 lg:py-8">
+            <div className="flex flex-wrap items-center justify-end gap-4 border-b border-white/15 pb-4">
               <div className="flex flex-wrap items-center gap-3 font-['DM_Mono'] text-[10px] uppercase text-white/50">
                 <span>{competitionDisplayName(t, match)} · {kickoffLabel}</span>
                 <span className="inline-flex items-center gap-2 text-primary"><Radio className="size-3.5" /> {loadingContext ? t("preview.syncingTxline") : projection?.availability.canShowMarket ? t("preview.marketObserved") : t("preview.waitingEligibleMarket")}</span>
               </div>
             </div>
 
-            <div className="mt-10 grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-end gap-3 sm:gap-8 lg:mt-14">
+            <div className="mt-8 grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-end gap-3 sm:gap-8 lg:mt-10">
               <TeamHeading name={match.homeTeam} side="home" />
               <span className="pb-2 font-['DM_Mono'] text-xs font-black text-primary sm:pb-5">VS</span>
               <TeamHeading name={match.awayTeam} side="away" />
             </div>
 
-            <div className="mt-12 border-t border-white/15 pt-7 lg:mt-16">
+            <div className="mt-8 border-t border-white/15 pt-5 lg:mt-10">
               <p className="font-['DM_Mono'] text-[10px] font-bold uppercase text-white/45">{projection?.availability.canMakeDirectionalClaim ? t("preview.market.currentLeader") : projection?.availability.canShowMarket ? t("preview.market.lastObserved") : t("preview.market.context")}</p>
-              <div className="mt-3 flex flex-wrap items-end justify-between gap-6">
-                <h1 style={{ viewTransitionName: "market-value" } as CSSProperties} className="max-w-4xl font-['Chakra_Petch'] text-[clamp(2rem,4.6vw,4.9rem)] font-black uppercase leading-[.9]">
+              <div className="mt-3 flex flex-col gap-4 lg:flex-row lg:items-end lg:gap-10">
+                <h1 style={{ viewTransitionName: "market-value" } as CSSProperties} className="max-w-3xl font-['Chakra_Petch'] text-[clamp(1.8rem,3.4vw,3.6rem)] font-black uppercase leading-[.9]">
                   {loadingContext && !context ? t("preview.market.reading") : currentSignal}
                 </h1>
-                <p className="max-w-xs text-sm leading-6 text-white/50">{t("preview.market.explanation")}</p>
+                <p className="max-w-sm text-sm leading-6 text-white/50 lg:pb-0.5">{t("preview.market.explanation")}</p>
               </div>
             </div>
           </div>
@@ -283,7 +284,7 @@ export function MatchPreviewScreen() {
           </div>
 
           <aside className="self-start border border-primary/35 bg-primary/[.055] p-6 lg:sticky lg:top-24">
-            <div className="flex items-center justify-between text-primary"><p className="font-['DM_Mono'] text-[10px] font-black uppercase">{t(roomStateKeys[canonical.room])} · {t(matchStateKeys[canonical.match])}</p><Zap className="size-4" /></div>
+            <div className="flex items-center justify-between text-primary"><p className="font-['DM_Mono'] text-[10px] font-black uppercase">{t(roomStateKeys[canonical.room])}</p><Zap className="size-4" /></div>
             <h3 className="mt-5 font-['Chakra_Petch'] text-3xl font-black uppercase leading-[.9]">{t("preview.enterFixture", { homeTeam: match.homeTeam, awayTeam: match.awayTeam })}</h3>
             <dl className="mt-8 divide-y divide-white/15 border-y border-white/15 text-sm">
               {[[t("preview.participants"), t("preview.realPeople")], [t("preview.answer"), t("preview.onePerMoment")], [t("preview.resolution"), t("preview.officialFacts")]].map(([label, value]) => <div key={label} className="flex justify-between gap-4 py-4"><dt className="text-white/40">{label}</dt><dd className="text-right font-semibold">{value}</dd></div>)}
