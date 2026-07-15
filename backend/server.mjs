@@ -91,7 +91,7 @@ const liveRoomFeeds = new Map();
 const internalIngestEnabled = String(process.env.VIRA_INTERNAL_INGEST_ENABLED || "false").toLowerCase() === "true";
 const requireTxlineCredentials = String(process.env.VIRA_REQUIRE_TXLINE_CREDENTIALS || "false").toLowerCase() === "true";
 const adminToken = String(process.env.VIRA_ADMIN_TOKEN || "");
-const picksEnabled = String(process.env.VIRA_PICKS_ENABLED || "false").toLowerCase() === "true";
+const picksEnabled = String(process.env.VIRA_PICKS_ENABLED ?? "true").toLowerCase() === "true";
 const picksRejections = { marketUnavailable: 0, deadline: 0 };
 const allowedOrigins = new Set(String(process.env.VIRA_ALLOWED_ORIGINS || "http://localhost:5173,http://127.0.0.1:5173").split(",").map((value) => value.trim()).filter(Boolean));
 const distDirectory = path.resolve(process.env.VIRA_DIST_DIR || fileURLToPath(new URL("../dist/", import.meta.url)));

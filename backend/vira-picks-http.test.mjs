@@ -10,6 +10,7 @@ import test from "node:test";
 function freePort() { return new Promise((resolve, reject) => { const server = http.createServer(); server.once("error", reject); server.listen(0, "127.0.0.1", () => { const address = server.address(); server.close(() => resolve(address.port)); }); }); }
 async function wait(origin, child) { const limit = Date.now() + 15_000; while (Date.now() < limit) { if (child.exitCode !== null) throw new Error(`backend_exited_${child.exitCode}`); try { if ((await fetch(`${origin}/health`)).ok) return; } catch {} await new Promise((resolve) => setTimeout(resolve, 80)); } throw new Error("backend_timeout"); }
 const headers = (token, json = false) => ({ ...(json ? { "Content-Type": "application/json" } : {}), "X-Vira-Public-Token": token, "X-Vira-Locale": "en", "X-Vira-Time-Zone": "UTC" });
+const defaultPicksEnv = Object.fromEntries(Object.entries(process.env).filter(([key]) => key !== "VIRA_PICKS_ENABLED"));
 
 function catalog(now) {
   const fixtureId = "picks-http-fixture"; const kickoff = new Date(now + 60 * 60_000).toISOString(); const observedAt = new Date(now - 10_000).toISOString(); const endpoint = `/api/odds/snapshot/${fixtureId}`;
@@ -20,7 +21,7 @@ function catalog(now) {
 
 test("HTTP projections enforce server snapshots, identity isolation, attribution and no competitive mutation", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "vira-picks-http-")); const dataDir = path.join(root, "data"); const catalogPath = path.join(root, "catalog.json"); await writeFile(catalogPath, JSON.stringify(catalog(Date.now())), "utf8");
-  const port = await freePort(); const origin = `http://127.0.0.1:${port}`; const child = spawn(process.execPath, ["backend/server.mjs"], { cwd: process.cwd(), env: { ...process.env, PORT: String(port), VIRA_DATA_DIR: dataDir, VIRA_CATALOG_SNAPSHOT_PATH: catalogPath, VIRA_PICKS_ENABLED: "true", VIRA_VERIFIED_PLAYBACK_ENABLED: "false", TXLINE_JWT: "", TXLINE_API_TOKEN: "" }, stdio: ["ignore", "pipe", "pipe"] });
+  const port = await freePort(); const origin = `http://127.0.0.1:${port}`; const child = spawn(process.execPath, ["backend/server.mjs"], { cwd: process.cwd(), env: { ...defaultPicksEnv, PORT: String(port), VIRA_DATA_DIR: dataDir, VIRA_CATALOG_SNAPSHOT_PATH: catalogPath, VIRA_VERIFIED_PLAYBACK_ENABLED: "false", TXLINE_JWT: "", TXLINE_API_TOKEN: "" }, stdio: ["ignore", "pipe", "pipe"] });
   const tokenA = crypto.randomBytes(32).toString("hex"); const tokenB = crypto.randomBytes(32).toString("hex");
   try {
     await wait(origin, child); const before = await (await fetch(`${origin}/operational/metrics`)).json();

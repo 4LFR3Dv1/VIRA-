@@ -2,18 +2,18 @@
 
 VIRA Picks is an isolated, pre-match social prediction experience. A fan confirms one to three structured answers for one fixture, shares an immutable card and compares the official result with friends. It has no money, stake, prize, return, payout, wallet or wagering behavior.
 
-The feature is disabled by default and does not mutate the Match Room runtime, competitive ledger, round deadlines, SSE, replay, Mini League points, ranking, session contracts or `FixtureConsumerProjectionV1`.
+The feature is enabled globally for every fixture in the TxLINE catalog and does not mutate the Match Room runtime, competitive ledger, round deadlines, SSE, replay, Mini League points, ranking, session contracts or `FixtureConsumerProjectionV1`. Eligibility remains capability-based and fail-closed: a fixture without an exact fresh allowlisted market cannot accept that selection.
 
 ## Feature flags
 
-Both sides must be enabled intentionally:
+Both sides default to enabled in production builds:
 
 ```dotenv
 VIRA_PICKS_ENABLED=true
 VITE_VIRA_PICKS_ENABLED=true
 ```
 
-The default for both flags is `false`. Enabling only the frontend does not bypass backend authorization or market checks.
+The default for both flags is `true`. There is no fixture-ID allowlist. Setting either flag explicitly to `false` remains an emergency kill switch; frontend visibility never bypasses backend market, fixture, freshness or deadline checks.
 
 ## Architecture
 
@@ -103,4 +103,4 @@ The focused browser journey runs on Chromium desktop, Chromium mobile viewport a
 - Production resolution is wired to the TxLINE historical-score projection, but remains dependent on that endpoint returning a complete structured boundary record; otherwise it deliberately stays pending.
 - The isolated E2E uses a captured, fixed final authority through a guarded local-only E2E route.
 
-Recommendation: keep the branch unmerged and both flags off until production can acquire and validate complete score history for regular-time authority. The implemented V1 remains isolated from the approved competitive core.
+The regular-time production path is enabled globally. Fixtures lacking authoritative market or score history remain unavailable or pending rather than falling back to inferred data. The implementation remains isolated from the approved competitive core.

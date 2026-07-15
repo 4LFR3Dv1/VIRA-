@@ -7,6 +7,7 @@ import os from "node:os";
 import path from "node:path";
 
 let backend: ChildProcess; let origin = ""; let dataDir = ""; const fixtureId = "picks-e2e-2026"; const e2eToken = crypto.randomBytes(32).toString("hex");
+const defaultPicksEnv = Object.fromEntries(Object.entries(process.env).filter(([key]) => !["VIRA_PICKS_ENABLED", "VITE_VIRA_PICKS_ENABLED"].includes(key)));
 function freePort(): Promise<number> { return new Promise((resolve, reject) => { const server = http.createServer(); server.once("error", reject); server.listen(0, "127.0.0.1", () => { const address = server.address(); server.close(() => resolve(typeof address === "object" && address ? address.port : 0)); }); }); }
 function run(command: string, args: string[], env: NodeJS.ProcessEnv) { return new Promise<void>((resolve, reject) => { const child = spawn(command, args, { cwd: process.cwd(), env, stdio: "ignore", shell: process.platform === "win32" }); child.once("exit", (code) => code === 0 ? resolve() : reject(new Error(`${command}_exit_${code}`))); }); }
 async function waitForHealth() { await expect.poll(async () => { try { return (await fetch(`${origin}/health`)).status; } catch { return 0; } }, { timeout: 20_000 }).toBe(200); }
@@ -29,9 +30,9 @@ async function capture(page: Page, testInfo: TestInfo, name: string) { const dir
 
 test.beforeAll(async () => {
   dataDir = await mkdtemp(path.join(os.tmpdir(), "vira-picks-browser-")); await writeFile(path.join(dataDir, "txline-catalog.json"), JSON.stringify(snapshot()), "utf8");
-  await run(process.platform === "win32" ? "npm.cmd" : "npm", ["run", "build"], { ...process.env, VITE_VIRA_PICKS_ENABLED: "true" });
+  await run(process.platform === "win32" ? "npm.cmd" : "npm", ["run", "build"], defaultPicksEnv);
   const port = await freePort(); origin = `http://127.0.0.1:${port}`;
-  backend = spawn(process.execPath, ["backend/server.mjs"], { cwd: process.cwd(), env: { ...process.env, PORT: String(port), VIRA_DATA_DIR: dataDir, VIRA_E2E_ENABLED: "true", VIRA_E2E_TOKEN: e2eToken, VIRA_E2E_ALLOWED_HOSTS: "127.0.0.1", VIRA_PICKS_ENABLED: "true", VIRA_VERIFIED_PLAYBACK_ENABLED: "false", TXLINE_JWT: "", TXLINE_API_TOKEN: "" }, stdio: ["ignore", "pipe", "pipe"] }); await waitForHealth();
+  backend = spawn(process.execPath, ["backend/server.mjs"], { cwd: process.cwd(), env: { ...defaultPicksEnv, PORT: String(port), VIRA_DATA_DIR: dataDir, VIRA_E2E_ENABLED: "true", VIRA_E2E_TOKEN: e2eToken, VIRA_E2E_ALLOWED_HOSTS: "127.0.0.1", VIRA_VERIFIED_PLAYBACK_ENABLED: "false", TXLINE_JWT: "", TXLINE_API_TOKEN: "" }, stdio: ["ignore", "pipe", "pipe"] }); await waitForHealth();
 });
 test.afterAll(async () => { backend?.kill("SIGTERM"); if (backend) await new Promise((resolve) => backend.once("exit", resolve)); await rm(dataDir, { recursive: true, force: true }); });
 
@@ -47,7 +48,7 @@ test("bilingual two-fan immutable journey remains separate from competitive stat
   expect((await scenario("lock")).status).toBe(200); expect((await scenario("resolve")).status).toBe(200); await pageA.reload(); await pageB.reload();
   await expect(pageA.getByText("2/2 — Perfect read")).toBeVisible(); await expect(pageB.getByText("2/2 — Perfect read")).toBeVisible(); await capture(pageA, testInfo, "picks-result-en");
   await pageA.getByRole("button", { name: "Share" }).click(); await expect.poll(() => pageA.getByAltText(/Preview of the VIRA share card/i).evaluate((image: HTMLImageElement) => image.naturalWidth)).toBe(1200); await capture(pageA, testInfo, "picks-result-share-en");
-  await pageA.keyboard.press("Escape"); await pageA.goto(`/picks/${fixtureId}?lang=pt-BR`); await expect(pageA.getByText("2/2 — Leitura perfeita")).toBeVisible(); await expect(pageA.getByText("Ana")).toBeVisible();
+  await pageA.keyboard.press("Escape"); await pageA.goto(`/picks/${fixtureId}?lang=pt-BR`); await expect(pageA.getByText("2/2 — Leitura perfeita")).toBeVisible(); await expect(pageA.getByRole("heading", { name: "Ana", exact: true })).toBeVisible();
   const after = await (await fetch(`${origin}/operational/metrics`)).json(); expect(after.ledger.globalPosition).toBe(before.ledger.globalPosition); expect(after.picks.cardsConfirmed).toBe(2); expect(after.picks.friendsCreatedPicks).toBe(1); expect(after.picks.cardsResolved).toBe(2);
   await contextA.close(); await contextB.close();
 });
