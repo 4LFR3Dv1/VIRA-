@@ -6,6 +6,7 @@ import {
   fetchScoresUpdates,
   normalizeTxlineScore,
 } from "./txline-client.mjs";
+import { deriveRegularTimeScoreAuthorityV1 } from "./vira-picks-regular-time-authority.mjs";
 
 function asRecords(payload) {
   if (!payload) return [];
@@ -273,10 +274,25 @@ function projectScoreState(payload, fixtureId) {
   };
 }
 
+function projectHistoricalScoreState(payload, fixtureId, receivedAt) {
+  return {
+    ...projectScoreState(payload, fixtureId),
+    regularTimeAuthority: deriveRegularTimeScoreAuthorityV1({
+      fixtureId,
+      records: asRecords(payload),
+      historyComplete: true,
+      freshness: "fresh",
+      receivedAt,
+      acquisitionOrigin: `/api/scores/historical/${fixtureId}`,
+    }),
+  };
+}
+
 async function readEndpoint({ name, endpoint, fetcher, config, fixtureId, projector }) {
   const requestedAt = new Date().toISOString();
   try {
     const payload = await fetcher(config, fixtureId);
+    const receivedAt = new Date().toISOString();
     return {
       name,
       provider: "TxLINE",
@@ -284,9 +300,9 @@ async function readEndpoint({ name, endpoint, fetcher, config, fixtureId, projec
       ok: true,
       endpoint,
       requestedAt,
-      receivedAt: new Date().toISOString(),
+      receivedAt,
       summary: summarizePayload(payload),
-      data: projector ? projector(payload) : null,
+      data: projector ? projector(payload, receivedAt) : null,
     };
   } catch (error) {
     return {
@@ -337,7 +353,7 @@ export async function buildTxlineContext(config, match) {
       fetcher: fetchHistoricalScores,
       config,
       fixtureId,
-      projector: (payload) => projectScoreState(payload, fixtureId),
+      projector: (payload, receivedAt) => projectHistoricalScoreState(payload, fixtureId, receivedAt),
     }),
     readEndpoint({
       name: "odds",
@@ -397,6 +413,7 @@ export async function buildTxlineContext(config, match) {
     availableMarkets: uniqueMarkets,
     canonical1X2,
     fixtureState,
+    regularTimeScoreAuthority: historical.data?.regularTimeAuthority ?? null,
     marketTaxonomy: {
       observed: uniqueMarkets.length,
       inFocus: Math.min(5, uniqueMarkets.length),
@@ -406,4 +423,4 @@ export async function buildTxlineContext(config, match) {
   };
 }
 
-export const txlineContextInternals = { projectScoreState };
+export const txlineContextInternals = { projectScoreState, projectHistoricalScoreState };

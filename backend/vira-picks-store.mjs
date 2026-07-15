@@ -4,6 +4,7 @@ import path from "node:path";
 import { canonicalHash } from "./vira-picks-market.mjs";
 import { cloneFrozen, publicPicksCard, validateSelections } from "./vira-picks-contracts.mjs";
 import { resolveSelectionV1 } from "./vira-picks-resolvers.mjs";
+import { verifyRegularTimeScoreAuthorityV1 } from "./vira-picks-regular-time-authority.mjs";
 
 const nowIso = () => new Date().toISOString();
 const code = () => crypto.randomBytes(9).toString("base64url");
@@ -76,9 +77,9 @@ export class ViraPicksStore {
   }
   async voidFixture(fixtureId, reason, at = nowIso()) { return this.mutate((state) => { let count = 0; for (const card of Object.values(state.cards)) if (card.fixtureId === String(fixtureId) && !["resolved", "void"].includes(card.status)) { card.status = "void"; card.resolvedAt = at; card.results = card.selections.map((selection) => ({ selection, status: "void", resolvedAt: at, reason })); this.emit(state, "picks.voided", card, { reason }); count++; } return { voided: count }; }); }
   async resolveFixture(fixtureId, authority) {
-    if (authority?.status !== "final" || authority?.freshness !== "fresh" || authority?.authority !== "txline_game_finalised") return { awaitingAuthority: true, resolved: 0 };
-    const body = { schemaVersion: 1, fixtureId: String(fixtureId), status: "final", regularTimeScore: { home: authority.regularTimeScore?.home, away: authority.regularTimeScore?.away }, providerSequence: authority.providerSequence, observedAt: authority.observedAt, receivedAt: authority.receivedAt, acquisitionOrigin: authority.acquisitionOrigin };
-    const hash = canonicalHash(body); const snapshot = { ...body, id: `resolution_${hash.slice(0, 24)}`, canonicalHash: hash };
+    if (!verifyRegularTimeScoreAuthorityV1(authority, fixtureId, { now: this.clock() })) return { awaitingAuthority: true, resolved: 0 };
+    const body = Object.fromEntries(Object.entries(authority).filter(([name]) => !["id", "canonicalHash"].includes(name)));
+    const hash = authority.canonicalHash; const snapshot = authority;
     return this.mutate((state) => { state.resolutionSnapshots[hash] ??= snapshot; let count = 0; for (const card of Object.values(state.cards)) {
       if (card.fixtureId !== String(fixtureId) || ["resolved", "void"].includes(card.status)) continue;
       const resolvedAt = authority.observedAt; card.results = card.selections.map((selection) => { const result = resolveSelectionV1(selection, { homeScore: body.regularTimeScore.home, awayScore: body.regularTimeScore.away }); const item = { selection, status: result.status, resolvedAt, resolutionSnapshotRef: hash }; this.emit(state, "picks.selection_resolved", card, { kind: selection.kind, status: result.status, resolutionSnapshotRef: hash }); return item; });

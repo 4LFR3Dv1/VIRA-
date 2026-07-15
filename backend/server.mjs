@@ -13,6 +13,7 @@ import { createShareStore } from "./share-store.mjs";
 import { createViraPicksStore } from "./vira-picks-store.mjs";
 import { buildMarketSnapshotForSelection, buildPicksCatalog } from "./vira-picks-market.mjs";
 import { selectionFromCanonicalId } from "./vira-picks-contracts.mjs";
+import { deriveRegularTimeScoreAuthorityV1 } from "./vira-picks-regular-time-authority.mjs";
 import { createCompanionSubscriptionStore } from "./companion-subscription-store.mjs";
 import { createWebPushPublisherFromEnv } from "./web-push-publisher.mjs";
 import { createAttentionOrchestrator } from "./attention-orchestrator.mjs";
@@ -308,7 +309,11 @@ async function applyLatestScoreSnapshot(roomId, reason = "room-live-feed") {
 async function synchronizePicksFixtureLifecycle(fixture) {
   const status = String(fixture?.status ?? "unknown").toLowerCase();
   if (["cancelled", "canceled", "postponed", "abandoned"].includes(status)) return picksStore.voidFixture(fixture.fixtureId, status === "canceled" ? "cancelled" : status);
-  if (["live", "finished", "final"].includes(status) || (fixture?.startTime && Date.now() >= Date.parse(fixture.startTime))) return picksStore.lockFixture(fixture.fixtureId, new Date().toISOString());
+  if (["live", "finished", "final"].includes(status) || (fixture?.startTime && Date.now() >= Date.parse(fixture.startTime))) {
+    const locked = await picksStore.lockFixture(fixture.fixtureId, new Date().toISOString());
+    if (["finished", "final"].includes(status) && fixture?.context?.regularTimeScoreAuthority) return { ...locked, ...(await picksStore.resolveFixture(fixture.fixtureId, fixture.context.regularTimeScoreAuthority)) };
+    return locked;
+  }
   return { synchronized: false };
 }
 
@@ -565,7 +570,9 @@ async function handleRequest(request, response) {
         if (!picksEnabled) { sendJson(response, 404, { error: "picks_feature_disabled" }); return; }
         const fixtureId = picksScenarioRoute[1];
         if (picksScenarioRoute[2] === "lock") { sendJson(response, 200, await picksStore.lockFixture(fixtureId, new Date(Date.now() + 24 * 60 * 60_000).toISOString())); return; }
-        sendJson(response, 200, await picksStore.resolveFixture(fixtureId, { status: "final", freshness: "fresh", authority: "txline_game_finalised", regularTimeScore: { home: 2, away: 1 }, providerSequence: 9001, observedAt: new Date().toISOString(), receivedAt: new Date().toISOString(), acquisitionOrigin: "captured_txline_test_fixture" })); return;
+        const observedAt = new Date().toISOString();
+        const authority = deriveRegularTimeScoreAuthorityV1({ fixtureId, historyComplete: true, freshness: "fresh", receivedAt: observedAt, acquisitionOrigin: "captured_txline_test_fixture", records: [{ RevId: 9001, Ts: observedAt, Action: "status", Data: { StatusId: 5, Score: { AbsoluteScore: { Participant1: 2, Participant2: 1 } } } }] });
+        sendJson(response, 200, await picksStore.resolveFixture(fixtureId, authority)); return;
       }
       const scenarioRoute = url.pathname.match(/^\/__e2e\/scenario\/([a-z0-9-]{8,64})\/(start|resolve)$/);
       if (!scenarioRoute) { sendJson(response, 404, { error: "not_found" }); return; }
@@ -746,6 +753,7 @@ async function handleRequest(request, response) {
       const catalog = await txlineCatalogCache.get(); const fixture = catalog.matches.find((item) => String(item.fixtureId) === String(body.fixtureId));
       if (!fixture) throw Object.assign(new Error("fixture_not_found"), { status: 404 });
       const selections = (body.selectionIds ?? []).map(selectionFromCanonicalId);
+      if (selections.some((selection) => selection.kind === "both_teams_score")) throw Object.assign(new Error("picks_market_unavailable:provider_market_type_unverified"), { status: 409 });
       const snapshots = selections.map((selection) => {
         const result = buildMarketSnapshotForSelection({ fixture, context: fixture.context, selection, now: Date.now() });
         if (!result.available) { picksRejections.marketUnavailable += 1; throw Object.assign(new Error(`picks_market_unavailable:${result.reason}`), { status: 409 }); }
@@ -779,6 +787,7 @@ async function handleRequest(request, response) {
       if (!picksEnabled) throw Object.assign(new Error("picks_feature_disabled"), { status: 404 });
       const identity = shareStore.homePlayer(publicToken(request)); if (!identity) throw Object.assign(new Error("public_identity_required"), { status: 401 });
       const card = await picksStore.markShared(decodeURIComponent(picksShareRoute[1]), identity.publicId);
+      if (card.selections.some((selection) => selection.kind === "both_teams_score")) throw Object.assign(new Error("picks_selection_not_shareable"), { status: 409 });
       const catalog = await txlineCatalogCache.get(); const fixture = catalog.matches.find((item) => String(item.fixtureId) === card.fixtureId);
       if (!fixture) throw Object.assign(new Error("fixture_not_found"), { status: 404 });
       const resultCount = card.results?.filter((item) => item.status === "correct").length ?? 0; const isResult = card.status === "resolved" || card.status === "void";

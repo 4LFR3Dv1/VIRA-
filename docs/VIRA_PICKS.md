@@ -39,22 +39,15 @@ The dedicated store persists to `picks-v1.json` with a temporary file plus atomi
 
 The browser submits only the fixture ID, canonical selection IDs and an idempotency key. The authenticated public identity comes from the existing `X-Vira-Public-Token` contract. Market type, period, line, prices and probabilities are never accepted from browser input.
 
-The three product questions are fixed:
+The domain keeps three versioned resolvers, while only observed markets are exposed:
 
-| Kind | Canonical IDs | Resolver |
+| Kind | Canonical IDs | TxLINE exposure |
 | --- | --- | --- |
-| Regular-time result | `match_result:home`, `match_result:draw`, `match_result:away` | `resolveMatchResultV1` |
-| Regular-time total 2.5 | `total_goals:2.5:over`, `total_goals:2.5:under` | `resolveTotalGoalsV1` |
-| Both teams score | `both_teams_score:yes`, `both_teams_score:no` | `resolveBothTeamsScoreV1` |
+| Regular-time result | `match_result:home`, `match_result:draw`, `match_result:away` | Observed `1X2_PARTICIPANT_RESULT` |
+| Regular-time total 2.5 | `total_goals:2.5:over`, `total_goals:2.5:under` | Observed `OVERUNDER_PARTICIPANT_GOALS` with `marketPeriod === null`, literal `line=2.5`, exact `over/under` |
+| Both teams score | Resolver retained only | Not observed; absent from catalog, confirmation, consensus and share |
 
-Captured repository evidence proves the TxLINE provider identifier `1X2_PARTICIPANT_RESULT` for the first question. The repository does not currently contain captured TxLINE evidence for the provider identifiers of Total Goals 2.5 or Both Teams Score. Those mappings therefore fail closed by default. They may only be configured after checking real provider output:
-
-```dotenv
-VIRA_PICKS_TOTAL_GOALS_MARKET_TYPES=
-VIRA_PICKS_BTTS_MARKET_TYPES=
-```
-
-No similar market is substituted. Empty, stale, ambiguous, in-running, wrong-period, wrong-line or incomplete observations are unavailable. This limitation is intentional and means the current branch should remain disabled until the two identifiers are verified against real TxLINE responses.
+The frozen sanitized vector `overunder-2-5-observed-sanitized.mjs` records the exact provider signature and expected SHA-256. Parsing consumes the complete parameter string. Approximate lines, alternate representations, duplicate/unknown options, extra options, non-null periods and ambiguous observations fail closed. Provider aliases cannot be enabled through environment variables. BTTS remains unavailable until an equivalent real TxLINE observation is captured and reviewed.
 
 ## Authority and lock
 
@@ -66,7 +59,11 @@ No similar market is substituted. Empty, stale, ambiguous, in-running, wrong-per
 - Cancelled, postponed and abandoned fixtures void their cards without migration.
 - Unknown or stale final data remains pending.
 
-Resolution requires an explicit `txline_game_finalised` authority snapshot with a fresh, structured regular-time score. Total score is not assumed to be a regular-time score. Extra time and penalties are ignored by contract and tests.
+Resolution requires a hashed `RegularTimeScoreAuthorityV1`, separate from the terminal score. Status 5 uses its structured final score. Status 10 and 13 require fresh, complete structured history (`scores?Ts=0`) and recover the last score at or before the first post-regular-time status. If reconnect history is incomplete or no authoritative 90-minute score exists, the card remains unresolved. Extra-time and shootout totals never command Picks resolution.
+
+## Existing Consumer 1X2 audit
+
+The current Consumer prediction path resolves from `runtime.snapshot(...).match.homeScore/awayScore` after `match_end`; the runtime stores the absolute score carried by that terminal event. This is a credible post-extra-time risk, but the repository has no captured TxLINE status 10/13 vector proving that the terminal event score is cumulative in those paths. Following the protection gate, the existing runtime, ledger, `FixtureConsumerProjectionV1`, prediction resolution and ranking were not modified. A real sanitized extra-time or penalty history is required before proposing such a change.
 
 ## Persistence and privacy
 
@@ -102,8 +99,8 @@ The focused browser journey runs on Chromium desktop, Chromium mobile viewport a
 ## Known limits and merge recommendation
 
 - File persistence is single-writer.
-- Provider type mappings for Total Goals 2.5 and Both Teams Score are deliberately unverified and disabled by default.
-- Production resolution still needs a TxLINE projection that proves the final regular-time score separately from extra time and penalties.
+- Total Goals 2.5 is observed and strictly allowlisted; Both Teams Score remains unobserved and unavailable.
+- Production resolution still needs wiring from the complete TxLINE score-history endpoint into `RegularTimeScoreAuthorityV1`.
 - The isolated E2E uses a captured, fixed final authority through a guarded local-only E2E route.
 
-Recommendation: keep the branch unmerged and the flag off until real TxLINE captures verify the two missing market identifiers and the production regular-time final-score authority. The implemented V1 is suitable for review and post-hackathon evolution without risking the approved competitive core.
+Recommendation: keep the branch unmerged and both flags off until production can acquire and validate complete score history for regular-time authority. The implemented V1 remains isolated from the approved competitive core.

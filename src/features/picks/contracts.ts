@@ -48,6 +48,26 @@ export interface ViraMarketSnapshotV1 {
   readonly canonicalHash: string;
 }
 
+export interface RegularTimeScoreAuthorityV1 {
+  readonly schemaVersion: 1;
+  readonly id: string;
+  readonly authority: "txline_regular_time_score";
+  readonly fixtureId: string;
+  readonly status: "final";
+  readonly path: "finished_in_regular_time" | "historical_before_extra_time" | "historical_before_penalties";
+  readonly regularTimeScore: { readonly home: number; readonly away: number };
+  readonly terminalStatusId: 5 | 10 | 13;
+  readonly scoreEventSequence: number;
+  readonly boundaryEventSequence: number;
+  readonly providerSequence: number;
+  readonly observedAt: string;
+  readonly receivedAt: string;
+  readonly acquisitionOrigin: string;
+  readonly freshness: "fresh";
+  readonly historyComplete: true;
+  readonly canonicalHash: string;
+}
+
 export type ViraPicksCatalogQuestionV1 = {
   readonly kind: ViraPickSelectionV1["kind"];
   readonly available: boolean;
