@@ -100,7 +100,7 @@ The focused browser journey runs on Chromium desktop, Chromium mobile viewport a
 
 - File persistence is single-writer.
 - Total Goals 2.5 is observed and strictly allowlisted; Both Teams Score remains unobserved and unavailable.
-- Production resolution still needs wiring from the complete TxLINE score-history endpoint into `RegularTimeScoreAuthorityV1`.
+- Production resolution is wired to the TxLINE historical-score projection, but remains dependent on that endpoint returning a complete structured boundary record; otherwise it deliberately stays pending.
 - The isolated E2E uses a captured, fixed final authority through a guarded local-only E2E route.
 
 Recommendation: keep the branch unmerged and both flags off until production can acquire and validate complete score history for regular-time authority. The implemented V1 remains isolated from the approved competitive core.
