@@ -3,6 +3,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState, t
 import { formatDateTime, formatNumber, formatPercent, resolveBrowserTimeZone, type ZonedDateTimeFormatOptions } from "./formatters.ts";
 import { applyBrowserLocale, applyDocumentLocale, localeFromSearch, resolveBrowserLocale, type SupportedLocale } from "./locale.ts";
 import { translate, type TranslateFunction } from "./translate.ts";
+import { teamDisplayName } from "./team-display-name.ts";
 
 export type LocaleContextValue = {
   locale: SupportedLocale;
@@ -13,6 +14,7 @@ export type LocaleContextValue = {
   formatNumber: (value: number, options?: Intl.NumberFormatOptions) => string;
   formatPercent: (value: number, options?: Intl.NumberFormatOptions) => string;
   formatDateTime: (value: string | Date, options: ZonedDateTimeFormatOptions) => string;
+  teamName: (providerName: string) => string;
 };
 
 const LocaleContext = createContext<LocaleContextValue | null>(null);
@@ -49,6 +51,7 @@ export function LocaleProvider({ children }: { children: ReactNode }) {
     formatNumber: (number, options) => formatNumber(locale, number, options),
     formatPercent: (number, options) => formatPercent(locale, number, options),
     formatDateTime: (date, options) => formatDateTime(locale, date, options),
+    teamName: (providerName) => teamDisplayName(providerName, locale),
   }), [locale, setLocale, timeZone]);
 
   return <LocaleContext.Provider value={value}>{children}</LocaleContext.Provider>;

@@ -33,7 +33,7 @@ export interface ViraExperienceModel {
   verification: { status: "pending" | "verified" | "failed" };
 }
 
-export function createExperienceModel(state: ReplayState, event: PresentationEvent | null, verification: RoomVerification | null, t: TranslateFunction): ViraExperienceModel {
+export function createExperienceModel(state: ReplayState, event: PresentationEvent | null, verification: RoomVerification | null, t: TranslateFunction, displayTeamName: (name: string) => string = (name) => name): ViraExperienceModel {
   const snapshot = state.snapshot;
   const round = snapshot.currentRound;
   const predicate = round?.resolution.predicate ?? {};
@@ -75,7 +75,7 @@ export function createExperienceModel(state: ReplayState, event: PresentationEve
     round: round ? {
       id: round.id,
       number: round.sequence,
-      question: roundQuestion(t, round, snapshot.match),
+      question: roundQuestion(t, round, snapshot.match, displayTeamName),
       status: round.state,
       options: round.options.map((option) => ({ id: option.id, ...roundOptionCopy(t, round, option) })),
     } : null,

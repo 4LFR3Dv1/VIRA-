@@ -89,10 +89,10 @@ const copy = {
 type PlaybackData = Awaited<ReturnType<typeof fetchPublicPlayback>> & { replay: VerifiedRoundReplayV1 };
 
 export function GuidedPlaybackScreen() {
-  const { locale, localizedHref, timeZone } = useLocale();
+  const { locale, localizedHref, timeZone, teamName } = useLocale();
   const strings = copy[locale];
-  const homeTeam = locale === "en" ? "France" : "França";
-  const awayTeam = locale === "en" ? "Spain" : "Espanha";
+  const homeTeam = teamName("France");
+  const awayTeam = teamName("Spain");
   const navigate = useNavigate();
   const [data, setData] = useState<PlaybackData | null>(null);
   const [events, setEvents] = useState<PublicDomainEvent[]>([]);

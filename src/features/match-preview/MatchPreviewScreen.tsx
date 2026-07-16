@@ -82,13 +82,14 @@ function strongestMarketValue(market: TxlineAvailableMarket) {
 }
 
 function TeamHeading({ name, side }: { name: string; side: "home" | "away" }) {
+  const { teamName } = useLocale();
   return (
     <div className={`min-w-0 ${side === "away" ? "text-right" : "text-left"}`}>
       <div className={`mb-4 flex ${side === "away" ? "justify-end" : "justify-start"}`}>
         <TeamIcon name={name} side={side} size="lg" />
       </div>
       <p style={{ viewTransitionName: side === "home" ? "home-team" : "away-team" } as CSSProperties} className="break-words font-['Chakra_Petch'] text-[clamp(1.75rem,4.8vw,4.75rem)] font-black uppercase leading-[.88] text-white">
-        {name}
+        {teamName(name)}
       </p>
     </div>
   );
@@ -145,7 +146,7 @@ function archivedJourneyMatch(item: TournamentJourneyFixture | undefined): Match
 }
 
 function FinishedMatchPreview({ match, context }: { match: MatchCatalogEntry; context: MatchTxlineContext | null }) {
-  const { locale, localizedHref, t } = useLocale();
+  const { locale, localizedHref, t, teamName } = useLocale();
   const score = context?.fixtureState?.score ?? {
     home: Number.isFinite(Number(match.homeScore)) ? Number(match.homeScore) : null,
     away: Number.isFinite(Number(match.awayScore)) ? Number(match.awayScore) : null,
@@ -158,7 +159,7 @@ function FinishedMatchPreview({ match, context }: { match: MatchCatalogEntry; co
       <div aria-hidden className="absolute inset-0 -z-10 bg-[url('/textures/vira-carbon.webp')] bg-[length:640px_640px] opacity-[.09] mix-blend-screen" />
       <div className="mx-auto max-w-[1440px] px-5 py-12 sm:px-8 lg:px-14 lg:py-20">
         <div className="flex items-center gap-3 text-primary"><Trophy className="size-5" /><p className="font-['DM_Mono'] text-[10px] font-black uppercase tracking-[.18em]">{t("postMatch.eyebrow")}</p></div>
-        <h1 className="mt-7 max-w-5xl font-['Chakra_Petch'] text-[clamp(2.8rem,7vw,7rem)] font-black uppercase leading-[.78]">{t("fixture.headline.matchFinished", { homeTeam: match.homeTeam, awayTeam: match.awayTeam })}</h1>
+        <h1 className="mt-7 max-w-5xl font-['Chakra_Petch'] text-[clamp(2.8rem,7vw,7rem)] font-black uppercase leading-[.78]">{t("fixture.headline.matchFinished", { homeTeam: teamName(match.homeTeam), awayTeam: teamName(match.awayTeam) })}</h1>
         <p className="mt-7 max-w-2xl text-sm leading-6 text-white/50 md:text-base">{t("preview.finished.description")}</p>
 
         <div className="mt-12 grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-end gap-4 border-y border-white/15 py-8 sm:gap-8">
@@ -180,7 +181,7 @@ export function MatchPreviewScreen() {
   const { matchId = "" } = useParams();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const { locale, t, formatDateTime, formatPercent, localizedHref } = useLocale();
+  const { locale, t, formatDateTime, formatPercent, localizedHref, teamName } = useLocale();
   const [matches, setMatches] = useState<MatchCatalogEntry[]>([]);
   const [loadState, setLoadState] = useState<"loading" | "ready" | "error">("loading");
   const [contextState, setContextState] = useState<ContextState>("idle");
@@ -248,7 +249,7 @@ export function MatchPreviewScreen() {
   }, [context?.availableMarkets, prediction?.marketSignature]);
 
   const leadingChoice = projection?.market.canonical1X2?.leadingChoice ?? null;
-  const leadingLabel = leadingChoice === "home" ? match?.homeTeam : leadingChoice === "away" ? match?.awayTeam : leadingChoice === "draw" ? t("lobby.draw") : null;
+  const leadingLabel = leadingChoice === "home" ? teamName(match?.homeTeam ?? "") : leadingChoice === "away" ? teamName(match?.awayTeam ?? "") : leadingChoice === "draw" ? t("lobby.draw") : null;
   const formatPercentage = (value: number) => formatPercent(value <= 1 ? value : value / 100, { minimumFractionDigits: 1, maximumFractionDigits: 1 });
   const currentSignal = probability && leadingChoice && leadingLabel
     ? projection?.availability.canMakeDirectionalClaim
@@ -299,9 +300,9 @@ export function MatchPreviewScreen() {
   }
 
   const outcomes = probability ? [
-    { id: "home", label: match.homeTeam, value: probability.home, active: prediction?.priceName === "part1" },
+    { id: "home", label: teamName(match.homeTeam), value: probability.home, active: prediction?.priceName === "part1" },
     { id: "draw", label: t("lobby.draw"), value: probability.draw, active: prediction?.priceName === "draw" },
-    { id: "away", label: match.awayTeam, value: probability.away, active: prediction?.priceName === "part2" },
+    { id: "away", label: teamName(match.awayTeam), value: probability.away, active: prediction?.priceName === "part2" },
   ] : [];
 
   return (
@@ -349,8 +350,8 @@ export function MatchPreviewScreen() {
             <p className="mt-6 max-w-3xl text-base leading-7 text-white/55">{t("preview.challenges.description")}</p>
 
             <p className="mt-10 font-['DM_Mono'] text-[9px] font-black uppercase tracking-[.16em] text-white/35">{t("preview.challenges.examples")}</p><div className="mt-3 grid gap-px bg-white/15 sm:grid-cols-3">
-              <FootballPrompt label={t("preview.prompt.goalLabel")} prompt={t("preview.prompt.teamScores", { team: match.homeTeam, minutes: 10 })} />
-              <FootballPrompt label={t("preview.prompt.shotLabel")} prompt={t("preview.prompt.teamShot", { team: match.awayTeam, minutes: 5 })} />
+              <FootballPrompt label={t("preview.prompt.goalLabel")} prompt={t("preview.prompt.teamScores", { team: teamName(match.homeTeam), minutes: 10 })} />
+              <FootballPrompt label={t("preview.prompt.shotLabel")} prompt={t("preview.prompt.teamShot", { team: teamName(match.awayTeam), minutes: 5 })} />
               <FootballPrompt label={t("preview.prompt.momentLabel")} prompt={t("preview.prompt.goalBeforePeriodEnd")} />
             </div>
 
@@ -362,7 +363,7 @@ export function MatchPreviewScreen() {
 
           <aside className="self-start border border-primary/35 bg-primary/[.055] p-6 lg:sticky lg:top-24">
             <div className="flex items-center justify-between text-primary"><p className="font-['DM_Mono'] text-[10px] font-black uppercase">{t(roomStateKeys[canonical.room])}</p><Zap className="size-4" /></div>
-            <h3 className="mt-5 font-['Chakra_Petch'] text-3xl font-black uppercase leading-[.9]">{t("preview.enterFixture", { homeTeam: match.homeTeam, awayTeam: match.awayTeam })}</h3>
+            <h3 className="mt-5 font-['Chakra_Petch'] text-3xl font-black uppercase leading-[.9]">{t("preview.enterFixture", { homeTeam: teamName(match.homeTeam), awayTeam: teamName(match.awayTeam) })}</h3>
             <dl className="mt-8 divide-y divide-white/15 border-y border-white/15 text-sm">
               {[[t("preview.participants"), t("preview.realPeople")], [t("preview.answer"), t("preview.onePerMoment")], [t("preview.resolution"), t("preview.officialFacts")]].map(([label, value]) => <div key={label} className="flex justify-between gap-4 py-4"><dt className="text-white/40">{label}</dt><dd className="text-right font-semibold">{value}</dd></div>)}
             </dl>
@@ -413,7 +414,7 @@ export function MatchPreviewScreen() {
         </div>
       </main>
 
-      <JoinRoomDialog open={joinDialogOpen} subtitle={`${match.homeTeam} × ${match.awayTeam}`} name={playerName} onChangeName={setPlayerName} onClose={() => setJoinDialogOpen(false)} onConfirm={confirmOpenRoom} />
+      <JoinRoomDialog open={joinDialogOpen} subtitle={`${teamName(match.homeTeam)} × ${teamName(match.awayTeam)}`} name={playerName} onChangeName={setPlayerName} onClose={() => setJoinDialogOpen(false)} onConfirm={confirmOpenRoom} />
     </AppShell>
   );
 }

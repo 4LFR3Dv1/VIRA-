@@ -83,8 +83,9 @@ function PlaybackSection({ state, data, onRetry }: { state: "loading" | "ready" 
 }
 
 function VerifiedPlayback({ data, formatDateTime, formatPercent }: { data: Playback; formatDateTime: ReturnType<typeof useLocale>["formatDateTime"]; formatPercent: ReturnType<typeof useLocale>["formatPercent"] }) {
-  const { locale, localizedHref, t, timeZone } = useLocale(); const strings = copy[locale];
-  const { replay, verification, room } = data as Required<Pick<Playback, "replay" | "verification" | "room">> & Playback;
+  const { locale, localizedHref, t, timeZone, teamName } = useLocale(); const strings = copy[locale];
+  const { replay, verification, room: authoritativeRoom } = data as Required<Pick<Playback, "replay" | "verification" | "room">> & Playback;
+  const room = { ...authoritativeRoom, match: { ...authoritativeRoom.match, homeTeam: { ...authoritativeRoom.match.homeTeam, name: teamName(authoritativeRoom.match.homeTeam.name) }, awayTeam: { ...authoritativeRoom.match.awayTeam, name: teamName(authoritativeRoom.match.awayTeam.name) } } };
   const verified = verification.status === "verified" && replay.proof.hashChainValid && replay.proof.projectionMatches && replay.proof.rankingMatches && replay.proof.authorityValid && replay.proof.determinismValid;
   const result = `${stableOptionLabel(t, replay.resolution.winningOptionId)} · ${t("review.pointsApplied", { points: replay.scoring.totalPointsApplied })}`;
   const conclusions = deriveReviewConclusions(t, replay);

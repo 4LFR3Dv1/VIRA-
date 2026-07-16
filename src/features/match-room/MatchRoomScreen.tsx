@@ -36,7 +36,7 @@ import { VisualCompanionFeature } from "../companion/VisualCompanionFeature.tsx"
 import { VIRA_VISUAL_COMPANION_ENABLED } from "../companion/feature-flags.ts";
 
 export function MatchRoomScreen() {
-  const { locale, localizedHref, t, timeZone } = useLocale();
+  const { locale, localizedHref, t, timeZone, teamName } = useLocale();
   const { matchId = DEFAULT_MATCH_ID } = useParams();
   const [searchParams, setSearchParams] = useSearchParams();
   const inspect = searchParams.get("inspect") === "true";
@@ -91,7 +91,7 @@ export function MatchRoomScreen() {
     }
     return state.snapshot.answerSummary?.byOption ?? {};
   }, [currentRound, state.snapshot.answerSummary]);
-  const experienceModel = useMemo(() => createExperienceModel(state, latestPresentationEvent, verification, t), [latestPresentationEvent, state, t, verification]);
+  const experienceModel = useMemo(() => createExperienceModel(state, latestPresentationEvent, verification, t, teamName), [latestPresentationEvent, state, t, teamName, verification]);
 
   useEffect(() => {
     setShellOverlayState("match-inspector", inspect);

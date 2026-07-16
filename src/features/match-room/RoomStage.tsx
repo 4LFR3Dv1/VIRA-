@@ -43,12 +43,12 @@ export function RoomStage({ state, model, answerSummary, latestPresentationEvent
 }
 
 function PreparingRoundStage({ state, kind, context }: { state: ReplayState; kind: "market" | "round"; context: MatchTxlineContext | null }) {
-  const { formatNumber, t } = useLocale();
+  const { formatNumber, t, teamName } = useLocale();
   const reduceMotion = useReducedMotion();
   const connected = state.snapshot.connectionState === "live";
   const receivedSignals = state.snapshot.timeline.length;
   const projectedMarket = context?.consumerProjection?.availability.canShowMarket ? context.consumerProjection.market.canonical1X2 : null;
-  const watch = projectedMarket ? { priceLabel: projectedMarket.leadingChoice === "home" ? context?.fixture.homeTeam : projectedMarket.leadingChoice === "away" ? context?.fixture.awayTeam : t("lobby.draw"), pct: projectedMarket.selections[projectedMarket.leadingChoice], directional: context?.consumerProjection?.availability.canMakeDirectionalClaim === true } : null;
+  const watch = projectedMarket ? { priceLabel: projectedMarket.leadingChoice === "home" ? teamName(context?.fixture.homeTeam ?? "") : projectedMarket.leadingChoice === "away" ? teamName(context?.fixture.awayTeam ?? "") : t("lobby.draw"), pct: projectedMarket.selections[projectedMarket.leadingChoice], directional: context?.consumerProjection?.availability.canMakeDirectionalClaim === true } : null;
 
   return (
     <motion.section layout className="relative min-h-[31rem] overflow-hidden border-y border-white/15 bg-[#090d18]">
@@ -113,13 +113,13 @@ function OperationalStage({ state, kind, context = null, onFanPulse }: { state: 
 }
 
 function PreMatchMarketWatch({ state, context, participantCount, onFanPulse }: { state: ReplayState; context: MatchTxlineContext | null; participantCount: number; onFanPulse?: (side: "home" | "away") => Promise<void> }) {
-  const { locale, t } = useLocale();
+  const { locale, t, teamName } = useLocale();
   const [submitting, setSubmitting] = useState<"home" | "away" | null>(null);
   const [pulseError, setPulseError] = useState(false);
   const probability = context?.consumerProjection?.availability.canShowMarket ? context.consumerProjection.market.canonical1X2?.selections ?? null : null;
   const markets = context?.marketTaxonomy?.observed ?? context?.availableMarkets.length ?? 0;
-  const homeName = context?.fixture.homeTeam ?? state.snapshot.match.homeTeam.name;
-  const awayName = context?.fixture.awayTeam ?? state.snapshot.match.awayTeam.name;
+  const homeName = teamName(context?.fixture.homeTeam ?? state.snapshot.match.homeTeam.name);
+  const awayName = teamName(context?.fixture.awayTeam ?? state.snapshot.match.awayTeam.name);
   const pulse = state.snapshot.fanPulse ?? { total: 0, byTeam: { home: 0, away: 0 }, currentParticipantChoice: null };
   const homeShare = pulse.total ? Math.round((pulse.byTeam.home / pulse.total) * 100) : 50;
   const awayShare = pulse.total ? 100 - homeShare : 50;
@@ -190,7 +190,7 @@ function StatusMetric({ label, active = true }: { label: string; active?: boolea
 }
 
 function WaitingSignalStage({ state, latestPresentationEvent }: { state: ReplayState; latestPresentationEvent: PresentationEvent | null }) {
-  const { locale, t } = useLocale();
+  const { locale, t, teamName } = useLocale();
   const round = state.snapshot.currentRound;
   if (!round) return null;
   const participant = state.snapshot.currentParticipant;
@@ -216,7 +216,7 @@ function WaitingSignalStage({ state, latestPresentationEvent }: { state: ReplayS
       <motion.section layout className="overflow-hidden border-y border-white/15 bg-[#090d18] px-5 py-10 md:px-8 md:py-14">
         <div className="flex items-center gap-2 font-['DM_Mono'] text-[10px] font-black uppercase tracking-[.18em] text-primary"><Check className="size-4" /> {answersClosed ? t("round.answerInPlay") : t("round.answerConfirmed")}</div>
         <div className="mt-7 grid gap-10 lg:grid-cols-[1fr_.72fr] lg:items-end">
-          <div><h1 className="font-['Chakra_Petch'] text-[clamp(2.8rem,6vw,6.3rem)] font-black uppercase leading-[.8]">{shotOnTarget ? t("round.teamMustShoot", { team: targetTeam.name }) : t("round.teamMustScore", { team: targetTeam.name })}</h1><p className="mt-7 text-sm text-white/50">{answersClosed ? t("round.yourAnswer", { answer: answerLabel }) : t("round.answerPrivateUntilLock")}</p><div className="mt-6 border-l-2 border-primary pl-4"><p className="font-['DM_Mono'] text-[9px] uppercase text-white/35">{answersClosed ? t("round.predictionHorizon") : t("round.answerWindow")}</p><strong className="mt-1 block font-['Chakra_Petch'] text-2xl font-black uppercase">{answersClosed && football.endsAtClockSec !== undefined ? t("round.untilClock", { clock: formatClock(football.endsAtClockSec) }) : t("round.closesIn", { count: remainingSec })}</strong><p className="mt-1 text-xs text-white/40">{answersClosed ? shotOnTarget ? t("round.shotResolutionClosed") : t("round.goalResolutionClosed") : t("round.windowStarts", { minutes: Math.max(1, Math.round(football.durationSec / 60)) })}</p></div></div>
+          <div><h1 className="font-['Chakra_Petch'] text-[clamp(2.8rem,6vw,6.3rem)] font-black uppercase leading-[.8]">{shotOnTarget ? t("round.teamMustShoot", { team: teamName(targetTeam.name) }) : t("round.teamMustScore", { team: teamName(targetTeam.name) })}</h1><p className="mt-7 text-sm text-white/50">{answersClosed ? t("round.yourAnswer", { answer: answerLabel }) : t("round.answerPrivateUntilLock")}</p><div className="mt-6 border-l-2 border-primary pl-4"><p className="font-['DM_Mono'] text-[9px] uppercase text-white/35">{answersClosed ? t("round.predictionHorizon") : t("round.answerWindow")}</p><strong className="mt-1 block font-['Chakra_Petch'] text-2xl font-black uppercase">{answersClosed && football.endsAtClockSec !== undefined ? t("round.untilClock", { clock: formatClock(football.endsAtClockSec) }) : t("round.closesIn", { count: remainingSec })}</strong><p className="mt-1 text-xs text-white/40">{answersClosed ? shotOnTarget ? t("round.shotResolutionClosed") : t("round.goalResolutionClosed") : t("round.windowStarts", { minutes: Math.max(1, Math.round(football.durationSec / 60)) })}</p></div></div>
           <div className="border-l border-white/15 pl-6"><p className="font-['DM_Mono'] text-[10px] uppercase text-white/35">{t("round.officialTracking")}</p><div className="mt-5 grid grid-cols-2 gap-5"><div><p className="font-['DM_Mono'] text-[9px] uppercase text-white/35">{shotOnTarget ? t("round.shotsAtOpening") : t("round.scoreAtOpening")}</p><strong className="mt-2 block font-['Chakra_Petch'] text-4xl font-black">{openingScore}</strong></div><div><p className="font-['DM_Mono'] text-[9px] uppercase text-white/35">{shotOnTarget ? t("round.shotsNow") : t("round.scoreNow")}</p><strong className="mt-2 block font-['Chakra_Petch'] text-4xl font-black text-primary">{shotOnTarget ? targetStats?.shotsOnTarget ?? 0 : `${state.snapshot.match.homeScore}-${state.snapshot.match.awayScore}`}</strong></div></div><div className="mt-7 h-1 overflow-hidden bg-white/10"><motion.div className="h-full bg-primary" animate={{ width: `${football.startsAtClockSec !== undefined && football.endsAtClockSec !== undefined ? Math.max(0, Math.min(100, ((state.snapshot.match.matchClockSec - football.startsAtClockSec) / (football.endsAtClockSec - football.startsAtClockSec)) * 100)) : 0}%` }} /></div><p className="mt-4 font-['DM_Mono'] text-[9px] uppercase text-white/35">{t("round.nowAndLimit", { now: formatClock(state.snapshot.match.matchClockSec), limit: football.endsAtClockSec !== undefined ? formatClock(football.endsAtClockSec) : t("round.afterLock") })}</p>{football.endsAtClockSec !== undefined && state.snapshot.match.matchClockSec >= football.endsAtClockSec ? <p className="mt-2 text-xs text-primary">{t("round.windowExpiredWaiting")}</p> : null}</div>
         </div>
       </motion.section>

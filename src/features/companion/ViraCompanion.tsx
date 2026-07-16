@@ -47,13 +47,13 @@ function clock(value: number) {
 
 function ViraCompanionComponent({ model, enabled, onFollow, onUnfollow, onReturnToRoom, onOpenFloating, floatingAvailable = false, mode = "in_app", pushState, enabledPushTypes = [], onEnableAlerts, onDisableAlerts, onToggleAlertType, onClose, remainingMs = null }: ViraCompanionProps) {
   (globalThis as typeof globalThis & { __VIRA_COMPANION_RENDER_PROBE__?: (mode: string) => void }).__VIRA_COMPANION_RENDER_PROBE__?.(mode);
-  const { t } = useLocale();
+  const { t, teamName } = useLocale();
   const reduceMotion = useReducedMotion();
   const isUrgent = model.state === "round_open" || model.state === "answer_confirmed";
   const roundPrompt = model.roundKind === "team_scores" && model.targetTeam && model.durationMinutes
-    ? t("round.question.teamScores", { team: model.targetTeam, minutes: model.durationMinutes })
+    ? t("round.question.teamScores", { team: teamName(model.targetTeam), minutes: model.durationMinutes })
     : model.roundKind === "team_shot_on_target" && model.targetTeam && model.durationMinutes
-      ? t("round.question.teamShotOnTarget", { team: model.targetTeam, minutes: model.durationMinutes })
+      ? t("round.question.teamShotOnTarget", { team: teamName(model.targetTeam), minutes: model.durationMinutes })
       : t("round.question.marketTarget");
 
   if (!enabled) {
@@ -88,7 +88,7 @@ function ViraCompanionComponent({ model, enabled, onFollow, onUnfollow, onReturn
       <div className="flex items-center justify-between gap-3 pl-2">
         <div className="flex min-w-0 items-center gap-3">
           <img src="/vira-symbol.png" alt="" className="size-8 object-contain" />
-          <div className="min-w-0"><p className="font-['Chakra_Petch'] text-sm font-black uppercase">{t("companion.title")}</p><p className="truncate font-['DM_Mono'] text-[9px] uppercase tracking-[.14em] text-white/45">{model.homeTeam} × {model.awayTeam}</p></div>
+          <div className="min-w-0"><p className="font-['Chakra_Petch'] text-sm font-black uppercase">{t("companion.title")}</p><p className="truncate font-['DM_Mono'] text-[9px] uppercase tracking-[.14em] text-white/45">{teamName(model.homeTeam)} × {teamName(model.awayTeam)}</p></div>
         </div>
         <button type="button" onClick={onUnfollow} className="grid size-9 place-items-center text-white/45 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary" aria-label={t("companion.unfollow")}><X className="size-4" /></button>
       </div>
@@ -128,10 +128,10 @@ function sameProps(left: ViraCompanionProps, right: ViraCompanionProps) {
 export const ViraCompanion = memo(ViraCompanionComponent, sameProps);
 
 function PipCompanion({ model, remainingMs, roundPrompt, onClose, onReturnToRoom }: { model: ViraCompanionViewModel; remainingMs: number | null; roundPrompt: string; onClose?: () => void; onReturnToRoom?: () => void }) {
-  const { t } = useLocale();
+  const { t, teamName } = useLocale();
   const urgent = model.state === "round_open" || model.state === "answer_confirmed";
   return <section className="vira-pip" aria-label={t("companion.title")} aria-live="polite" data-companion-state={model.state}>
-    <header className="vira-pip__header"><div className="vira-pip__brand"><img src="/vira-symbol.png" alt="" /><div><p className="vira-pip__title">{t("companion.title")}</p><p className="vira-pip__fixture">{model.homeTeam} × {model.awayTeam}</p></div></div>{onClose ? <button type="button" className="vira-pip__close" onClick={onClose} aria-label={t("common.close")}>×</button> : null}</header>
+    <header className="vira-pip__header"><div className="vira-pip__brand"><img src="/vira-symbol.png" alt="" /><div><p className="vira-pip__title">{t("companion.title")}</p><p className="vira-pip__fixture">{teamName(model.homeTeam)} × {teamName(model.awayTeam)}</p></div></div>{onClose ? <button type="button" className="vira-pip__close" onClick={onClose} aria-label={t("common.close")}>×</button> : null}</header>
     <div className="vira-pip__body"><p className="vira-pip__state">{t(stateKeys[model.state])}</p><div className="vira-pip__score"><strong className="vira-pip__score-value">{model.homeScore} : {model.awayScore}</strong>{urgent && remainingMs !== null ? <div><p className="vira-pip__label">{t("companion.closesIn")}</p><div className="vira-pip__countdown">{clock(remainingMs)}</div></div> : null}</div>
       {(model.state === "round_open" || model.state === "answer_confirmed" || model.state === "locked") ? <p className="vira-pip__prompt">{roundPrompt}</p> : null}
       {model.state === "answer_confirmed" ? <p className="vira-pip__notice">{t("companion.privateUntilLock")}</p> : null}

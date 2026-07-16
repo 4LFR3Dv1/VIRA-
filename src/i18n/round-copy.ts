@@ -9,10 +9,10 @@ function durationMinutes(round: PredictionRound) {
   return Math.max(1, Math.round((round.resolution.condition?.durationSec ?? 600) / 60));
 }
 
-export function roundQuestion(t: TranslateFunction, round: PredictionRound, match: Match): string {
+export function roundQuestion(t: TranslateFunction, round: PredictionRound, match: Match, displayTeamName: (name: string) => string = (name) => name): string {
   const condition = round.resolution.domain === "football" ? round.resolution.condition : null;
-  if (condition?.kind === "team_scores") return t("round.question.teamScores", { team: targetTeam(round, match), minutes: durationMinutes(round) });
-  if (condition?.kind === "team_shot_on_target") return t("round.question.teamShotOnTarget", { team: targetTeam(round, match), minutes: durationMinutes(round) });
+  if (condition?.kind === "team_scores") return t("round.question.teamScores", { team: displayTeamName(targetTeam(round, match)), minutes: durationMinutes(round) });
+  if (condition?.kind === "team_shot_on_target") return t("round.question.teamShotOnTarget", { team: displayTeamName(targetTeam(round, match)), minutes: durationMinutes(round) });
   return t("round.question.marketTarget");
 }
 

@@ -89,10 +89,10 @@ function ConnectionRestoredNotice({ open }: { open: boolean }) {
 }
 
 function RoomTransitionTakeover({ room }: { room: ShellActiveRoom | null }) {
-  const { t } = useLocale();
+  const { t, teamName } = useLocale();
   return <AnimatePresence>{room ? <motion.div className="fixed inset-0 z-[105] grid place-items-center overflow-hidden bg-[#050814] px-5" initial={{ clipPath: "inset(100% 0 0 0)" }} animate={{ clipPath: "inset(0% 0 0 0)" }} exit={{ opacity: 0 }} transition={{ duration: .4, ease: [.76, 0, .24, 1] }}>
     <div aria-hidden className="absolute inset-0 opacity-25 [background-image:linear-gradient(rgba(255,255,255,.05)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,.04)_1px,transparent_1px)] [background-size:100%_90px,140px_100%]" />
-    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: .14, duration: .24 }} className="relative text-center"><h2 className="font-['Chakra_Petch'] text-[clamp(2.8rem,8vw,7rem)] font-black uppercase leading-[.8]">{room.homeTeam}<span className="mx-3 text-primary">x</span>{room.awayTeam}</h2><p className="mt-7 font-['DM_Mono'] text-[10px] uppercase tracking-[.14em] text-white/40">{t("shell.returningToRoom")}</p></motion.div>
+    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: .14, duration: .24 }} className="relative text-center"><h2 className="font-['Chakra_Petch'] text-[clamp(2.8rem,8vw,7rem)] font-black uppercase leading-[.8]">{teamName(room.homeTeam)}<span className="mx-3 text-primary">x</span>{teamName(room.awayTeam)}</h2><p className="mt-7 font-['DM_Mono'] text-[10px] uppercase tracking-[.14em] text-white/40">{t("shell.returningToRoom")}</p></motion.div>
   </motion.div> : null}</AnimatePresence>;
 }
 
@@ -141,7 +141,7 @@ function RouteTransitionFrame() {
 
 function ActiveRoomContinuity({ onEnterRoom }: { onEnterRoom: (room: ShellActiveRoom) => void }) {
   const { activeRoom, mode } = useShellExperience();
-  const { t, localizedHref } = useLocale();
+  const { t, localizedHref, teamName } = useLocale();
   const [enteringRoom, setEnteringRoom] = useState(false);
   if (activeRoom.kind !== "confirmed" || mode === "immersive") return null;
   const room = activeRoom.room;
@@ -153,7 +153,7 @@ function ActiveRoomContinuity({ onEnterRoom }: { onEnterRoom: (room: ShellActive
   };
   return <>
     <motion.aside aria-busy={enteringRoom} initial={{ opacity: 0, y: 24 }} animate={{ opacity: enteringRoom ? 0 : 1, y: enteringRoom ? 10 : 0 }} transition={{ duration: .2 }} className="fixed left-1/2 z-50 w-[min(580px,calc(100%-24px))] -translate-x-1/2 border border-primary/35 bg-[#07100b]/95 backdrop-blur-xl bottom-[calc(var(--shell-mobile-dock-height)+env(safe-area-inset-bottom)+12px)] lg:bottom-6 lg:left-auto lg:right-[max(24px,calc((100vw-1380px)/2))] lg:w-[510px] lg:translate-x-0">
-      <Link to={localizedHref(`/match/${room.roomId}`)} onClick={enter} className="grid grid-cols-[auto_1fr_auto] items-center gap-4 p-4"><span className="relative grid size-11 place-items-center border border-primary/25"><motion.span animate={room.phase === "action_required" || room.phase === "answer_confirmed" ? { opacity: [.2, .8, .2], scale: [.7, 1.2, .7] } : undefined} transition={{ duration: 1.8, repeat: Infinity }} className="absolute size-7 border border-primary" /><span className="size-2 bg-primary" /></span><div className="min-w-0"><p className="truncate font-['DM_Mono'] text-[9px] font-black uppercase tracking-[.16em] text-primary">{t(`shell.roomPhase.${room.phase === "action_required" ? "actionRequired" : room.phase === "answer_confirmed" ? "answerConfirmed" : room.phase === "result_available" ? "resultAvailable" : room.phase}` as StaticTranslationKey)}</p><p className="mt-1 truncate text-sm font-black uppercase">{room.homeTeam} x {room.awayTeam}</p>{room.answerConfirmed ? <p className="mt-1 text-[9px] uppercase tracking-[.12em] text-white/40">{t("shell.answerConfirmed")}</p> : null}</div><span aria-hidden>-&gt;</span></Link>
+      <Link to={localizedHref(`/match/${room.roomId}`)} onClick={enter} className="grid grid-cols-[auto_1fr_auto] items-center gap-4 p-4"><span className="relative grid size-11 place-items-center border border-primary/25"><motion.span animate={room.phase === "action_required" || room.phase === "answer_confirmed" ? { opacity: [.2, .8, .2], scale: [.7, 1.2, .7] } : undefined} transition={{ duration: 1.8, repeat: Infinity }} className="absolute size-7 border border-primary" /><span className="size-2 bg-primary" /></span><div className="min-w-0"><p className="truncate font-['DM_Mono'] text-[9px] font-black uppercase tracking-[.16em] text-primary">{t(`shell.roomPhase.${room.phase === "action_required" ? "actionRequired" : room.phase === "answer_confirmed" ? "answerConfirmed" : room.phase === "result_available" ? "resultAvailable" : room.phase}` as StaticTranslationKey)}</p><p className="mt-1 truncate text-sm font-black uppercase">{teamName(room.homeTeam)} x {teamName(room.awayTeam)}</p>{room.answerConfirmed ? <p className="mt-1 text-[9px] uppercase tracking-[.12em] text-white/40">{t("shell.answerConfirmed")}</p> : null}</div><span aria-hidden>-&gt;</span></Link>
     </motion.aside>
   </>;
 }

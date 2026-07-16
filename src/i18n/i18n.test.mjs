@@ -12,6 +12,7 @@ import {
   resolveLocale,
   withLocaleInUrl,
 } from "./locale.ts";
+import { teamDisplayName } from "./team-display-name.ts";
 import { catalogs, translate } from "./translate.ts";
 import { fixtureHeadline, fixtureMarketStatement, fixtureSchedule } from "./semantic-copy.ts";
 import { resolutionReasonLabel, roundOptionCopy, roundQuestion, stableOptionLabel } from "./round-copy.ts";
@@ -31,6 +32,14 @@ test("catalogs expose the same complete key set without raw-key fallbacks", () =
       assert.ok(rendered.length > 0);
     }
   }
+});
+
+test("team names localize only at the presentation boundary", () => {
+  assert.equal(teamDisplayName("France", "pt-BR"), "França");
+  assert.equal(teamDisplayName("Spain", "pt-BR"), "Espanha");
+  assert.equal(teamDisplayName("England", "pt-BR"), "Inglaterra");
+  assert.equal(teamDisplayName("France", "en"), "France");
+  assert.equal(teamDisplayName("Manchester City", "pt-BR"), "Manchester City");
 });
 
 test("locale aliases normalize conservatively", () => {
@@ -119,7 +128,7 @@ test("round copy derives only from stable domain fields and never from persisted
   };
   const before = JSON.stringify({ match, round });
   assert.equal(roundQuestion(translate("en"), round, match), "Will Spain score in the next 10 minutes?");
-  assert.equal(roundQuestion(translate("pt-BR"), round, match), "Spain marca nos próximos 10 minutos?");
+  assert.equal(roundQuestion(translate("pt-BR"), round, match, (name) => teamDisplayName(name, "pt-BR")), "Espanha marca nos próximos 10 minutos?");
   assert.equal(roundOptionCopy(translate("en"), round, round.options[0]).label, "Yes, they score");
   assert.equal(roundOptionCopy(translate("pt-BR"), round, round.options[1]).label, "Não marca");
   assert.equal(stableOptionLabel(translate("en"), "yes"), "Yes");

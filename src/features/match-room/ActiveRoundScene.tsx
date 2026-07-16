@@ -63,11 +63,11 @@ export function ActiveRoundScene({ model, state, answerSummary, onSelect, onSubm
 }
 
 function FootballRoundBrief({ state, remainingSec }: { state: ReplayState; remainingSec: number }) {
-  const { t } = useLocale();
+  const { t, teamName } = useLocale();
   const condition = state.snapshot.currentRound?.resolution.condition;
   const team = condition?.targetSide === "away" ? state.snapshot.match.awayTeam : state.snapshot.match.homeTeam;
   return <section className="mt-9 grid gap-5 border-y border-white/15 py-6 md:grid-cols-[1fr_auto] md:items-end">
-    <div><p className="font-['DM_Mono'] text-[9px] uppercase text-primary">{t("round.footballCondition")}</p><h2 className="mt-2 font-['Chakra_Petch'] text-2xl font-black uppercase">{condition?.kind === "team_shot_on_target" ? t("round.teamMustShoot", { team: team?.name ?? "--" }) : t("round.teamMustScore", { team: team?.name ?? "--" })}</h2><p className="mt-2 text-sm text-white/45">{t("round.windowStartsAfterLock", { minutes: Math.max(1, Math.round((condition?.durationSec ?? 600) / 60)) })}</p></div>
+    <div><p className="font-['DM_Mono'] text-[9px] uppercase text-primary">{t("round.footballCondition")}</p><h2 className="mt-2 font-['Chakra_Petch'] text-2xl font-black uppercase">{condition?.kind === "team_shot_on_target" ? t("round.teamMustShoot", { team: teamName(team?.name ?? "--") }) : t("round.teamMustScore", { team: teamName(team?.name ?? "--") })}</h2><p className="mt-2 text-sm text-white/45">{t("round.windowStartsAfterLock", { minutes: Math.max(1, Math.round((condition?.durationSec ?? 600) / 60)) })}</p></div>
     <div className="border-l border-white/15 pl-5 text-right"><p className="font-['DM_Mono'] text-[9px] uppercase text-white/35">{t("round.answersClosed")}</p><strong className="font-['Chakra_Petch'] text-4xl font-black text-primary">{remainingSec}s</strong></div>
   </section>;
 }

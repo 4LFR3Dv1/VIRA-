@@ -17,7 +17,7 @@ interface ReplayFinishedPanelProps {
 }
 
 export function ReplayFinishedPanel({ open, match, leaderboard, verification, onBack, onReview, shareAction }: ReplayFinishedPanelProps) {
-  const { locale, t } = useLocale();
+  const { locale, t, teamName } = useLocale();
   if (!open) return null;
 
   const winner = leaderboard[0];
@@ -34,9 +34,9 @@ export function ReplayFinishedPanel({ open, match, leaderboard, verification, on
         </div>
 
         <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-4 border-y border-white/15 py-5 sm:min-w-[29rem]">
-          <div className="min-w-0 text-right"><span className="mb-3 flex justify-end"><TeamIcon name={match.homeTeam.name} side="home" size="sm" /></span><strong className="block truncate font-['Chakra_Petch'] text-xl font-black uppercase">{match.homeTeam.name}</strong></div>
+          <div className="min-w-0 text-right"><span className="mb-3 flex justify-end"><TeamIcon name={match.homeTeam.name} side="home" size="sm" /></span><strong className="block truncate font-['Chakra_Petch'] text-xl font-black uppercase">{teamName(match.homeTeam.name)}</strong></div>
           <div className="px-3 text-center"><p className="font-['DM_Mono'] text-[9px] uppercase text-primary">{t("postMatch.finalScore")}</p><strong className="mt-2 flex items-center justify-center gap-2 font-['Chakra_Petch'] text-5xl font-black"><AnimatedNumber value={match.homeScore} locales={locale} /><span>-</span><AnimatedNumber value={match.awayScore} locales={locale} /></strong></div>
-          <div className="min-w-0"><span className="mb-3 flex"><TeamIcon name={match.awayTeam.name} side="away" size="sm" /></span><strong className="block truncate font-['Chakra_Petch'] text-xl font-black uppercase">{match.awayTeam.name}</strong></div>
+          <div className="min-w-0"><span className="mb-3 flex"><TeamIcon name={match.awayTeam.name} side="away" size="sm" /></span><strong className="block truncate font-['Chakra_Petch'] text-xl font-black uppercase">{teamName(match.awayTeam.name)}</strong></div>
         </div>
       </div>
 

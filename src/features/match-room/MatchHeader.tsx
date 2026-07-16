@@ -26,7 +26,7 @@ interface MatchHeaderProps {
 }
 
 export function MatchHeader({ state, onBack }: MatchHeaderProps) {
-  const { locale, t } = useLocale();
+  const { locale, t, teamName } = useLocale();
   const match = state.snapshot.match;
   const finished = match.status === "finished";
   const scheduled = match.status === "scheduled" || match.status === "paused" || match.status === "postponed";
@@ -47,9 +47,9 @@ export function MatchHeader({ state, onBack }: MatchHeaderProps) {
           <div className="flex min-w-0 items-center justify-center gap-2">
             <span className="hidden sm:block"><TeamIcon name={match.homeTeam.name} side="home" size="sm" /></span>
             <p className="truncate font-['DM_Mono'] text-[10px] font-bold uppercase tracking-[.18em]">
-              <span className="sm:hidden">{code(match.homeTeam.name)}</span><span className="hidden sm:inline">{match.homeTeam.name}</span>{" "}
+              <span className="sm:hidden">{code(teamName(match.homeTeam.name))}</span><span className="hidden sm:inline">{teamName(match.homeTeam.name)}</span>{" "}
               <span className="mx-1 text-muted-foreground">vs</span>{" "}
-              <span className="sm:hidden">{code(match.awayTeam.name)}</span><span className="hidden sm:inline">{match.awayTeam.name}</span>
+              <span className="sm:hidden">{code(teamName(match.awayTeam.name))}</span><span className="hidden sm:inline">{teamName(match.awayTeam.name)}</span>
             </p>
             <span className="hidden sm:block"><TeamIcon name={match.awayTeam.name} side="away" size="sm" /></span>
           </div>
