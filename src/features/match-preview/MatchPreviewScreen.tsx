@@ -14,7 +14,7 @@ import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router";
 
 import type { MatchCatalogEntry, MatchTxlineContext, TxlineAvailableMarket } from "../../runtime/api";
-import { fetchMatchCatalog, fetchMatchTxlineContext } from "../../runtime/api";
+import { fetchMatchCatalog, fetchMatchTxlineContext, fetchPublicRoomProjection, fetchRoomVerification } from "../../runtime/api";
 import { AnimatedNumber } from "../../shared/number/AnimatedNumber";
 import { ViraLoader } from "../../shared/brand/ViraLoader";
 import { AppShell } from "../../shared/shell/AppShell";
@@ -27,9 +27,11 @@ import { useLocale } from "../../i18n/locale-context.tsx";
 import type { StaticTranslationKey, TranslateFunction } from "../../i18n/translate.ts";
 import { competitionDisplayName } from "../../i18n/semantic-copy.ts";
 import { VIRA_PICKS_ENABLED } from "../picks/feature-flags.ts";
+import { fetchOwnerPicks } from "../picks/api.ts";
 import { fetchTournamentJourney, type TournamentJourneyFixture } from "../../social/share";
 
 type ContextState = "idle" | "loading" | "ready" | "empty" | "error";
+type FinishedCapabilities = { room: boolean; ranking: boolean; verifiedRounds: boolean; picks: boolean };
 const CONTEXT_CACHE_TTL_MS = 60_000;
 const roomStateKeys = { closed: "state.room.closed", open: "state.room.open", finished: "state.room.finished" } as const satisfies Record<string, StaticTranslationKey>;
 
@@ -147,11 +149,56 @@ function archivedJourneyMatch(item: TournamentJourneyFixture | undefined): Match
 
 function FinishedMatchPreview({ match, context }: { match: MatchCatalogEntry; context: MatchTxlineContext | null }) {
   const { locale, localizedHref, t, teamName } = useLocale();
+  const [capabilities, setCapabilities] = useState<FinishedCapabilities>({ room: false, ranking: false, verifiedRounds: false, picks: false });
+  useEffect(() => {
+    let active = true;
+    const room = fetchPublicRoomProjection(match.fixtureId).catch(() => null);
+    const verification = fetchRoomVerification(match.fixtureId).catch(() => null);
+    const picks = VIRA_PICKS_ENABLED ? fetchOwnerPicks(match.fixtureId, locale).catch(() => ({ card: null })) : Promise.resolve({ card: null });
+    void Promise.all([room, verification, picks]).then(([projection, proof, owner]) => {
+      if (!active) return;
+      const resolvedRound = Boolean(projection?.lastResolution || projection?.evidenceHistory.some((item) => item.resolution));
+      setCapabilities({
+        room: Boolean(projection),
+        ranking: Boolean(projection?.leaderboard.length),
+        verifiedRounds: Boolean(projection && resolvedRound && proof?.status === "verified" && proof.hashChainValid && proof.replaySucceeded),
+        picks: Boolean(owner.card),
+      });
+    });
+    return () => { active = false; };
+  }, [locale, match.fixtureId]);
   const score = context?.fixtureState?.score ?? {
     home: Number.isFinite(Number(match.homeScore)) ? Number(match.homeScore) : null,
     away: Number.isFinite(Number(match.awayScore)) ? Number(match.awayScore) : null,
   };
   const scoreAvailable = typeof score.home === "number" && typeof score.away === "number";
+  const capabilityCopy = locale === "pt-BR" ? {
+    description: capabilities.verifiedRounds && capabilities.ranking
+      ? "A partida terminou. O placar oficial, o ranking final da sala e as rodadas verificadas continuam disponíveis."
+      : capabilities.verifiedRounds
+        ? "A partida terminou. O placar oficial e as rodadas verificadas continuam disponíveis na sala final."
+        : capabilities.room
+          ? "A partida terminou. O placar oficial e a sala final continuam disponíveis."
+          : "A partida terminou. O placar oficial e sua autoridade terminal TxLINE continuam disponíveis.",
+    archive: capabilities.picks
+      ? "Nenhuma nova rodada ou previsão será aberta. Consulte o resultado oficial ou compare seu card VIRA Picks."
+      : capabilities.room
+        ? "Nenhuma nova rodada ou previsão será aberta. Consulte o resultado oficial e a sala final preservada."
+        : "Nenhuma nova rodada ou previsão será aberta. Este arquivo preserva o resultado oficial da partida.",
+  } : {
+    description: capabilities.verifiedRounds && capabilities.ranking
+      ? "The match is over. The official score, final room ranking and verified rounds remain available."
+      : capabilities.verifiedRounds
+        ? "The match is over. The official score and verified rounds remain available in the final room."
+        : capabilities.room
+          ? "The match is over. The official score and final room remain available."
+          : "The match is over. The official score and its TxLINE terminal authority remain available.",
+    archive: capabilities.picks
+      ? "No new rounds or predictions will open. Review the official result or compare your VIRA Picks card."
+      : capabilities.room
+        ? "No new rounds or predictions will open. Review the official result and the preserved final room."
+        : "No new rounds or predictions will open. This archive preserves the official match result.",
+  };
 
   return <AppShell><main className="min-h-[calc(100vh-68px)] overflow-hidden bg-[#070a13]/55 text-white">
     <section className="relative isolate border-b border-white/15">
@@ -160,7 +207,7 @@ function FinishedMatchPreview({ match, context }: { match: MatchCatalogEntry; co
       <div className="mx-auto max-w-[1440px] px-5 py-12 sm:px-8 lg:px-14 lg:py-20">
         <div className="flex items-center gap-3 text-primary"><Trophy className="size-5" /><p className="font-['DM_Mono'] text-[10px] font-black uppercase tracking-[.18em]">{t("postMatch.eyebrow")}</p></div>
         <h1 className="mt-7 max-w-5xl font-['Chakra_Petch'] text-[clamp(2.8rem,7vw,7rem)] font-black uppercase leading-[.78]">{t("fixture.headline.matchFinished", { homeTeam: teamName(match.homeTeam), awayTeam: teamName(match.awayTeam) })}</h1>
-        <p className="mt-7 max-w-2xl text-sm leading-6 text-white/50 md:text-base">{t("preview.finished.description")}</p>
+        <p className="mt-7 max-w-2xl text-sm leading-6 text-white/58 md:text-base">{capabilityCopy.description}</p>
 
         <div className="mt-12 grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-end gap-4 border-y border-white/15 py-8 sm:gap-8">
           <TeamHeading name={match.homeTeam} side="home" />
@@ -171,8 +218,8 @@ function FinishedMatchPreview({ match, context }: { match: MatchCatalogEntry; co
     </section>
 
     <section className="mx-auto grid max-w-[1440px] gap-8 px-5 py-12 sm:px-8 lg:grid-cols-[minmax(0,1fr)_22rem] lg:px-14 lg:py-16">
-      <div className="border-y border-white/15 py-7"><p className="font-['DM_Mono'] text-[10px] uppercase text-primary">{t("preview.finished.archiveTitle")}</p><h2 className="mt-4 font-['Chakra_Petch'] text-4xl font-black uppercase">{t("preview.finished.official")}</h2><p className="mt-5 max-w-2xl text-sm leading-6 text-white/45">{t("preview.finished.archiveDescription")}</p><div className="mt-7 flex flex-wrap gap-3">{match.archiveResultAuthority ? <Link to={localizedHref("/matches")} className="inline-flex min-h-14 items-center gap-3 bg-primary px-5 font-['Chakra_Petch'] text-xs font-black uppercase text-[#070a13]">{t("preview.backToMatches")}<ArrowRight className="size-4" /></Link> : <><Link to={localizedHref(`/match/${match.fixtureId}`)} className="inline-flex min-h-14 items-center gap-3 bg-primary px-5 font-['Chakra_Petch'] text-xs font-black uppercase text-[#070a13]">{t("preview.finished.roomCta")}<ArrowRight className="size-4" /></Link>{VIRA_PICKS_ENABLED ? <Link to={localizedHref(`/picks/${match.fixtureId}`)} className="inline-flex min-h-14 items-center border border-white/20 px-5 font-['Chakra_Petch'] text-xs font-black uppercase hover:border-primary hover:text-primary">VIRA Picks</Link> : null}</>}</div></div>
-      <aside className="border border-primary/30 bg-primary/[.055] p-6"><ShieldCheck className="size-5 text-primary" /><p className="mt-5 font-['DM_Mono'] text-[9px] uppercase text-white/35">TxLINE</p><strong className="mt-2 block font-['Chakra_Petch'] text-2xl font-black uppercase">{t("preview.finished.txlineFinal")}</strong><p className="mt-4 text-xs leading-5 text-white/40">{context?.fixtureState || match.archiveResultAuthority ? t("preview.finished.authorityConfirmed") : t("preview.finished.authorityPending")}</p><Link to={localizedHref("/matches")} className="mt-8 inline-flex items-center gap-2 text-xs font-bold uppercase text-white/55 hover:text-white"><ArrowLeft className="size-4" />{t("preview.backToMatches")}</Link></aside>
+      <div className="border-y border-white/15 py-7"><p className="font-['DM_Mono'] text-[10px] uppercase text-primary">{t("preview.finished.archiveTitle")}</p><h2 className="mt-4 font-['Chakra_Petch'] text-4xl font-black uppercase">{t("preview.finished.official")}</h2><p className="mt-5 max-w-2xl text-sm leading-6 text-white/52">{capabilityCopy.archive}</p><div className="mt-7 flex flex-wrap gap-3">{capabilities.room ? <Link to={localizedHref(`/match/${match.fixtureId}`)} className="inline-flex min-h-14 items-center gap-3 bg-primary px-5 font-['Chakra_Petch'] text-xs font-black uppercase text-[#070a13]">{t("preview.finished.roomCta")}<ArrowRight className="size-4" /></Link> : null}{capabilities.picks ? <Link to={localizedHref(`/picks/${match.fixtureId}`)} className="inline-flex min-h-14 items-center border border-white/25 px-5 font-['Chakra_Petch'] text-xs font-black uppercase hover:border-primary hover:text-primary">VIRA Picks</Link> : null}{!capabilities.room && !capabilities.picks ? <Link to={localizedHref("/matches")} className="inline-flex min-h-14 items-center gap-3 bg-primary px-5 font-['Chakra_Petch'] text-xs font-black uppercase text-[#070a13]">{t("preview.backToMatches")}<ArrowRight className="size-4" /></Link> : null}</div></div>
+      <aside className="border border-primary/30 bg-primary/[.055] p-6"><ShieldCheck className="size-5 text-primary" /><img src="/txline-logo.svg" alt="TxLINE" className="mt-5 h-4 w-auto opacity-80" /><strong className="mt-4 block font-['Chakra_Petch'] text-2xl font-black uppercase">{t("preview.finished.txlineFinal")}</strong><p className="mt-4 text-xs leading-5 text-white/48">{context?.fixtureState || match.archiveResultAuthority ? t("preview.finished.authorityConfirmed") : t("preview.finished.authorityPending")}</p><Link to={localizedHref("/matches")} className="mt-8 inline-flex items-center gap-2 text-xs font-bold uppercase text-white/65 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"><ArrowLeft className="size-4" />{t("preview.backToMatches")}</Link></aside>
     </section>
   </main></AppShell>;
 }
