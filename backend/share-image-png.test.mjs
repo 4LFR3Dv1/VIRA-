@@ -44,6 +44,20 @@ test("prediction, invite and result cards have distinct consumer compositions", 
   assert.notEqual(prediction, room); assert.notEqual(room, result);
 });
 
+test("certified playback result has a dedicated 1200x630 engagement card", () => {
+  const share = { publicCode: "playback01", kind: "playback_result", metadata: { title: "France 2–1 Spain", description: "Verified" }, destination: { path: "/match/judge-playback-france-spain-v2", ctaLabel: "Replay the round" }, payload: { homeTeam: "France", awayTeam: "Spain", homeScore: 2, awayScore: 1, verified: true }, editorialContext: { locale: "en", timeZone: "America/Sao_Paulo" } };
+  const svg = renderShareSvg(share);
+  assert.match(svg, /CERTIFIED PLAYBACK/);
+  assert.match(svg, /ONE SIGNAL\. ONE LOCK\./);
+  assert.match(svg, /ONE REPRODUCIBLE RESULT\./);
+  assert.match(svg, /data-team-flag="France"/);
+  assert.match(svg, /data-team-flag="Spain"/);
+  const png = renderSharePng(share);
+  assert.equal(png.readUInt32BE(16), 1200);
+  assert.equal(png.readUInt32BE(20), 630);
+  assert.ok(png.length > 5_000);
+});
+
 test("share landing preserves locale and invite while exposing official reassurance", () => {
   const share = { publicCode: "share01", kind: "room", metadata: { title: "Join Ana", description: "France x Spain" }, destination: { path: "/match/fixture?source=friend#room", ctaLabel: "Join room" }, editorialContext: { locale: "en", timeZone: "America/Sao_Paulo" } };
   const html = renderSharePage({ share, base: "https://vira.example" });

@@ -40,9 +40,9 @@ function textLines(value, x, y, { limit = 24, maxLines = 3, size = 64, lineHeigh
 
 function dictionary(locale) {
   return locale === "en" ? {
-    prediction: "MATCH PICK", invite: "LIVE ROOM", result: "MATCH RESULT", picks: "VIRA PICKS", picksResult: "PICKS RESULT", socialCard: "SOCIAL CARD", noMoney: "NO MONEY INVOLVED", makePicks: "MAKE YOUR PICKS", locks: "LOCKS AT KICKOFF", noGate: "NO ACCOUNT · NO X · NO WALLET", powered: "SPORTS DATA BY TxLINE", kickoff: "KICKOFF", players: "FANS IN", join: "JOIN NOW", correct: "CORRECT", missed: "MISSED", void: "VOID", pending: "PENDING", points: "POINTS", rank: "RANK", verified: "REPRODUCIBLE RESULT", pick: "PICK", backing: "IS BACKING", whoWith: "WHO ARE YOU WITH?", seesDraw: "SEES A DRAW", yourCall: "WHAT'S YOUR CALL?", opened: "OPENED THIS MATCH", areYouIn: "ARE YOU IN?", called: "CALLED", readNext: "CAN YOU READ THE NEXT ONE?",
+    prediction: "MATCH PICK", invite: "LIVE ROOM", result: "MATCH RESULT", playbackResult: "CERTIFIED PLAYBACK", picks: "VIRA PICKS", picksResult: "PICKS RESULT", socialCard: "SOCIAL CARD", noMoney: "NO MONEY INVOLVED", makePicks: "MAKE YOUR PICKS", locks: "LOCKS AT KICKOFF", noGate: "NO ACCOUNT · NO X · NO WALLET", powered: "SPORTS DATA BY TxLINE", kickoff: "KICKOFF", players: "FANS IN", join: "JOIN NOW", correct: "CORRECT", missed: "MISSED", void: "VOID", pending: "PENDING", points: "POINTS", rank: "RANK", verified: "REPRODUCIBLE RESULT", pick: "PICK", backing: "IS BACKING", whoWith: "WHO ARE YOU WITH?", seesDraw: "SEES A DRAW", yourCall: "WHAT'S YOUR CALL?", opened: "OPENED THIS MATCH", areYouIn: "ARE YOU IN?", called: "CALLED", readNext: "CAN YOU READ THE NEXT ONE?", oneSignal: "ONE SIGNAL. ONE LOCK.", sameResult: "ONE REPRODUCIBLE RESULT.", replayRound: "REPLAY THE ROUND",
   } : {
-    prediction: "PALPITE", invite: "SALA AO VIVO", result: "RESULTADO", picks: "VIRA PICKS", picksResult: "RESULTADO PICKS", socialCard: "CARD SOCIAL", noMoney: "SEM DINHEIRO ENVOLVIDO", makePicks: "FAÇA SUAS PREVISÕES", locks: "FECHA NO INÍCIO", noGate: "SEM CONTA · SEM X · SEM WALLET", powered: "DADOS ESPORTIVOS TxLINE", kickoff: "INÍCIO", players: "FÃS NA SALA", join: "ENTRE AGORA", correct: "CORRETA", missed: "INCORRETA", void: "ANULADA", pending: "PENDENTE", points: "PONTOS", rank: "POSIÇÃO", verified: "RESULTADO REPRODUZÍVEL", pick: "ESCOLHA", backing: "APOIA", whoWith: "DE QUE LADO VOCÊ ESTÁ?", seesDraw: "VÊ UM EMPATE", yourCall: "QUAL É O SEU PALPITE?", opened: "ABRIU ESTA PARTIDA", areYouIn: "VOCÊ VEM?", called: "ACERTOU", readNext: "CONSEGUE ACERTAR A PRÓXIMA?",
+    prediction: "PALPITE", invite: "SALA AO VIVO", result: "RESULTADO", playbackResult: "PLAYBACK CERTIFICADO", picks: "VIRA PICKS", picksResult: "RESULTADO PICKS", socialCard: "CARD SOCIAL", noMoney: "SEM DINHEIRO ENVOLVIDO", makePicks: "FAÇA SUAS PREVISÕES", locks: "FECHA NO INÍCIO", noGate: "SEM CONTA · SEM X · SEM WALLET", powered: "DADOS ESPORTIVOS TxLINE", kickoff: "INÍCIO", players: "FÃS NA SALA", join: "ENTRE AGORA", correct: "CORRETA", missed: "INCORRETA", void: "ANULADA", pending: "PENDENTE", points: "PONTOS", rank: "POSIÇÃO", verified: "RESULTADO REPRODUZÍVEL", pick: "ESCOLHA", backing: "APOIA", whoWith: "DE QUE LADO VOCÊ ESTÁ?", seesDraw: "VÊ UM EMPATE", yourCall: "QUAL É O SEU PALPITE?", opened: "ABRIU ESTA PARTIDA", areYouIn: "VOCÊ VEM?", called: "ACERTOU", readNext: "CONSEGUE ACERTAR A PRÓXIMA?", oneSignal: "UM SINAL. UM LOCK.", sameResult: "UM RESULTADO REPRODUZÍVEL.", replayRound: "REPRODUZIR A RODADA",
   };
 }
 
@@ -57,7 +57,7 @@ function base(kindLabel) {
 }
 
 const TEAM_VISUALS = {
-  argentina: ["#74ACDF", "#FFFFFF", "argentina"], brazil: ["#009739", "#FEDD00", "brazil"], england: ["#FFFFFF", "#CE1124", "england"], france: ["#002395", "#ED2939", "france"], spain: ["#AA151B", "#F1BF00", "spain"],
+  argentina: ["#74ACDF", "#FFFFFF", "argentina"], brazil: ["#009739", "#FEDD00", "brazil"], england: ["#FFFFFF", "#CE1124", "england"], france: ["#002395", "#ED2939", "france"], "frança": ["#002395", "#ED2939", "france"], spain: ["#AA151B", "#F1BF00", "spain"], "espanha": ["#AA151B", "#F1BF00", "spain"],
   germany: ["#000000", "#DD0000", "horizontal"], italy: ["#009246", "#CE2B37", "vertical"], portugal: ["#046A38", "#DA291C", "vertical"], netherlands: ["#AE1C28", "#21468B", "horizontal"], belgium: ["#000000", "#FDDA24", "vertical"],
   mexico: ["#006847", "#CE1126", "vertical"], uruguay: ["#FFFFFF", "#5CBFEB", "horizontal"], japan: ["#FFFFFF", "#BC002D", "japan"], morocco: ["#C1272D", "#006233", "morocco"], "united states": ["#B22234", "#3C3B6E", "usa"], usa: ["#B22234", "#3C3B6E", "usa"],
 };
@@ -143,9 +143,15 @@ function picksCard(share, copy, locale, resultMode = false) {
   return `${base(copy.picks)}${matchupIdentity(payload)}${textLines(headline, 58, 326, { limit: 22, maxLines: 2, size: 54 })}<text class="display" x="58" y="465" fill="${COLORS.lime}" font-size="30">${side ? copy.whoWith : copy.yourCall}</text><text x="58" y="530" fill="${COLORS.muted}" font-size="16" letter-spacing="1.5">${escapeXml(secondary || copy.locks)} · ${copy.noMoney}</text>${activationCta(share, copy)}`;
 }
 
+function playbackResultCard(share, copy) {
+  const payload = share.payload ?? {};
+  const score = `${payload.homeTeam ?? ""} ${payload.homeScore ?? "—"} : ${payload.awayScore ?? "—"} ${payload.awayTeam ?? ""}`;
+  return `${base(copy.playbackResult)}${matchupIdentity(payload)}<text class="display" x="58" y="342" fill="${COLORS.white}" font-size="58">${escapeXml(copy.oneSignal)}</text><text class="display" x="58" y="408" fill="${COLORS.lime}" font-size="48">${escapeXml(copy.sameResult)}</text><text class="display" x="58" y="484" fill="${COLORS.white}" font-size="28">${escapeXml(score)}</text><text x="58" y="538" fill="${COLORS.muted}" font-size="15" letter-spacing="1.5">TxLINE · ${escapeXml(copy.verified)}</text>${activationCta({ ...share, destination: { ...share.destination, ctaLabel: copy.replayRound } }, copy)}`;
+}
+
 export function renderShareSvg(share) {
   const { locale } = resolveShareLocaleContext(share);
   const copy = dictionary(locale);
-  const content = share.kind === "prediction" ? predictionCard(share, copy) : share.kind === "room" ? inviteCard(share, copy) : share.kind === "picks" ? picksCard(share, copy, locale) : share.kind === "picks_result" ? picksCard(share, copy, locale, true) : resultCard(share, copy);
+  const content = share.kind === "prediction" ? predictionCard(share, copy) : share.kind === "room" ? inviteCard(share, copy) : share.kind === "picks" ? picksCard(share, copy, locale) : share.kind === "picks_result" ? picksCard(share, copy, locale, true) : share.kind === "playback_result" ? playbackResultCard(share, copy) : resultCard(share, copy);
   return `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">${defs()}${content}</svg>`;
 }

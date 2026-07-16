@@ -767,6 +767,38 @@ async function handleRequest(request, response) {
       return;
     }
 
+    if (request.method === "POST" && url.pathname === "/public/playback/share") {
+      ensureReady();
+      const body = await readJson(request, 4_096);
+      const roomId = String(body.roomId || verifiedPlaybackIds.roomId);
+      if (roomId !== verifiedPlaybackIds.roomId) throw Object.assign(new Error("canonical_playback_required"), { status: 404 });
+      const selected = selectPublicPlaybackRoom({ rooms: runtime.publicRoomSummaries(), requestedRoomId: roomId, canonicalRoomId: verifiedPlaybackIds.roomId, canonicalRoundId: verifiedPlaybackIds.roundId });
+      if (!selected) throw Object.assign(new Error("verified_round_not_available"), { status: 404 });
+      const verification = await runtime.verifyRoom(roomId);
+      const replay = await runtime.verifiedRoundReplay(roomId, selected.roundId);
+      if (verification.status !== "verified" || replay.proof?.authorityValid !== true) throw Object.assign(new Error("playback_not_verified"), { status: 409 });
+      const editorialContext = requestEditorialLocale(request, "judge_playback");
+      const english = editorialContext.locale === "en";
+      const match = selected.room.match;
+      const homeTeam = english ? "France" : "França";
+      const awayTeam = english ? "Spain" : "Espanha";
+      const share = await shareStore.createShare({
+        kind: "playback_result",
+        createdByPublicId: null,
+        expiresAt: null,
+        metadata: {
+          title: english ? `${homeTeam} ${match.homeScore}–${match.awayScore} ${awayTeam} · Can you read the next moment?` : `${homeTeam} ${match.homeScore}–${match.awayScore} ${awayTeam} · Você prevê o próximo momento?`,
+          description: english ? "One TxLINE signal. One server lock. One reproducible result." : "Um sinal TxLINE. Um lock do servidor. Um resultado reproduzível.",
+        },
+        destination: { path: `/match/${encodeURIComponent(roomId)}`, ctaLabel: english ? "Replay the round" : "Reproduzir a rodada" },
+        attribution: { source: "judge_playback", campaign: "certified_playback_result" },
+        payload: { fixtureId: match.fixtureId, roomId, homeTeam, awayTeam, homeScore: match.homeScore, awayScore: match.awayScore, verified: true, replayHash: replay.replayHash, winningOptionId: replay.resolution.winningOptionId },
+        editorialContext,
+      });
+      sendJson(response, 201, { share, url: `${publicBaseUrl(request)}/s/${share.publicCode}` });
+      return;
+    }
+
     if (request.method === "POST" && url.pathname === "/public/identity") {
       const body = await readJson(request);
       sendJson(response, 200, await shareStore.ensureIdentity(publicToken(request, body), body.displayName));

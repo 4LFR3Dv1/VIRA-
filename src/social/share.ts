@@ -26,6 +26,10 @@ export function createRoomShare(input: { roomId: string; participantId: string; 
   return fetch(`${API_ORIGIN}/shares`, { method: "POST", headers: editorialHeaders(context), body: JSON.stringify(input) }).then((response) => json<ShareResponse>(response));
 }
 
+export function createGuidedPlaybackShare(roomId: string, context?: EditorialRequestContext) {
+  return fetch(`${API_ORIGIN}/public/playback/share`, { method: "POST", headers: editorialHeaders(context), body: JSON.stringify({ roomId }) }).then((response) => json<ShareResponse>(response));
+}
+
 export function createPredictionShare(input: { fixtureId: string; displayName: string; choice: "home" | "draw" | "away"; inviteCode?: string | null }, context?: EditorialRequestContext) {
   return fetch(`${API_ORIGIN}/predictions`, { method: "POST", headers: editorialHeaders(context), body: JSON.stringify(input) }).then((response) => json<ShareResponse & { prediction: { id: string; choice: string } }>(response));
 }
