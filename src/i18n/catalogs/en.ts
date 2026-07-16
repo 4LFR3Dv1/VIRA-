@@ -66,7 +66,7 @@ export const en = {
   "fixture.headline.whoWinsTomorrow": "Who wins tomorrow?",
   "fixture.headline.whoWinsFixture": ({ homeTeam, awayTeam }) => `Who wins ${homeTeam} × ${awayTeam}?`,
   "fixture.headline.matchLive": ({ homeTeam, awayTeam }) => `${homeTeam} × ${awayTeam} is live`,
-  "fixture.headline.matchFinished": ({ homeTeam, awayTeam }) => `${homeTeam} × ${awayTeam} is final`,
+  "fixture.headline.matchFinished": ({ homeTeam, awayTeam }) => `${homeTeam} vs ${awayTeam} has ended`,
   "fixture.headline.unavailable": "Match unavailable",
   "fixture.schedule.live": "Live now",
   "fixture.schedule.today": "Today",
