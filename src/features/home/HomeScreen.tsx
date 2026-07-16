@@ -1,4 +1,4 @@
-import { ArrowRight, CalendarDays, Check, Play, Radio, Share2, Trophy, Users } from "lucide-react";
+import { ArrowRight, CalendarDays, Check, Radio, Share2, Trophy, Users } from "lucide-react";
 import { useCallback, useEffect, useState, type CSSProperties } from "react";
 import { Link, useNavigate } from "react-router";
 
@@ -14,7 +14,6 @@ type Choice = "home" | "draw" | "away";
 
 const immersiveCopy = {
   en: {
-    liveExperience: "Experience VIRA live now",
     choose: "Choose your side",
     chosen: (selection: string) => `${selection} has your support`,
     drawChosen: "You are calling the draw",
@@ -33,7 +32,6 @@ const immersiveCopy = {
     calendarPrompt: "Choose the next match. Your VIRA continues from kickoff to the final whistle.",
   },
   "pt-BR": {
-    liveExperience: "Viva o VIRA ao vivo agora",
     choose: "Escolha seu lado",
     chosen: (selection: string) => `${selection} tem sua torcida`,
     drawChosen: "Seu palpite é empate",
@@ -166,7 +164,7 @@ export function HomeScreen() {
   return <section className="mx-auto grid min-h-[calc(100dvh-72px)] max-w-[1500px] content-between px-5 py-8 sm:px-8 lg:px-14 lg:py-12">
     <header className="flex items-center justify-between border-b border-white/12 pb-4">
       <div><p className="font-['DM_Mono'] text-[10px] font-black uppercase text-primary">{t("home.kicker")}</p><p className="mt-1 text-xs text-white/40">{playerName || t("home.firstPick")}</p></div>
-      <div className="flex gap-2"><Link to={localizedHref("/match/judge-playback-france-spain-v2")} className="inline-flex min-h-10 items-center gap-2 border border-primary/45 px-3 text-[9px] font-black uppercase text-primary hover:bg-primary hover:text-[#050814] sm:px-4 sm:text-[10px]"><Play className="size-3.5" /> <span className="hidden sm:inline">{c.liveExperience}</span><span className="sm:hidden">VIRA live</span></Link><Link to={localizedHref("/matches")} className="inline-flex min-h-10 items-center gap-2 border border-white/15 px-3 text-[9px] font-black uppercase hover:border-primary sm:px-4 sm:text-[10px]"><CalendarDays className="size-4" /> {t("home.matches")}</Link></div>
+      <Link to={localizedHref("/matches")} className="inline-flex min-h-10 items-center gap-2 border border-white/15 px-3 text-[9px] font-black uppercase hover:border-primary sm:px-4 sm:text-[10px]"><CalendarDays className="size-4" /> {t("home.matches")}</Link>
     </header>
 
     {editorial.kind === "predict_fixture" && fixture ? <div data-home-immersion={confirmedChoice ? "confirmed" : selected ? "identified" : "choosing"} className="relative my-6 overflow-hidden border-y border-white/12 px-0 py-9 transition-colors duration-500 motion-reduce:transition-none lg:my-8 lg:px-8 lg:py-12" style={heroStyle}>
