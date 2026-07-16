@@ -15,6 +15,8 @@ VITE_VIRA_PICKS_ENABLED=true
 
 The default for both flags is `true`. There is no fixture-ID allowlist. Setting either flag explicitly to `false` remains an emergency kill switch; frontend visibility never bypasses backend market, fixture, freshness or deadline checks.
 
+Market freshness separates transport health from market movement. `VIRA_PICKS_MARKET_ACQUISITION_FRESH_MS` limits how long a recently queried TxLINE response remains authoritative (two minutes by default), while `VIRA_PICKS_MARKET_OBSERVATION_FRESH_MS` allows a valid pre-match market to remain stable without pretending that its prices changed (six hours by default). An unavailable endpoint, future timestamp, incomplete market or genuinely old observation still fails closed.
+
 ## Architecture
 
 ```text

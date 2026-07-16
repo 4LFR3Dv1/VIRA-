@@ -13,7 +13,7 @@
   [![Judge Walkthrough](https://img.shields.io/badge/Judges-3_minute_walkthrough-FFFFFF?style=for-the-badge&labelColor=050814)](https://vira.snelabs.space/help?lang=en)
   [![Verify](https://github.com/4LFR3Dv1/VIRA-/actions/workflows/verify.yml/badge.svg)](https://github.com/4LFR3Dv1/VIRA-/actions/workflows/verify.yml)
 
-  **TxODDS World Cup Hackathon · Consumer & Fan Experience · Functional devnet deployment**
+  **TxODDS World Cup Hackathon · Live consumer deployment · TxLINE-powered · Solana devnet verified**
 </div>
 
 <br />
@@ -24,7 +24,7 @@
 
 Most football products ask fans to watch a feed. VIRA lets them play the unfolding match together.
 
-Fans enter instantly as guests, join a shared Match Room and answer short challenges opened by what is happening on the pitch. Answers stay private until one server-owned deadline. The next eligible TxLINE observation resolves the same rule for everyone, then points, streaks and ranking update together.
+Fans enter instantly as guests. Before kickoff, they can make and share an immutable VIRA Picks card. During the match, they join a shared Match Room and answer short challenges opened by what is happening on the pitch. Answers stay private until one server-owned deadline. The next eligible TxLINE observation resolves the same rule for everyone, then points, streaks and ranking update together.
 
 ```text
 TxLINE match event
@@ -38,19 +38,51 @@ shared result → ranking → verifiable replay → share
 
 No wallet, OAuth, purchase or installation is required for the fan experience. Solana is used by the backend to activate TxLINE access and optionally anchor a resolved replay hash.
 
+## One match, two social experiences
+
+VIRA creates a continuous fan journey around the same authoritative fixture rather than limiting engagement to the live whistle-to-whistle window.
+
+| | **VIRA Picks · before kickoff** | **Match Room · during live play** |
+| --- | --- | --- |
+| **Fan action** | Confirm 1–3 structured predictions, share the immutable card and invite friends to make their own. | Answer synchronized football challenges, follow live pressure signals and compete together. |
+| **TxLINE authority** | Fixture lifecycle, kickoff, allowlisted market snapshots and regular-time result. | Live score, provider sequence, football observations and eligible post-lock signals. |
+| **Social loop** | Pick → confirm → share → compare official results. | Join → answer → resolve → streak → rank → share. |
+| **Isolation** | Dedicated atomic Picks store and deterministic selection resolvers. | Independent append-only competitive ledger, replay and Mini League ranking. |
+
+Both experiences reuse the same guest identity and social distribution layer, but Picks never mutates Match Room points, answers, replay or ranking. There is no stake, payout, prize or combined probability.
+
 ## Judge fast path — under three minutes
 
-1. Open the [live app](https://vira.snelabs.space/?lang=en) and make the featured 1X2 prediction.
-2. Share the result and open the link in an anonymous or mobile window.
-3. Enter the same fixture from both windows with different names.
-4. Compare the synchronized room, private answer state and Mini League membership.
-5. Open [Official VIRA Review](https://vira.snelabs.space/help?lang=en) to inspect a resolved round reconstructed from the public ledger.
+**Available now, before kickoff**
+
+1. Open the [live app](https://vira.snelabs.space/?lang=en), choose a scheduled fixture and enter VIRA Picks.
+2. Confirm an immutable card, share it and open the link in an anonymous or mobile window.
+3. Create a second card with another guest identity and verify that both cards remain independent.
+
+**During a live fixture**
+
+1. Enter the same Match Room from two windows with different names.
+2. Compare the synchronized round, private answer state, server-owned deadline and Mini League membership.
+3. Watch both screens receive the same TxLINE-driven resolution and updated ranking.
+
+**When no match is live**
+
+Open [Official VIRA Review](https://vira.snelabs.space/help?lang=en) to inspect a resolved round reconstructed from the public ledger, or use the canonical [3:40 demo](https://www.youtube.com/watch?v=eqe9e5TZ02k) to see the complete two-device journey.
 
 ```text
 Pick → Share → Join → Play → Resolve → Rank → Verify
 ```
 
-The canonical [3:40 demo video](https://www.youtube.com/watch?v=eqe9e5TZ02k) shows the complete experience, two isolated participants and the real TxLINE integration path. The [judge walkthrough](docs/JUDGE_WALKTHROUGH.md) provides the operational version of the same flow.
+The canonical demo shows the complete experience, two isolated participants and the real TxLINE integration path. The [judge walkthrough](docs/JUDGE_WALKTHROUGH.md) provides the operational version of the same flow.
+
+## Product journey
+
+| Match Preview | VIRA Picks | Match Room result |
+| --- | --- | --- |
+| [![Brazil vs France Match Preview](docs/images/vira-match-preview.png)](docs/images/vira-match-preview.png) | [![Confirmed immutable VIRA Picks card](docs/images/vira-picks-confirmed.png)](docs/images/vira-picks-confirmed.png) | [![Resolved synchronized Match Room](docs/images/vira-match-room-resolved.png)](docs/images/vira-match-room-resolved.png) |
+| Discover the fixture, TxLINE consensus and available fan experiences. | Confirm structured pre-match predictions that lock at kickoff. | Resolve the same live rule for every participant, then update ranking. |
+
+The gallery uses sanitized, deterministic TxLINE test fixtures so each state remains inspectable when no match is active. Live production uses the same Consumer UI and authority checks.
 
 ## Why VIRA stands out
 
@@ -84,10 +116,24 @@ TxLINE is not decorative content in VIRA. It provides the fixture identity, comp
 | Score snapshot and updates | Scoreboard reconciliation, football actions and authoritative match lifecycle. |
 | Historical scores | Deterministic inspection and replay from real provider records. |
 | Odds snapshot and updates | Canonical full-match 1X2 context and pre-match prediction. |
+| Allowlisted market snapshots | Immutable VIRA Picks context for regular-time result and exact Total Goals 2.5. |
 | Score stream | Live football observations delivered to active Match Rooms. |
 | Odds stream | Live market observations supported by the runtime adapter. |
+| Pressure observations | Normalized possession, attacking possession, defensive possession and dangerous possession cues for live UX. |
 
-VIRA deliberately fails closed when authority is missing or stale. It does not invent lineups, players, possession or unsupported market facts. The complete mapping is documented in [TxLINE Endpoint Map](docs/TXLINE_ENDPOINT_MAP.md).
+The catalog refreshes automatically, rotates the featured fixture and reconciles `live → finished → next scheduled` without preserving a completed match as the active hero. Home, Match Preview and the match archive use the same server-owned Consumer projection, including a dedicated post-game experience.
+
+VIRA deliberately fails closed when authority is missing or stale. It does not invent lineups, players or unsupported market facts. The complete mapping is documented in [TxLINE Endpoint Map](docs/TXLINE_ENDPOINT_MAP.md).
+
+### VIRA Picks market allowlist
+
+| Consumer question | Availability |
+| --- | --- |
+| **Regular-time match result** | Available from the observed canonical `1X2_PARTICIPANT_RESULT` market. |
+| **Regular-time Total Goals 2.5** | Available only when TxLINE supplies one exact `OVERUNDER_PARTICIPANT_GOALS` observation with literal `line=2.5` and complete `over/under` options. Acquisition freshness and market-observation freshness are validated separately. |
+| **Both teams to score** | Intentionally unavailable until a corresponding TxLINE market is observed, sanitized and certified. The resolver exists but is not exposed to selection, consensus or sharing. |
+
+VIRA never substitutes a similar market, accepts a browser-supplied price or calculates a combined card probability.
 
 ### Demo disclosure
 
@@ -99,8 +145,11 @@ A separate demo segment shows the real production TxLINE path. Normal operation 
 
 ```mermaid
 flowchart LR
-    TX[TxLINE fixtures, scores and odds] --> N[Normalization and authority checks]
-    N --> R[Serialized Match Room runtime]
+    TX[TxLINE fixtures, markets, scores and live observations] --> N[Normalization and authority checks]
+    N --> P[VIRA Picks<br/>before kickoff]
+    N --> R[Match Room<br/>during live play]
+    P --> PS[(Atomic immutable Picks store)]
+    PS --> PC[Picks and result share cards]
     R --> L[(Append-only JSONL ledger<br/>with hash chain)]
     R --> S[SSE projections]
     S --> A[Fan A]
@@ -158,7 +207,7 @@ The [VIRA commercial pitch](docs/VIRA_Synchronized_Football_Engagement.pdf) pres
 At the latest release gate:
 
 - production build passed;
-- 139 automated unit, contract and integration checks passed;
+- the complete automated verification suite passed across contracts, runtime, replay, Picks and Consumer journeys;
 - the two-device Consumer E2E passed with isolated identities and equivalent rankings;
 - public read-only smoke tests passed on Chromium desktop, Chromium mobile viewport and Mobile WebKit;
 - the deployed Consumer projection agreed across Home, Lobby and Match Preview;
@@ -181,6 +230,7 @@ The canonical video package includes its own [metadata](scripts/demo/vira-demo-m
 - **Consumer:** React 18, TypeScript, Vite, Motion and responsive PWA assets.
 - **Runtime:** Node.js, serialized room queues and Server-Sent Events.
 - **Persistence:** append-only JSONL event store, optimistic concurrency and hash chaining.
+- **Pre-match Picks:** typed immutable cards, canonical SHA-256 market snapshots and a dedicated atomic single-writer store.
 - **Sports data:** TxLINE fixtures, odds, scores, updates, historical records and streams.
 - **Blockchain:** Solana/Anchor for TxLINE activation; Solana Memo Program for optional replay commitments.
 - **Quality:** Node test runner, Playwright, deterministic fixtures and deployment audits.
@@ -297,6 +347,17 @@ POST /rooms/:roomId/rounds/:roundId/answer
 GET  /rooms/:roomId/txline/status
 ```
 
+### VIRA Picks
+
+```http
+GET  /picks/fixtures/:fixtureId/catalog
+POST /picks/cards
+GET  /picks/cards/public/:publicCode
+GET  /picks/fixtures/:fixtureId/me
+POST /picks/cards/:cardId/share
+POST /picks/cards/public/:publicCode/open
+```
+
 ### Public verification
 
 ```http
@@ -364,7 +425,7 @@ VIRA addresses these points through a server-side Consumer projection, explicit 
 ## Known limits
 
 - The file event store supports one process and one persistent volume.
-- Market-family diversity is narrower than the general rule engine supports.
+- VIRA Picks exposes only observed, certified market families; BTTS remains hidden until a real TxLINE mapping is captured.
 - Mobile WebKit evidence uses emulation rather than a physical iPhone.
 - The deterministic competitive demo uses a captured, explicitly disclosed TxLINE fixture.
 - Long-running ledgers will eventually need snapshotting, compaction or a transactional store.

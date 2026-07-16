@@ -5,6 +5,7 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import http from "node:http";
 import os from "node:os";
 import path from "node:path";
+import { deriveFixtureConsumerProjection } from "../../shared/fixture-consumer-projection.mjs";
 
 let backend: ChildProcess; let origin = ""; let dataDir = ""; const fixtureId = "picks-e2e-2026"; const e2eToken = crypto.randomBytes(32).toString("hex");
 const defaultPicksEnv = Object.fromEntries(Object.entries(process.env).filter(([key]) => !["VIRA_PICKS_ENABLED", "VITE_VIRA_PICKS_ENABLED"].includes(key)));
@@ -15,8 +16,10 @@ async function scenario(action: "lock" | "resolve") { return fetch(`${origin}/__
 function snapshot(now = Date.now()) {
   const kickoff = new Date(now + 60 * 60_000).toISOString(); const observedAt = new Date(now - 5_000).toISOString(); const endpoint = `/api/odds/snapshot/${fixtureId}`;
   const market = (marketType: string, priceNames: string[], marketParameters: string | null = null) => ({ id: marketType, messageId: `message-${marketType}`, fixtureId, signature: `${fixtureId}|${marketType}|${marketParameters ?? "default"}`, marketType, marketParameters, marketPeriod: null, inRunning: false, capturedAt: observedAt, sourceEndpoint: endpoint, sequence: 7, options: priceNames.map((priceName, index) => ({ priceName, label: priceName, pct: [52, 26, 22][index] ?? 48, price: 1.5 + index })) });
-  const context = { fixtureId, generatedAt: new Date(now).toISOString(), endpoints: { odds: { endpoint, receivedAt: new Date(now).toISOString(), ok: true } }, availableMarkets: [market("1X2_PARTICIPANT_RESULT", ["part1", "draw", "part2"]), market("OVERUNDER_PARTICIPANT_GOALS", ["over", "under"], "line=2.5")] };
-  return { version: 3, source: "txline", cacheSource: "server", generatedAt: new Date(now).toISOString(), featuredFixtureId: fixtureId, materialization: { contextsRefreshed: 0, contextsReused: 1, concurrency: 1 }, matches: [{ id: fixtureId, fixtureId, title: "Brazil vs France", competitionLabel: "World Cup", startTime: kickoff, status: "scheduled", homeTeam: "Brazil", awayTeam: "France", context }] };
+  const context = { fixtureId, generatedAt: new Date(now).toISOString(), endpoints: { odds: { endpoint, receivedAt: new Date(now).toISOString(), ok: true } }, canonical1X2: { marketSignature: `${fixtureId}|MATCH_RESULT_1X2|full-match`, snapshotId: `captured-${fixtureId}`, providerSequence: 7, observedAt, selections: { home: 52, draw: 26, away: 22 } }, availableMarkets: [market("1X2_PARTICIPANT_RESULT", ["part1", "draw", "part2"]), market("OVERUNDER_PARTICIPANT_GOALS", ["over", "under"], "line=2.5")] };
+  const fixture = { id: fixtureId, fixtureId, title: "Brazil vs France", competitionLabel: "World Cup", competition: { providerCompetitionId: 72, canonicalCompetitionId: "world-cup", displayName: "World Cup", kind: "world_cup", authority: "txline", mapped: true }, startTime: kickoff, status: "scheduled", homeTeam: "Brazil", awayTeam: "France", source: "txline", context };
+  const consumerProjection = deriveFixtureConsumerProjection({ fixture, txlineContext: context, evaluatedAt: new Date(now).toISOString() });
+  return { version: 3, source: "txline", cacheSource: "server", generatedAt: new Date(now).toISOString(), featuredFixtureId: fixtureId, materialization: { contextsRefreshed: 0, contextsReused: 1, concurrency: 1 }, matches: [{ ...fixture, consumerProjection, availability: { marketCount: context.availableMarkets.length, canonical1X2Available: true, hasMarket: true, hasPlayablePrediction: consumerProjection.availability.canPredict, ...consumerProjection.availability, contextStatus: "ready" } }] };
 }
 async function createObservedPicks(page: Page, name: string, locale: "en" | "pt-BR") {
   await page.getByLabel(locale === "en" ? "Your name" : "Seu nome").fill(name);
@@ -39,8 +42,10 @@ test.afterAll(async () => { backend?.kill("SIGTERM"); if (backend) await new Pro
 test("bilingual two-fan immutable journey remains separate from competitive state", async ({ browser }, testInfo) => {
   const before = await (await fetch(`${origin}/operational/metrics`)).json();
   const contextA = await browser.newContext({ baseURL: origin, reducedMotion: "reduce" }); const contextB = await browser.newContext({ baseURL: origin, reducedMotion: "reduce" });
-  const pageA = await contextA.newPage(); await pageA.goto(`/picks/${fixtureId}?lang=en`); await expect(pageA.getByRole("heading", { name: /Make your match picks/ })).toBeVisible();
+  const pageA = await contextA.newPage(); if (testInfo.project.name === "chromium-desktop") await pageA.setViewportSize({ width: 1920, height: 1080 }); await pageA.goto(`/match/${fixtureId}/preview?lang=en`); await expect(pageA.getByText("Brazil", { exact: true }).first()).toBeVisible(); await capture(pageA, testInfo, "match-preview-en");
+  await pageA.goto(`/picks/${fixtureId}?lang=en`); await expect(pageA.getByRole("heading", { name: /Make your match picks/ })).toBeVisible();
   await pageA.keyboard.press("Tab"); expect(await pageA.evaluate(() => document.activeElement?.tagName)).not.toBe("BODY"); await createObservedPicks(pageA, "Ana", "en");
+  await capture(pageA, testInfo, "picks-confirmed-en");
   await pageA.getByRole("button", { name: "Confirm immutable card" }).click(); await expect(pageA.getByRole("alert")).toHaveText("Confirmed picks cannot be edited.");
   const shareResponse = pageA.waitForResponse((response) => response.url().endsWith("/share") && response.request().method() === "POST"); await pageA.getByRole("button", { name: "Share" }).click(); const share = await (await shareResponse).json() as { url: string };
   await expect.poll(() => pageA.getByAltText(/Preview of the VIRA share card/i).evaluate((image: HTMLImageElement) => image.naturalWidth)).toBe(1200); await capture(pageA, testInfo, "picks-share-en");
