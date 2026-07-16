@@ -85,6 +85,10 @@ export function fetchHome(context?: EditorialRequestContext) {
   return fetch(`${API_ORIGIN}/home`, { headers: editorialHeaders(context) }).then((response) => json<HomeProjection>(response));
 }
 
+export function fetchTournamentJourney(context?: EditorialRequestContext) {
+  return fetch(`${API_ORIGIN}/tournaments/world-cup/journey`, { headers: editorialHeaders(context) }).then((response) => json<TournamentJourneyProjection>(response));
+}
+
 export function trackHome(type: "home.editorial_viewed" | "home.primary_action_clicked", editorialKind: string, fixtureId?: string) {
   return fetch(`${API_ORIGIN}/home/analytics`, { method: "POST", headers: { "Content-Type": "application/json", "X-Vira-Public-Token": getPublicToken() }, body: JSON.stringify({ type, editorialKind, fixtureId }) }).then((response) => json<{ accepted: true }>(response));
 }

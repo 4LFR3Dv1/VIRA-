@@ -51,6 +51,7 @@ export interface MatchSummary {
   homeScore?: number;
   awayScore?: number;
   source: string;
+  archiveResultAuthority?: "txline_terminal_history";
   consumerProjection?: FixtureConsumerProjection;
 }
 

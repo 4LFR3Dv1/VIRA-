@@ -27,6 +27,7 @@ import { useLocale } from "../../i18n/locale-context.tsx";
 import type { StaticTranslationKey, TranslateFunction } from "../../i18n/translate.ts";
 import { competitionDisplayName } from "../../i18n/semantic-copy.ts";
 import { VIRA_PICKS_ENABLED } from "../picks/feature-flags.ts";
+import { fetchTournamentJourney, type TournamentJourneyFixture } from "../../social/share";
 
 type ContextState = "idle" | "loading" | "ready" | "empty" | "error";
 const CONTEXT_CACHE_TTL_MS = 60_000;
@@ -110,6 +111,39 @@ function FootballPrompt({ label, prompt }: { label: string; prompt: string }) {
   return <article className="min-h-40 bg-[#0a0e1a] p-5 sm:p-6"><p className="font-['DM_Mono'] text-[9px] font-black uppercase tracking-[.16em] text-primary">{label}</p><h3 className="mt-8 font-['Chakra_Petch'] text-xl font-black uppercase leading-[.95]">{prompt}</h3></article>;
 }
 
+function archivedJourneyMatch(item: TournamentJourneyFixture | undefined): MatchCatalogEntry | null {
+  const projection = item?.fixture;
+  if (!item || !projection) return null;
+  const fixture = projection.fixture;
+  return {
+    id: fixture.fixtureId,
+    fixtureId: fixture.fixtureId,
+    title: `${fixture.homeTeam.name} vs ${fixture.awayTeam.name}`,
+    competitionLabel: fixture.competition.displayName,
+    competition: fixture.competition,
+    startTime: fixture.kickoffAt,
+    status: fixture.status,
+    homeTeam: fixture.homeTeam.name,
+    awayTeam: fixture.awayTeam.name,
+    homeScore: item.result?.homeScore,
+    awayScore: item.result?.awayScore,
+    source: "txline-journey-archive",
+    archiveResultAuthority: item.result?.authority,
+    consumerProjection: projection,
+    context: null,
+    availability: {
+      marketCount: 0,
+      observedMarketCount: 0,
+      focusMarketCount: 0,
+      canonical1X2Available: Boolean(projection.market.canonical1X2),
+      hasMarket: false,
+      hasPlayablePrediction: false,
+      ...projection.availability,
+      contextStatus: "unavailable",
+    },
+  };
+}
+
 function FinishedMatchPreview({ match, context }: { match: MatchCatalogEntry; context: MatchTxlineContext | null }) {
   const { locale, localizedHref, t } = useLocale();
   const score = context?.fixtureState?.score ?? {
@@ -129,15 +163,15 @@ function FinishedMatchPreview({ match, context }: { match: MatchCatalogEntry; co
 
         <div className="mt-12 grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-end gap-4 border-y border-white/15 py-8 sm:gap-8">
           <TeamHeading name={match.homeTeam} side="home" />
-          <div className="px-2 text-center"><p className="font-['DM_Mono'] text-[9px] uppercase text-primary">{t("postMatch.finalScore")}</p><strong className="mt-3 block font-['Chakra_Petch'] text-[clamp(2.8rem,7vw,6rem)] font-black leading-none">{scoreAvailable ? <><AnimatedNumber value={score.home as number} locales={locale} />-<AnimatedNumber value={score.away as number} locales={locale} /></> : "--"}</strong></div>
+          <div className="px-2 text-center"><p className="font-['DM_Mono'] text-[9px] uppercase text-primary">{t("postMatch.finalScore")}</p><strong data-testid="finished-score" aria-label={scoreAvailable ? `${t("postMatch.finalScore")} ${score.home}-${score.away}` : t("postMatch.finalScore")} className="mt-3 block font-['Chakra_Petch'] text-[clamp(2.8rem,7vw,6rem)] font-black leading-none">{scoreAvailable ? <><AnimatedNumber value={score.home as number} locales={locale} />-<AnimatedNumber value={score.away as number} locales={locale} /></> : "--"}</strong></div>
           <TeamHeading name={match.awayTeam} side="away" />
         </div>
       </div>
     </section>
 
     <section className="mx-auto grid max-w-[1440px] gap-8 px-5 py-12 sm:px-8 lg:grid-cols-[minmax(0,1fr)_22rem] lg:px-14 lg:py-16">
-      <div className="border-y border-white/15 py-7"><p className="font-['DM_Mono'] text-[10px] uppercase text-primary">{t("preview.finished.archiveTitle")}</p><h2 className="mt-4 font-['Chakra_Petch'] text-4xl font-black uppercase">{t("preview.finished.official")}</h2><p className="mt-5 max-w-2xl text-sm leading-6 text-white/45">{t("preview.finished.archiveDescription")}</p><div className="mt-7 flex flex-wrap gap-3"><Link to={localizedHref(`/match/${match.fixtureId}`)} className="inline-flex min-h-14 items-center gap-3 bg-primary px-5 font-['Chakra_Petch'] text-xs font-black uppercase text-[#070a13]">{t("preview.finished.roomCta")}<ArrowRight className="size-4" /></Link>{VIRA_PICKS_ENABLED ? <Link to={localizedHref(`/picks/${match.fixtureId}`)} className="inline-flex min-h-14 items-center border border-white/20 px-5 font-['Chakra_Petch'] text-xs font-black uppercase hover:border-primary hover:text-primary">VIRA Picks</Link> : null}</div></div>
-      <aside className="border border-primary/30 bg-primary/[.055] p-6"><ShieldCheck className="size-5 text-primary" /><p className="mt-5 font-['DM_Mono'] text-[9px] uppercase text-white/35">TxLINE</p><strong className="mt-2 block font-['Chakra_Petch'] text-2xl font-black uppercase">{t("preview.finished.txlineFinal")}</strong><p className="mt-4 text-xs leading-5 text-white/40">{context?.fixtureState ? t("preview.finished.authorityConfirmed") : t("preview.finished.authorityPending")}</p><Link to={localizedHref("/matches")} className="mt-8 inline-flex items-center gap-2 text-xs font-bold uppercase text-white/55 hover:text-white"><ArrowLeft className="size-4" />{t("preview.backToMatches")}</Link></aside>
+      <div className="border-y border-white/15 py-7"><p className="font-['DM_Mono'] text-[10px] uppercase text-primary">{t("preview.finished.archiveTitle")}</p><h2 className="mt-4 font-['Chakra_Petch'] text-4xl font-black uppercase">{t("preview.finished.official")}</h2><p className="mt-5 max-w-2xl text-sm leading-6 text-white/45">{t("preview.finished.archiveDescription")}</p><div className="mt-7 flex flex-wrap gap-3">{match.archiveResultAuthority ? <Link to={localizedHref("/matches")} className="inline-flex min-h-14 items-center gap-3 bg-primary px-5 font-['Chakra_Petch'] text-xs font-black uppercase text-[#070a13]">{t("preview.backToMatches")}<ArrowRight className="size-4" /></Link> : <><Link to={localizedHref(`/match/${match.fixtureId}`)} className="inline-flex min-h-14 items-center gap-3 bg-primary px-5 font-['Chakra_Petch'] text-xs font-black uppercase text-[#070a13]">{t("preview.finished.roomCta")}<ArrowRight className="size-4" /></Link>{VIRA_PICKS_ENABLED ? <Link to={localizedHref(`/picks/${match.fixtureId}`)} className="inline-flex min-h-14 items-center border border-white/20 px-5 font-['Chakra_Petch'] text-xs font-black uppercase hover:border-primary hover:text-primary">VIRA Picks</Link> : null}</>}</div></div>
+      <aside className="border border-primary/30 bg-primary/[.055] p-6"><ShieldCheck className="size-5 text-primary" /><p className="mt-5 font-['DM_Mono'] text-[9px] uppercase text-white/35">TxLINE</p><strong className="mt-2 block font-['Chakra_Petch'] text-2xl font-black uppercase">{t("preview.finished.txlineFinal")}</strong><p className="mt-4 text-xs leading-5 text-white/40">{context?.fixtureState || match.archiveResultAuthority ? t("preview.finished.authorityConfirmed") : t("preview.finished.authorityPending")}</p><Link to={localizedHref("/matches")} className="mt-8 inline-flex items-center gap-2 text-xs font-bold uppercase text-white/55 hover:text-white"><ArrowLeft className="size-4" />{t("preview.backToMatches")}</Link></aside>
     </section>
   </main></AppShell>;
 }
@@ -157,16 +191,19 @@ export function MatchPreviewScreen() {
 
   useEffect(() => {
     let cancelled = false;
-    fetchMatchCatalog().then((response) => {
-      if (!cancelled) {
-        setMatches(response.matches);
-        setLoadState("ready");
+    fetchMatchCatalog().then(async (response) => {
+      let nextMatches = response.matches;
+      if (!nextMatches.some((item) => item.fixtureId === matchId)) {
+        const journey = await fetchTournamentJourney({ locale, timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC" }).catch(() => null);
+        const archived = archivedJourneyMatch(journey?.fixtures.find((item) => item.fixtureId === matchId));
+        if (archived) nextMatches = [...nextMatches, archived];
       }
+      if (!cancelled) { setMatches(nextMatches); setLoadState("ready"); }
     }).catch(() => !cancelled && setLoadState("error"));
     return () => { cancelled = true; };
-  }, []);
+  }, [locale, matchId]);
 
-  const match = useMemo(() => matches.find((item) => item.fixtureId === matchId) ?? matches[0] ?? null, [matchId, matches]);
+  const match = useMemo(() => matches.find((item) => item.fixtureId === matchId) ?? null, [matchId, matches]);
   const projection = match?.consumerProjection ?? null;
   useShellAtmosphere("route:preview", match ? {
     atmosphere: projection?.fixture.status === "finished" ? "finished" : "anticipation",
@@ -180,6 +217,7 @@ export function MatchPreviewScreen() {
 
   useEffect(() => {
     if (!match) return;
+    if (match.archiveResultAuthority) { setContext(null); setContextState("empty"); return; }
     let cancelled = false;
     const cached = readCachedContext(match.fixtureId);
     if (cached) {
