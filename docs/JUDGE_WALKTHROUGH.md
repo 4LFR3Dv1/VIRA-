@@ -1,53 +1,84 @@
 # VIRA Judge Walkthrough
 
-## Fast Path
+Evaluate the complete VIRA journey in under three minutes. No wallet, OAuth, payment, extension or local setup is required.
 
-1. Open <https://vira.snelabs.space/> and make the featured 1X2 pick.
-2. Share the link and open it in an anonymous or mobile window.
-3. Submit the second prediction and enter the same room.
-4. Open <https://vira.snelabs.space/help> to inspect a resolved ledger replay without login.
+## 1. Available now — VIRA Picks
 
-No wallet, OAuth, payment, extension or local setup is required.
+1. Open the [live product](https://vira.snelabs.space/?lang=en) and choose a scheduled World Cup fixture.
+2. Open **VIRA Picks**, enter a guest name and select one or two available predictions.
+3. Confirm the immutable card. The server revalidates the fixture, kickoff, exact TxLINE market and freshness before accepting it.
+4. Share the card and open the link in an anonymous or mobile window.
+5. Create a second card with another guest identity. Picks remain separate from Match Room points and ranking.
 
-## Authority
+Supported consumer markets are intentionally allowlisted:
+
+- regular-time match result;
+- regular-time Total Goals 2.5 when the exact TxLINE market is authoritative;
+- Both Teams to Score remains hidden until a matching TxLINE market is observed and certified.
+
+VIRA Picks contains no money, stake, payout, prize or combined probability.
+
+## 2. During a live fixture — Match Room
+
+1. Enter the same Match Room from two windows with different guest names.
+2. Wait for a relevant TxLINE football observation to open a short synchronized challenge.
+3. Submit one answer on each device. Individual choices and option splits remain private until lock.
+4. Observe the same server-owned deadline on both screens.
+5. The first eligible post-lock TxLINE observation resolves the rule, then points, streak and ranking update together.
+
+The browser never chooses the deadline, winning option, score or ranking.
+
+## 3. Anytime — Certified Playback
+
+Open the [Judge Evaluation Guide](https://vira.snelabs.space/help?lang=en) when no match is live.
+
+The playback is a **sanitized deterministic TxLINE test fixture** persisted in the append-only ledger and replayed by the production runtime. It is not presented as current live delivery. The page proves:
 
 ```text
-TxLINE fixture market -> pre-match context
-Official score/events -> competitive resolution
-VIRA runtime          -> lock, predicate, scoring and ranking
-Append-only ledger    -> restart and independent replay
-Solana commitment     -> asynchronous replay-hash anchor
+TxLINE-shaped observation and provider sequence
+        ↓
+canonical server rule and immutable lock
+        ↓
+deterministic winning option and scoring
+        ↓
+hash-chain verification
+        ↓
+live projection = replayed projection
+        ↓
+live ranking = replayed ranking
 ```
 
-`/help` never calls internal ingest routes. It selects a resolved public room, reruns verification and exposes only redacted aggregate participation.
+The canonical fixture is pinned by default so a newly resolved room cannot silently replace the certified judge evidence. A different public room is inspected only when its `roomId` is requested explicitly.
 
-## Two-Device Gate
+## What to inspect
 
-```text
-A and B enter the same room
-both submit private answers
-the server locks the round
-an authorized fact resolves everyone
-both rankings match
-restart rehydrates the same state
-replay hash remains byte-identical
-```
+- fixture and provider identity;
+- market signature, provider sequence and acquisition origin;
+- server-owned lock timestamp;
+- deterministic rule expression and winning option;
+- answers evaluated and points applied;
+- replay hash and event-range hash;
+- hash-chain, authority, temporal, eligibility and determinism checks;
+- projection and ranking equivalence after replay.
+
+Public playback contains no session token, participant credential, TxLINE credential or private pre-lock selection.
+
+## Submission links
+
+- [Live product](https://vira.snelabs.space/?lang=en)
+- [3:40 demo video](https://www.youtube.com/watch?v=eqe9e5TZ02k)
+- [Public repository](https://github.com/4LFR3Dv1/VIRA-)
+- [Commercial pitch](VIRA_Synchronized_Football_Engagement.pdf)
+- [TxLINE endpoint map](TXLINE_ENDPOINT_MAP.md)
+- [VIRA Picks authority and limits](VIRA_PICKS.md)
+
+## Reproducible verification
 
 ```powershell
 npm run test:e2e:two-device
 npm run test:judge-playback
+npm run test:browser:picks
+npm run verify
 ```
 
-## Runbook
-
-Before: check `/ready` and `/operational/metrics`, confirm one replica, mounted volume and TxLINE health, then freeze deploys.
-
-During: watch `eventLoopLagMs`, `queueDepth`, `sseClients`, disk space, catalog errors and degraded feeds. Stop opening rounds when authority is degraded; never inject a substitute result.
-
-After: confirm full time, open `/help`, compare projection/ranking, run `certify:match` and archive `artifacts/certify-match.json`.
-
-For a wall-clock stability run, execute `npm run soak:match -- --target https://vira.snelabs.space --duration-sec 14400 --interval-sec 30` and archive `artifacts/soak-match.json`. The report fails on readiness loss, queued work, replay drift, projection divergence or ranking divergence.
-
-## Operational Boundary
-
-The event store is single-writer. Production must remain one backend replica with one persistent volume. Accelerated certification repeats the restart/replay contract, but a four-hour wall-clock soak must still be executed and archived before claiming long-duration production certification.
+Operational readiness, metrics, persistence and soak procedures live in the separate [Operations Runbook](OPERATIONS_RUNBOOK.md).

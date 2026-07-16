@@ -32,7 +32,7 @@ export async function fetchBackendHealth(): Promise<boolean> {
   return response.ok;
 }
 
-export async function fetchPublicPlayback(): Promise<{ available: boolean; reason?: string; room?: { roomId: string; match: RoomSnapshot["match"] }; verification?: RoomVerification; replay?: VerifiedRoundReplayV1 }> {
+export async function fetchPublicPlayback(): Promise<{ available: boolean; reason?: string; source?: { kind: "canonical_certified_fixture" | "requested_public_room"; provider: "TxLINE"; fixtureType: "sanitized_txline_test_fixture" | "resolved_public_room"; liveDuringReview: false; disclosure: string }; room?: { roomId: string; match: RoomSnapshot["match"] }; verification?: RoomVerification; replay?: VerifiedRoundReplayV1 }> {
   const response = await fetch(`${API_ORIGIN}/public/playback`);
   if (!response.ok) throw new Error(`playback_failed:${response.status}`);
   return response.json();

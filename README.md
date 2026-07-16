@@ -412,7 +412,8 @@ VIRA addresses these points through a server-side Consumer projection, explicit 
 
 | Document | Purpose |
 | --- | --- |
-| [Judge Walkthrough](docs/JUDGE_WALKTHROUGH.md) | Fast evaluation path and operational runbook. |
+| [Judge Walkthrough](docs/JUDGE_WALKTHROUGH.md) | Three-minute product evaluation across Picks, Match Room and certified playback. |
+| [Operations Runbook](docs/OPERATIONS_RUNBOOK.md) | Readiness, live monitoring, persistence and certification procedures. |
 | [TxLINE Endpoint Map](docs/TXLINE_ENDPOINT_MAP.md) | Provider endpoints and product mapping. |
 | [Football Moment Engine](docs/FOOTBALL_MOMENT_ENGINE.md) | Normalized football actions and round conditions. |
 | [Consumer Cadence](docs/CONSUMER_CADENCE.md) | Meaningful-round limits and cooldown policy. |

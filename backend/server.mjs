@@ -41,6 +41,7 @@ import { createTxlineStreamManager } from "./txline-stream.mjs";
 import { planScoreUpdateReconciliation } from "./txline-score-reconciler.mjs";
 import { createTxlineCatalogCache } from "./txline-catalog-cache.mjs";
 import { ensureVerifiedPlayback, verifiedPlaybackIds } from "./verified-playback-seed.mjs";
+import { publicPlaybackSource, selectPublicPlaybackRoom } from "./public-playback.mjs";
 import { deriveFixtureTemporalContext, resolveEditorialLocaleContext } from "../shared/editorial-domain.mjs";
 import { predictionShareCopy, roomShareCopy, shareChoiceLabel } from "../shared/share-copy.mjs";
 import { authorizeE2eRequest, e2eModeFromEnv } from "./e2e-mode.mjs";
@@ -733,19 +734,12 @@ async function handleRequest(request, response) {
     if (request.method === "GET" && url.pathname === "/public/playback") {
       ensureReady();
       const requestedRoomId = url.searchParams.get("roomId");
-      const candidates = runtime.publicRoomSummaries().filter((room) => room.lastResolution?.roundId && (!requestedRoomId || room.roomId === requestedRoomId));
-      const selected = candidates.sort((left, right) => Number(right.match.status === "finished") - Number(left.match.status === "finished"))[0] ?? null;
-      const fallbackAllowed = !requestedRoomId || requestedRoomId === verifiedPlaybackIds.roomId;
-      const fallbackRoom = fallbackAllowed
-        ? runtime.publicRoomSummaries().find((room) => room.roomId === verifiedPlaybackIds.roomId) ?? null
-        : null;
-      const playbackRoom = selected ?? fallbackRoom;
-      const roundId = selected?.lastResolution?.roundId ?? (fallbackRoom ? verifiedPlaybackIds.roundId : null);
-      if (!playbackRoom || !roundId) {
+      const selected = selectPublicPlaybackRoom({ rooms: runtime.publicRoomSummaries(), requestedRoomId, canonicalRoomId: verifiedPlaybackIds.roomId, canonicalRoundId: verifiedPlaybackIds.roundId });
+      if (!selected) {
         sendJson(response, 200, { available: false, reason: "verified_round_not_available", destination: "/matches" });
         return;
       }
-      sendJson(response, 200, { available: true, room: playbackRoom, verification: await runtime.verifyRoom(playbackRoom.roomId), replay: await runtime.verifiedRoundReplay(playbackRoom.roomId, roundId) });
+      sendJson(response, 200, { available: true, source: publicPlaybackSource(selected.kind), room: selected.room, verification: await runtime.verifyRoom(selected.room.roomId), replay: await runtime.verifiedRoundReplay(selected.room.roomId, selected.roundId) });
       return;
     }
 
