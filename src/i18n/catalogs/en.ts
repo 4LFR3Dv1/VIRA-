@@ -116,6 +116,7 @@ export const en = {
   "home.footer.noGroup": "No group yet",
   "home.footer.champion": "World Cup champion",
   "home.footer.outrightUnavailable": "Unavailable without a verified tournament-winner market",
+  "home.footer.tournamentActive": "Tournament active · champion pending the official final",
   "state.match.scheduled": "Pre-match",
   "state.match.live": "Live",
   "state.match.finished": "Final",

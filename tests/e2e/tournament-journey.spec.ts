@@ -1,0 +1,37 @@
+import { devices, expect, test } from "@playwright/test";
+import { spawn, type ChildProcess } from "node:child_process";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import http from "node:http";
+import os from "node:os";
+import path from "node:path";
+import { deriveFixtureConsumerProjection } from "../../shared/fixture-consumer-projection.mjs";
+
+let backend: ChildProcess; let origin = ""; let dataDir = "";
+function freePort(): Promise<number> { return new Promise((resolve, reject) => { const server = http.createServer(); server.once("error", reject); server.listen(0, "127.0.0.1", () => { const address = server.address(); server.close(() => resolve(typeof address === "object" && address ? address.port : 0)); }); }); }
+function projection(fixtureId: string, homeTeam: string, awayTeam: string, status: "scheduled" | "finished", startTime: string) { return deriveFixtureConsumerProjection({ fixture: { fixtureId, homeTeam, awayTeam, status, startTime, competitionLabel: "World Cup", competition: { providerCompetitionId: "72", canonicalCompetitionId: "world-cup", displayName: "World Cup", kind: "world_cup", authority: "registry", mapped: true } }, evaluatedAt: "2026-07-16T12:00:00.000Z", localeContext: { locale: "en", timeZone: "UTC" } }); }
+function archived(fixtureId: string, homeTeam: string, awayTeam: string, homeScore: number, awayScore: number) { const terminal = { FixtureId: Number(fixtureId), Action: "game_finalised", StatusId: 100, Seq: 1000, Participant1IsHome: true, Score: { Participant1: { Total: { Goals: homeScore } }, Participant2: { Total: { Goals: awayScore } } } }; return { fixtureId, projection: projection(fixtureId, homeTeam, awayTeam, "finished", fixtureId === "18237038" ? "2026-07-14T19:00:00.000Z" : "2026-07-15T19:00:00.000Z"), result: { authority: "txline_terminal_history", homeScore, awayScore, providerSequence: 1000, observedAt: "2026-07-15T21:00:00.000Z", receivedAt: "2026-07-16T12:00:00.000Z", origin: `/api/scores/historical/${fixtureId}`, freshness: "terminal", terminalPayload: terminal }, observations: [{ payload: terminal, origin: `/api/scores/historical/${fixtureId}`, observedAt: "2026-07-15T21:00:00.000Z", receivedAt: "2026-07-16T12:00:00.000Z", providerSequence: 1000, freshness: "terminal", canonicalHash: "a".repeat(64) }], updatedAt: "2026-07-16T12:00:00.000Z" }; }
+
+test.beforeAll(async () => {
+  dataDir = await mkdtemp(path.join(os.tmpdir(), "vira-tournament-journey-"));
+  const final = { fixtureId: "18257739", homeTeam: "Spain", awayTeam: "Argentina", status: "scheduled", startTime: "2026-07-19T19:00:00.000Z", competitionLabel: "World Cup", competition: { providerCompetitionId: "72", canonicalCompetitionId: "world-cup", displayName: "World Cup", kind: "world_cup", authority: "registry", mapped: true }, raw: { FixtureId: 18257739, Participant1: "Spain", Participant2: "Argentina", Participant1IsHome: true, StartTime: 1784491200000, GameState: 0, Competition: "World Cup", CompetitionId: 72 } };
+  const third = { fixtureId: "18257865", homeTeam: "France", awayTeam: "England", status: "scheduled", startTime: "2026-07-18T21:00:00.000Z", competitionLabel: "World Cup", competition: final.competition, raw: { FixtureId: 18257865, Participant1: "France", Participant2: "England", Participant1IsHome: true, StartTime: 1784418000000, GameState: 0, Competition: "World Cup", CompetitionId: 72 } };
+  const matches = [final, third].map((item) => ({ ...item, consumerProjection: projection(item.fixtureId, item.homeTeam, item.awayTeam, "scheduled", item.startTime), context: null, availability: { marketCount: 0, observedMarketCount: 0, focusMarketCount: 0, canonical1X2Available: false, hasMarket: false, hasPlayablePrediction: false, canFeature: true, featureReason: "upcoming_fixture", canPredict: false, canEnterRoom: true, canShowMarket: false, canMakeDirectionalClaim: false, reason: "market_missing", contextStatus: "unavailable" } }));
+  const catalogPath = path.join(dataDir, "catalog.json"); await writeFile(catalogPath, JSON.stringify({ version: 3, source: "txline", cacheSource: "server", generatedAt: "2026-07-16T12:00:00.000Z", featuredFixtureId: "18257739", materialization: { contextsRefreshed: 0, contextsReused: 0, concurrency: 1 }, matches }), "utf8");
+  await writeFile(path.join(dataDir, "tournament-journey.json"), JSON.stringify({ schemaVersion: 1, fixtures: { "18237038": archived("18237038", "France", "Spain", 0, 2), "18241006": archived("18241006", "England", "Argentina", 1, 2) } }), "utf8");
+  const port = await freePort(); origin = `http://127.0.0.1:${port}`; backend = spawn(process.execPath, ["backend/server.mjs"], { cwd: process.cwd(), env: { ...process.env, PORT: String(port), VIRA_DATA_DIR: dataDir, VIRA_CATALOG_SNAPSHOT_PATH: catalogPath, VIRA_VERIFIED_PLAYBACK_ENABLED: "false", TXLINE_JWT: "", TXLINE_API_TOKEN: "" }, stdio: "ignore" });
+  await expect.poll(async () => { try { return (await fetch(`${origin}/health`)).status; } catch { return 0; } }, { timeout: 20_000 }).toBe(200);
+});
+test.afterAll(async () => { backend?.kill("SIGTERM"); if (backend) await new Promise((resolve) => backend.once("exit", resolve)); await rm(dataDir, { recursive: true, force: true }); });
+
+test("official bracket is bilingual, accessible and separated from guided playback", async ({ browser }, testInfo) => {
+  const { defaultBrowserType: _defaultBrowserType, ...iphone } = devices["iPhone 13"];
+  const context = await browser.newContext(testInfo.project.name === "mobile-webkit" ? { ...iphone, baseURL: origin, reducedMotion: "reduce" } : { baseURL: origin, reducedMotion: "reduce" });
+  const page = await context.newPage(); const errors: string[] = []; page.on("pageerror", (error) => errors.push(error.message));
+  await page.goto("/?lang=en"); await expect(page.getByRole("heading", { name: "Road to the final" })).toBeVisible(); await expect(page.getByText("Tournament active", { exact: true })).toBeVisible();
+  const visibleCards = page.locator("article:visible"); await expect(page.getByText("Official champion", { exact: true })).toHaveCount(0); await expect(visibleCards.getByText("France", { exact: true }).first()).toBeVisible(); await expect(visibleCards.getByText("0–2")).toBeVisible(); await expect(visibleCards.getByText("1–2")).toBeVisible();
+  await expect(visibleCards.getByRole("link", { name: /Open match: Spain vs Argentina/ })).toHaveAttribute("href", /18257739/); await expect(page.getByRole("link", { name: /Start guided playback/ })).toHaveAttribute("href", /judge-playback-france-spain-v2/); await expect(page.getByText(/sanitized captured TxLINE fixture/)).toBeVisible();
+  const horizontalOverflow = await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth + 1); expect(horizontalOverflow).toBe(false);
+  const evidenceDir = path.resolve("artifacts", "tournament-journey", testInfo.project.name); await mkdir(evidenceDir, { recursive: true }); await page.screenshot({ path: path.join(evidenceDir, "home-en.png"), fullPage: true });
+  await page.goto("/?lang=pt-BR"); await expect(page.getByRole("heading", { name: "Caminho até a final" })).toBeVisible(); await expect(page.getByText("Torneio em andamento", { exact: true })).toBeVisible(); await expect(page.getByText(/fixture TxLINE capturada e sanitizada/)).toBeVisible();
+  expect(errors).toEqual([]); await context.close();
+});

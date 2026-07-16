@@ -118,6 +118,7 @@ export type TranslationMessages = {
   "home.footer.noGroup": undefined;
   "home.footer.champion": undefined;
   "home.footer.outrightUnavailable": undefined;
+  "home.footer.tournamentActive": undefined;
   "state.match.scheduled": undefined;
   "state.match.live": undefined;
   "state.match.finished": undefined;

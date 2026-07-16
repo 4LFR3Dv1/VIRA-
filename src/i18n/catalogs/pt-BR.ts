@@ -116,6 +116,7 @@ export const ptBR = {
   "home.footer.noGroup": "Nenhum grupo ainda",
   "home.footer.champion": "Campeão da Copa",
   "home.footer.outrightUnavailable": "Indisponível sem mercado de campeão verificado",
+  "home.footer.tournamentActive": "Torneio em andamento · campeão aguarda a final oficial",
   "state.match.scheduled": "Pré-jogo",
   "state.match.live": "Ao vivo",
   "state.match.finished": "Final",

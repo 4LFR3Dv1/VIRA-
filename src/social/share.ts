@@ -53,6 +53,29 @@ export type HomeProjection = {
   tournament: { id: string; name: string; status: string; generatedAt: string; outrightMarket: null; primaryFixture: HomeFixture | null };
   player: null | { publicId: string; displayName: string; points: number; streak: number; fixturePrediction: PredictionProjection | null; miniLeagues: Array<{ id: string; status: string; members: Array<{ publicId: string; displayName: string; points: number; rank: number }> }> };
   editorial: { kind: "join_live_room" | "predict_fixture" | "result_available" | "open_calendar"; authority: "txline_fixture_market" | "official_match_state"; fixture: HomeFixture | null; prediction: PredictionProjection | null; sourceSnapshotIds: string[]; generatedAt: string; expiresAt: string | null; copy?: { headline: string; scheduleLabel: string; marketStatement: string }; evidence?: { eligibility: unknown; rankScore: number; rankReasons: string[] } };
+  journey?: TournamentJourneyProjection;
+};
+
+export type TournamentJourneyFixture = {
+  fixtureId: string;
+  stage: "semi_final" | "third_place" | "final";
+  slot: number;
+  structureAuthority: "editorial_manifest";
+  resultAuthority: "txline";
+  manifestVersion: string;
+  fixture: FixtureConsumerProjection | null;
+  result: null | { authority: "txline_terminal_history"; homeScore: number; awayScore: number; providerSequence: number | null; observedAt: string | null; receivedAt: string; origin: string; freshness: "terminal" };
+  availability: "available" | "unavailable";
+};
+
+export type TournamentJourneyProjection = {
+  schemaVersion: 1;
+  tournamentId: string;
+  manifestVersion: string;
+  generatedAt: string;
+  status: "active" | "complete";
+  fixtures: TournamentJourneyFixture[];
+  champion: null | { name: string; fixtureId: string; authority: "txline_terminal_history" };
 };
 
 export type PredictionProjection = { choice: "home" | "draw" | "away"; status: "open" | "resolved"; correct?: boolean; winningChoice?: string; finalScore?: { home: number; away: number } };
