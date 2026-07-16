@@ -11,6 +11,9 @@ import { createRoomRuntime } from "./runtime.mjs";
 import { createSolanaCommitmentPublisherFromEnv } from "./solana-commitment-publisher.mjs";
 import { createShareStore } from "./share-store.mjs";
 import { createViraPicksStore } from "./vira-picks-store.mjs";
+import { createTournamentJourneyStore } from "./tournament-journey-store.mjs";
+import { createTournamentJourneyService } from "./tournament-journey-service.mjs";
+import { WORLD_CUP_JOURNEY_MANIFEST_V1 } from "./tournament-journey-manifest.mjs";
 import { buildMarketSnapshotForSelection, buildPicksCatalog } from "./vira-picks-market.mjs";
 import { selectionFromCanonicalId } from "./vira-picks-contracts.mjs";
 import { deriveRegularTimeScoreAuthorityV1 } from "./vira-picks-regular-time-authority.mjs";
@@ -52,6 +55,7 @@ const e2eMode = e2eModeFromEnv();
 const eventStore = await createFileEventStore();
 const shareStore = await createShareStore();
 const picksStore = await createViraPicksStore();
+const tournamentJourneyStore = await createTournamentJourneyStore();
 const companionSubscriptionStore = await createCompanionSubscriptionStore();
 const commitmentPublisher = createSolanaCommitmentPublisherFromEnv();
 const runtime = createRoomRuntime({ eventStore, commitmentPublisher });
@@ -81,6 +85,8 @@ try {
   console.error("VIRA runtime failed to rehydrate ledger", error);
 }
 const txlineConfig = txlineConfigFromEnv();
+const tournamentJourney = createTournamentJourneyService({ store: tournamentJourneyStore, manifest: WORLD_CUP_JOURNEY_MANIFEST_V1, txlineConfig });
+await tournamentJourney.seedObserved();
 const txlineStreams = createTxlineStreamManager({ config: txlineConfig, runtime });
 const port = Number(process.env.PORT || 8787);
 const configuredRoomIds = new Set();
@@ -983,7 +989,9 @@ async function handleRequest(request, response) {
         try { snapshot = runtime.snapshot(String(league.roomId), null); } catch { snapshot = null; }
         return shareStore.league(leagueId, snapshot);
       }).filter(Boolean);
-      sendJson(response, 200, deriveHomeProjection({
+      const localeContext = requestEditorialLocale(request);
+      const journey = await tournamentJourney.refresh(catalog, { localeContext }).catch(() => tournamentJourney.projection(localeContext));
+      sendJson(response, 200, { ...deriveHomeProjection({
         catalog,
         predictions: refreshedPlayer?.predictions ?? playerState?.predictions ?? {},
         miniLeagues,
@@ -993,8 +1001,16 @@ async function handleRequest(request, response) {
           points: totalPoints,
           streak: bestStreak,
         } : null,
-        localeContext: requestEditorialLocale(request),
-      }));
+        localeContext,
+      }), journey });
+      return;
+    }
+
+    if (request.method === "GET" && url.pathname === "/tournaments/world-cup/journey") {
+      ensureReady();
+      const catalog = await txlineCatalogCache.get({ allowColdWait: false });
+      const localeContext = requestEditorialLocale(request);
+      sendJson(response, 200, catalog ? await tournamentJourney.refresh(catalog, { localeContext }).catch(() => tournamentJourney.projection(localeContext)) : tournamentJourney.projection(localeContext));
       return;
     }
 

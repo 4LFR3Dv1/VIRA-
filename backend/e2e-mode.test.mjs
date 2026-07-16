@@ -58,6 +58,6 @@ test("administrative E2E routes are absent when disabled and fixed when enabled"
       assert.equal((await fetch(`${origin}/__e2e/ingest`, { method: "POST", headers })).status, 404);
       const ready = await (await fetch(`${origin}/ready`)).json(); assert.equal(path.resolve(ready.eventStore.dataDir), path.resolve(enabledDir));
     });
-    const files = await readdir(enabledDir); assert.ok(files.every((file) => ["events.jsonl", "metadata.json", "social.json", "snapshots", "quarantine"].includes(file)), `unexpected persistence entry: ${files.join(",")}`);
+    const files = await readdir(enabledDir); assert.ok(files.every((file) => ["events.jsonl", "metadata.json", "social.json", "tournament-journey.json", "snapshots", "quarantine"].includes(file)), `unexpected persistence entry: ${files.join(",")}`);
   } finally { await rm(disabledDir, { recursive: true, force: true }); await rm(enabledDir, { recursive: true, force: true }); }
 });
