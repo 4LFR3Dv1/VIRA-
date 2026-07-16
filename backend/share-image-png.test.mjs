@@ -15,9 +15,9 @@ test("share renderer produces a real 1200x630 PNG", () => {
 
 test("share renderer bundles every server-side font and renders dynamic text", () => {
   assert.equal(resolveShareFontFiles().length, 2);
-  const base = { kind: "prediction", destination: { ctaLabel: "Open" }, payload: { homeTeam: "France", awayTeam: "Spain", choiceLabel: "France" } };
-  const france = renderSharePng({ ...base, metadata: { title: "Ana picked France" } });
-  const spain = renderSharePng({ ...base, metadata: { title: "Ana picked Spain" } });
+  const base = { kind: "prediction", destination: { ctaLabel: "Open" }, payload: { displayName: "Ana", homeTeam: "France", awayTeam: "Spain" } };
+  const france = renderSharePng({ ...base, metadata: { title: "Ana picked France" }, payload: { ...base.payload, choiceLabel: "France" } });
+  const spain = renderSharePng({ ...base, metadata: { title: "Ana picked Spain" }, payload: { ...base.payload, choiceLabel: "Spain" } });
   const digest = (buffer) => createHash("sha256").update(buffer).digest("hex");
   assert.notEqual(digest(france), digest(spain), "dynamic share text must affect the rendered pixels");
 });
@@ -35,11 +35,11 @@ test("share renderer resolves the built asset when public is absent", () => {
 
 test("prediction, invite and result cards have distinct consumer compositions", () => {
   const base = { publicCode: "share01", metadata: { title: "Ana picked France", description: "France x Spain" }, destination: { path: "/match/fixture", ctaLabel: "Open" }, editorialContext: { locale: "en", timeZone: "America/Sao_Paulo" } };
-  const prediction = renderShareSvg({ ...base, kind: "prediction", payload: { homeTeam: "France", awayTeam: "Spain", choiceLabel: "France" } });
-  const room = renderShareSvg({ ...base, kind: "room", payload: { homeTeam: "France", awayTeam: "Spain", participantCount: 2, fixtureStatus: "live" } });
+  const prediction = renderShareSvg({ ...base, kind: "prediction", payload: { displayName: "Ana", homeTeam: "France", awayTeam: "Spain", choiceLabel: "France" } });
+  const room = renderShareSvg({ ...base, kind: "room", payload: { displayName: "Ana", homeTeam: "France", awayTeam: "Spain", participantCount: 2, fixtureStatus: "live" } });
   const result = renderShareSvg({ ...base, kind: "result", payload: { homeTeam: "France", awayTeam: "Spain", homeScore: 2, awayScore: 1, points: 100, rank: 1, correct: true, verified: true } });
-  assert.match(prediction, /MATCH PICK/); assert.match(prediction, /KICKOFF/);
-  assert.match(room, /LIVE ROOM/); assert.match(room, /NO ACCOUNT · NO X · NO WALLET/);
+  assert.match(prediction, /MATCH PICK/); assert.match(prediction, /WHO ARE YOU WITH/); assert.match(prediction, /data-team-flag="France"/);
+  assert.match(room, /LIVE ROOM/); assert.match(room, /ARE YOU IN/); assert.match(room, /data-team-flag="Spain"/);
   assert.match(result, /MATCH RESULT/); assert.match(result, /REPRODUCIBLE RESULT/);
   assert.notEqual(prediction, room); assert.notEqual(room, result);
 });

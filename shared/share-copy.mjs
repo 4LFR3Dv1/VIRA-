@@ -19,9 +19,9 @@ export function resolveShareLocaleContext(share) {
 
 function dictionary(locale) {
   return locale === "en" ? {
-    draw: "Draw", timePending: "time to be confirmed", at: "at", predictionCta: "Make my prediction", resultCta: "View result", roomCta: "Join room", roomResultCta: "View group result", nextCta: "Play the next one", matchCta: "View match",
+    draw: "Draw", timePending: "time to be confirmed", at: "at", predictionCta: "Make my pick", resultCta: "View result", roomCta: "Join the room", roomResultCta: "View group result", nextCta: "Play the next one", matchCta: "View match",
     live: "Live match", roomOpen: "Room open", inRoom: (count) => `${count} in the room`, joinBody: "Join and play together.",
-    picked: (name, choice) => `${name} picked ${choice}`, predictBody: (headline, schedule) => `${headline} · ${schedule}. Make your prediction.`,
+    picked: (name, choice) => `${name} is backing ${choice}. Who are you with?`, predictBody: (headline, schedule) => `${headline} · ${schedule}. Make your call.`,
     headlineToday: "Who wins today?", headlineTomorrow: "Who wins tomorrow?", headlineFixture: (home, away) => `Who wins ${home} x ${away}?`,
     correct: "was right", played: "played", yes: "YES", no: "NO", won: "won", points: (value) => `+${value} points`, recorded: "result recorded",
     resultTitle: (name, action) => `${name} ${action} on VIRA`, resultBody: (winner, result) => `${winner} won · ${result}.`, predictionResultTitle: (name, correct) => `${name} ${correct ? "was right" : "made a prediction"}`,
@@ -30,7 +30,7 @@ function dictionary(locale) {
   } : {
     draw: "Empate", timePending: "horário a confirmar", at: "às", predictionCta: "Fazer meu palpite", resultCta: "Ver resultado", roomCta: "Entrar na sala", roomResultCta: "Ver resultado do grupo", nextCta: "Jogar a próxima", matchCta: "Ver partida",
     live: "Partida ao vivo", roomOpen: "Sala aberta", inRoom: (count) => `${count} na sala`, joinBody: "Entre para jogar junto.",
-    picked: (name, choice) => `${name} escolheu ${choice}`, predictBody: (headline, schedule) => `${headline} · ${schedule}. Faça o seu palpite.`,
+    picked: (name, choice) => `${name} apoia ${choice}. De que lado você está?`, predictBody: (headline, schedule) => `${headline} · ${schedule}. Faça sua escolha.`,
     headlineToday: "Quem vence hoje?", headlineTomorrow: "Quem vence amanhã?", headlineFixture: (home, away) => `Quem vence ${home} x ${away}?`,
     correct: "acertou", played: "jogou", yes: "SIM", no: "NÃO", won: "venceu", points: (value) => `+${value} pontos`, recorded: "resultado registrado",
     resultTitle: (name, action) => `${name} ${action} no VIRA`, resultBody: (winner, result) => `${winner} venceu · ${result}.`, predictionResultTitle: (name, correct) => `${name} ${correct ? "acertou" : "fez seu palpite"}`,
@@ -59,7 +59,7 @@ export function roomShareCopy({ snapshot, participant, locale, kind }) {
   const normalizedLocale = normalizeShareLocale(locale);
   const copy = dictionary(normalizedLocale);
   if (kind === "room") return {
-    metadata: { title: normalizedLocale === "en" ? `${participant.displayName} is in ${snapshot.match.homeTeam.name} x ${snapshot.match.awayTeam.name}` : `${participant.displayName} está em ${snapshot.match.homeTeam.name} x ${snapshot.match.awayTeam.name}`, description: `${snapshot.match.status === "live" ? copy.live : copy.roomOpen} · ${copy.inRoom(snapshot.roomPopulation)}. ${copy.joinBody}`, imagePath: "dynamic" },
+    metadata: { title: normalizedLocale === "en" ? `${participant.displayName} opened ${snapshot.match.homeTeam.name} x ${snapshot.match.awayTeam.name}. Are you in?` : `${participant.displayName} abriu ${snapshot.match.homeTeam.name} x ${snapshot.match.awayTeam.name}. Você vem?`, description: `${snapshot.match.status === "live" ? copy.live : copy.roomOpen} · ${copy.inRoom(snapshot.roomPopulation)}. ${copy.joinBody}`, imagePath: "dynamic" },
     ctaLabel: snapshot.match.status === "finished" ? copy.roomResultCta : copy.roomCta,
   };
   const result = snapshot.lastResolution;

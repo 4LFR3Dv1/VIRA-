@@ -34,12 +34,18 @@ const copy = LOCALE === "en" ? {
   review: "Open Official Review", reviewTitle: "VIRA Official Review", resultMatches: "Replay produced the same result and ranking.",
   waiting: "Waiting for the invite", invite: /Invite to the room/i, shareDialog: /Share this moment/i,
   alertsReceive: /Receive match alerts/i, alertsEnabled: /Disable alerts/i, audit: /Audit details/i, details: /Technical details/i,
+  pressure: /Building pressure/i,
+  corner: /^Corner$/i, yellowCard: /^Yellow card$/i, goal: /^Goal$/i,
+  connected: /^Connected$/i,
 } : {
   joinDialog: "Entrar na sala", name: "Nome na sala", homeName: "Seu nome", join: "Entrar na sala", sharePick: /Compartilhar: France/i,
   yes: /SIM/i, confirm: /Confirmar palpite/i, confirmed: /Palpite confirmado/i, ranking: /Ranking atualizado/i,
   review: "Abrir Revisão Oficial", reviewTitle: "Revisão Oficial VIRA", resultMatches: "O replay produziu o mesmo resultado e ranking.",
   waiting: "Aguardando o convite", invite: /Convidar para a sala/i, shareDialog: /Compartilhe este momento/i,
   alertsReceive: /Receber alertas da partida/i, alertsEnabled: /Desativar alertas/i, audit: /Detalhes da auditoria/i, details: /Detalhes técnicos/i,
+  pressure: /Construindo pressão/i,
+  corner: /^Escanteio$/i, yellowCard: /^Cartão amarelo$/i, goal: /^Gol$/i,
+  connected: /^Conectado$/i,
 };
 const scenes = [];
 let epoch = 0;
@@ -62,6 +68,14 @@ async function ensureStable(page) {
   await page.locator("body").waitFor({ state: "visible" });
   await waitFor(() => page.evaluate(() => !document.querySelector('[aria-busy="true"]')), "stable layout");
 }
+async function waitSharePreview(page) {
+  const image = page.getByAltText(/Preview of the VIRA share card|Prévia do card compartilhável VIRA|VIRA share card|Card compartilhável VIRA/i);
+  await image.waitFor();
+  await waitFor(
+    () => image.evaluate((element) => element instanceof HTMLImageElement && element.complete && element.naturalWidth === 1200 && element.naturalHeight === 630),
+    "share preview 1200x630",
+  );
+}
 function gitSha() { try { return execFileSync("git", ["rev-parse", "HEAD"], { cwd: ROOT, encoding: "utf8" }).trim(); } catch { return "unknown"; } }
 async function buildId() {
   try {
@@ -73,10 +87,13 @@ async function buildId() {
 function catalog(roomId) {
   const generatedAt = new Date().toISOString();
   const startTime = new Date(Date.now() + 86_400_000).toISOString();
-  const context = { fixtureId: roomId, provider: "TxLINE", generatedAt, fixture: { provider: "TxLINE", source: "txline", fixtureId: roomId, title: "France vs Spain", competitionLabel: "World Cup", status: "scheduled", startTime, homeTeam: "France", awayTeam: "Spain" }, canonical1X2: { marketSignature: `${roomId}|MATCH_RESULT_1X2|full-match`, snapshotId: `captured-${roomId}`, providerSequence: 42, observedAt: new Date(Date.now() - 120_000).toISOString(), selections: { home: 51, draw: 27, away: 22 } }, availableMarkets: [], suggestedPrediction: { priceName: "part1", probability: 51 }, cache: { status: "captured", cachedAt: generatedAt, ttlMs: 30_000 } };
-  const fixture = { id: roomId, fixtureId: roomId, title: "France vs Spain", competitionLabel: "World Cup", competition: { providerCompetitionId: 72, canonicalCompetitionId: "world-cup", displayName: "World Cup", kind: "world_cup", authority: "txline", mapped: true }, startTime, status: "scheduled", homeTeam: "France", awayTeam: "Spain", source: "txline", context };
-  const projection = deriveFixtureConsumerProjection({ fixture, txlineContext: context, evaluatedAt: generatedAt });
-  return { version: 3, source: "txline", cacheSource: "captured", inputAuthority: AUTHORITY, generatedAt, featuredFixtureId: roomId, refreshReason: "captured-demo-fixture", materialization: { contextsRefreshed: 0, contextsReused: 1, concurrency: 1 }, matches: [{ ...fixture, consumerProjection: projection, availability: { marketCount: 1, canonical1X2Available: true, hasMarket: true, hasPlayablePrediction: projection.availability.canPredict, ...projection.availability, contextStatus: "ready" } }] };
+  const makeMatch = (fixtureId, status) => {
+    const context = { fixtureId, provider: "TxLINE", generatedAt, fixture: { provider: "TxLINE", source: "txline", fixtureId, title: "France vs Spain", competitionLabel: "World Cup", status, startTime, homeTeam: "France", awayTeam: "Spain" }, canonical1X2: { marketSignature: `${fixtureId}|MATCH_RESULT_1X2|full-match`, snapshotId: `captured-${fixtureId}`, providerSequence: 42, observedAt: new Date(Date.now() - 120_000).toISOString(), selections: { home: 51, draw: 27, away: 22 } }, availableMarkets: [], suggestedPrediction: { priceName: "part1", probability: 51 }, cache: { status: "captured", cachedAt: generatedAt, ttlMs: 30_000 } };
+    const fixture = { id: fixtureId, fixtureId, title: "France vs Spain", competitionLabel: "World Cup", competition: { providerCompetitionId: 72, canonicalCompetitionId: "world-cup", displayName: "World Cup", kind: "world_cup", authority: "txline", mapped: true }, startTime, status, homeTeam: "France", awayTeam: "Spain", source: "txline", context };
+    const projection = deriveFixtureConsumerProjection({ fixture, txlineContext: context, evaluatedAt: generatedAt });
+    return { ...fixture, consumerProjection: projection, availability: { marketCount: 1, canonical1X2Available: true, hasMarket: true, hasPlayablePrediction: projection.availability.canPredict, ...projection.availability, contextStatus: "ready" } };
+  };
+  return { version: 3, source: "txline", cacheSource: "captured", inputAuthority: AUTHORITY, generatedAt, featuredFixtureId: roomId, refreshReason: "captured-demo-fixture", materialization: { contextsRefreshed: 0, contextsReused: 2, concurrency: 1 }, matches: [makeMatch(roomId, "scheduled"), makeMatch(`${roomId}-moments`, "unknown")] };
 }
 
 async function join(page, name) { const dialog = page.getByRole("dialog", { name: copy.joinDialog }); await dialog.getByPlaceholder(copy.name).fill(name); await dialog.getByRole("button", { name: copy.join }).click(); await page.getByText(name, { exact: true }).first().waitFor(); }
@@ -161,16 +178,22 @@ async function main() {
     await pageA.goto(`/?lang=${encodeURIComponent(LOCALE)}`); await ensureStable(pageA);
     await scene("home", "Home", ["A"], [pageA], async () => {}, 1800);
     await scene("home-pick", "Pre-match pick", ["A"], [pageA], async () => { await pageA.getByRole("textbox", { name: copy.homeName }).fill("Ana"); await pageA.getByRole("button", { name: /France/i }).click(); await pageA.getByRole("button", { name: copy.sharePick }).waitFor(); }, 2200, "no-preference");
-    await scene("prediction-share", "Prediction share", ["A"], [pageA], async () => { const response = pageA.waitForResponse((item) => item.url().includes(`/predictions/${roomId}/share`) && item.status() === 201); await pageA.getByRole("button", { name: copy.sharePick }).click(); shareUrl = (await (await response).json()).url; }, 2300);
+    await scene("prediction-share", "Prediction share", ["A"], [pageA], async () => { const response = pageA.waitForResponse((item) => item.url().includes(`/predictions/${roomId}/share`) && item.status() === 201); await pageA.getByRole("button", { name: copy.sharePick }).click(); shareUrl = (await (await response).json()).url; await pageA.goto(new URL(new URL(shareUrl).pathname, origin).toString()); await ensureStable(pageA); await waitSharePreview(pageA); }, 2300);
     await scene("player-b-opens-share", "Player B opens the invite", ["B"], [pageB], async () => { await pageB.goto(new URL(new URL(shareUrl).pathname, origin).toString()); await ensureStable(pageB); await pageB.locator("[data-share-cta]").waitFor(); }, 2200);
     const started = await fetch(`${origin}/__e2e/scenario/${runId}/start`, { method: "POST", headers: { "X-Vira-E2E-Token": token } }); if (!started.ok || (await started.json()).inputAuthority !== AUTHORITY) throw new Error("Scenario start failed");
     await pageA.goto(`/match/${roomId}?lang=${encodeURIComponent(LOCALE)}`); await ensureJoined(pageA, "Ana");
     await scene("guest-join", "Guest-first join", ["B"], [pageB], async () => { await pageB.locator("[data-share-cta]").click(); await pageB.getByRole("button", { name: copy.join }).first().click(); await ensureJoined(pageB, "Bruno"); }, 2200, "no-preference");
     await Promise.all([pageA.getByText("Bruno", { exact: true }).first().waitFor(), pageB.getByText("Ana", { exact: true }).first().waitFor()]);
     await scene("shared-room", "Two participants in the same room", ["A", "B"], [pageA, pageB], async () => {}, 2200);
-    await scene("room-share-sheet", "Room invite share sheet", ["A"], [pageA], async () => { const response = pageA.waitForResponse((item) => new URL(item.url()).pathname === "/shares" && item.status() === 201); await pageA.getByRole("button", { name: copy.invite }).click(); await response; await pageA.getByRole("dialog", { name: copy.shareDialog }).waitFor(); }, 2200);
+    await scene("room-share-sheet", "Room invite share sheet", ["A"], [pageA], async () => { const response = pageA.waitForResponse((item) => new URL(item.url()).pathname === "/shares" && item.status() === 201); await pageA.getByRole("button", { name: copy.invite }).click(); await response; await pageA.getByRole("dialog", { name: copy.shareDialog }).waitFor(); await waitSharePreview(pageA); }, 2200);
     await pageA.getByRole("dialog", { name: copy.shareDialog }).getByRole("button", { name: /Close share sheet|Fechar compartilhamento/i }).click();
     await scene("match-room", "Match Room without visual Companion", ["A"], [pageA], async () => { await pageA.locator("[data-companion-state]").waitFor({ state: "detached" }).catch(() => {}); }, 1900);
+    await scene("live-pressure", "TxLINE attacking pressure reaches both screens", ["A", "B"], [pageA, pageB], async () => {
+      const response = await fetch(`${origin}/__e2e/scenario/${runId}/pressure`, { method: "POST", headers: { "X-Vira-E2E-Token": token } });
+      if (!response.ok) throw new Error(`Pressure scenario failed: ${response.status}`);
+      await Promise.all([pageA, pageB].map((page) => page.getByText(copy.pressure).waitFor({ timeout: 10_000 })));
+    }, 3200, "no-preference");
+    await recordCorrelatedState("pressure");
     if (CAPTURE_MODE === "desktop") {
       await pageA.locator("[data-match-alerts-control]").waitFor({ timeout: 15_000 });
       const control = pageA.locator("[data-match-alerts-control]");
@@ -204,6 +227,23 @@ async function main() {
     const reviewPlayer = CAPTURE_MODE === "hybrid-cross-device" ? "A" : "B";
     await scene("official-review", "Official Review", [reviewPlayer], [reviewPage], async () => { await reviewPage.goto(`/matches?lang=${encodeURIComponent(LOCALE)}`); await reviewPage.getByRole("button", { name: copy.review, exact: true }).click(); const review = reviewPage.getByRole("dialog").filter({ hasText: copy.reviewTitle }); await review.waitFor(); await review.getByText(copy.resultMatches, { exact: true }).waitFor(); }, 2600);
     await scene("replay-proof", "Replay and hashes", [reviewPlayer], [reviewPage], async () => { const review = reviewPage.getByRole("dialog").filter({ hasText: copy.reviewTitle }); await review.locator("summary").filter({ hasText: copy.audit }).click(); await review.locator("summary").filter({ hasText: copy.details }).click(); await review.getByText(/Round ID|ID da rodada/i).scrollIntoViewIfNeeded(); }, 3000);
+    const momentsRunId = `${runId}-moments`;
+    const momentsRoomId = `e2e-${momentsRunId}`;
+    const momentsStarted = await fetch(`${origin}/__e2e/scenario/${momentsRunId}/start`, { method: "POST", headers: { "X-Vira-E2E-Token": token } });
+    if (!momentsStarted.ok) throw new Error(`Live moments scenario failed to start: ${momentsStarted.status}`);
+    await Promise.all([pageA.goto(`/match/${momentsRoomId}?lang=${encodeURIComponent(LOCALE)}`), pageB.goto(`/match/${momentsRoomId}?lang=${encodeURIComponent(LOCALE)}`)]);
+    await Promise.all([ensureJoined(pageA, "Ana"), ensureJoined(pageB, "Bruno")]);
+    await Promise.all([pageA, pageB].map((page) => page.getByText(copy.connected).first().waitFor({ timeout: 15_000 })));
+    async function liveMoment(id, title, endpoint, matcher, hold) {
+      await scene(id, title, ["A", "B"], [pageA, pageB], async () => {
+        const response = await fetch(`${origin}/__e2e/scenario/${momentsRunId}/${endpoint}`, { method: "POST", headers: { "X-Vira-E2E-Token": token } });
+        if (!response.ok) throw new Error(`${title} scenario failed: ${response.status}`);
+        await Promise.all([pageA, pageB].map((page) => page.getByText(matcher).first().waitFor({ timeout: 10_000 })));
+      }, hold, "no-preference");
+    }
+    await liveMoment("live-corner", "Live corner notification", "corner", copy.corner, 3000);
+    await liveMoment("live-card", "Live yellow-card notification", "card", copy.yellowCard, 3400);
+    await liveMoment("live-goal", "Live goal takeover", "goal", copy.goal, 4600);
     const unexpectedFailedRequests = failedRequests.filter((request) => !/ERR_ABORTED|cancelled/i.test(request.reason));
     if (consoleErrors.length || serverErrors.length || unexpectedFailedRequests.length) throw new Error(`Capture health failed: ${JSON.stringify({ consoleErrors, serverErrors, unexpectedFailedRequests, expectedNavigationCancellations: failedRequests.length - unexpectedFailedRequests.length })}`);
     const aRaw = path.join(raw, "player-a.webm"), bRaw = path.join(raw, "player-b.webm");

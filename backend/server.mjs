@@ -575,7 +575,7 @@ async function handleRequest(request, response) {
         const authority = deriveRegularTimeScoreAuthorityV1({ fixtureId, historyComplete: true, freshness: "fresh", receivedAt: observedAt, acquisitionOrigin: "captured_txline_test_fixture", records: [{ RevId: 9001, Ts: observedAt, Action: "status", Data: { StatusId: 5, Score: { AbsoluteScore: { Participant1: 2, Participant2: 1 } } } }] });
         sendJson(response, 200, await picksStore.resolveFixture(fixtureId, authority)); return;
       }
-      const scenarioRoute = url.pathname.match(/^\/__e2e\/scenario\/([a-z0-9-]{8,64})\/(start|pressure|resolve)$/);
+      const scenarioRoute = url.pathname.match(/^\/__e2e\/scenario\/([a-z0-9-]{8,64})\/(start|pressure|corner|card|goal|resolve)$/);
       if (!scenarioRoute) { sendJson(response, 404, { error: "not_found" }); return; }
       const roomId = `e2e-${scenarioRoute[1]}`;
       if (scenarioRoute[2] === "start") {
@@ -620,6 +620,30 @@ async function handleRequest(request, response) {
         await runtime.applyNormalizedEvent(roomId, pressureEvent("one", sequence, 330), { acquisitionOrigin: "captured_txline_test_fixture" });
         const snapshot = await runtime.applyNormalizedEvent(roomId, pressureEvent("two", sequence + 1, 340), { acquisitionOrigin: "captured_txline_test_fixture" });
         sendJson(response, 200, { inputAuthority: e2eMode.inputAuthority, roomId, state: snapshot.currentRound?.state, streamVersion: snapshot.ledger.streamVersion });
+        return;
+      }
+      if (["corner", "card", "goal"].includes(scenarioRoute[2])) {
+        const before = runtime.snapshot(roomId, null);
+        if (before.match.status !== "live") { sendJson(response, 409, { error: "match_not_live", status: before.match.status }); return; }
+        const moment = scenarioRoute[2];
+        const sequence = Number(before.ledger.streamVersion) + 100;
+        const action = moment === "card" ? "yellow_card" : moment;
+        const snapshot = await runtime.applyNormalizedEvent(roomId, {
+          id: `captured-e2e-${moment}-${sequence}`,
+          providerActionId: `captured-action-${moment}-${sequence}`,
+          matchId: roomId,
+          sequence,
+          occurredAt: new Date().toISOString(),
+          matchClockSec: moment === "corner" ? 420 : moment === "card" ? 510 : 620,
+          type: moment,
+          participantSide: "home",
+          confirmed: true,
+          confirmationState: "confirmed",
+          absoluteScore: moment === "goal" ? { home: 1, away: 0 } : null,
+          source: "verified-playback",
+          payload: { FixtureId: roomId, Seq: sequence, Action: action, Type: action, PlayerName: moment === "card" ? "M. Laurent" : moment === "goal" ? "A. Martin" : undefined, Participant: 1, Participant1IsHome: true, Clock: { Running: true, Seconds: moment === "corner" ? 420 : moment === "card" ? 510 : 620 } },
+        }, { acquisitionOrigin: "captured_txline_test_fixture" });
+        sendJson(response, 200, { inputAuthority: e2eMode.inputAuthority, roomId, moment, score: { home: snapshot.match.homeScore, away: snapshot.match.awayScore }, streamVersion: snapshot.ledger.streamVersion });
         return;
       }
       sendJson(response, 404, { error: "not_found" });
@@ -810,7 +834,7 @@ async function handleRequest(request, response) {
       const resultCount = card.results?.filter((item) => item.status === "correct").length ?? 0; const isResult = card.status === "resolved" || card.status === "void";
       const share = await shareStore.createShare({
         kind: isResult ? "picks_result" : "picks", createdByPublicId: identity.publicId, expiresAt: isResult ? null : card.locksAt,
-        metadata: { title: isResult ? `${identity.displayName} · ${resultCount}/${card.selections.length}` : `${identity.displayName} · VIRA Picks`, description: card.locale === "pt-BR" ? "Previsões sociais. Sem dinheiro envolvido." : "Social predictions. No money involved." },
+        metadata: { title: isResult ? `${identity.displayName} · ${resultCount}/${card.selections.length}` : (() => { const matchPick = card.selections.find((selection) => selection.kind === "match_result"); const side = matchPick?.selection === "home" ? fixture.homeTeam : matchPick?.selection === "away" ? fixture.awayTeam : null; return card.locale === "pt-BR" ? side ? `${identity.displayName} apoia ${side}. De que lado você está?` : `${identity.displayName} vê um empate. Qual é o seu palpite?` : side ? `${identity.displayName} is backing ${side}. Who are you with?` : `${identity.displayName} sees a draw. What's your call?`; })(), description: card.locale === "pt-BR" ? "Previsões sociais. Sem dinheiro envolvido." : "Social predictions. No money involved." },
         destination: { path: `/picks/${encodeURIComponent(card.fixtureId)}?card=${encodeURIComponent(card.publicCode)}`, ctaLabel: card.locale === "pt-BR" ? "Faça suas previsões" : "Make your picks" },
         attribution: { source: "picks", campaign: isResult ? "picks_result" : "picks_card" },
         payload: { fixtureId: card.fixtureId, picksCardId: card.id, picksPublicCode: card.publicCode, displayName: card.displayName, selections: card.selections, results: card.results, homeTeam: fixture.homeTeam, awayTeam: fixture.awayTeam, kickoffAt: fixture.startTime, homeScore: card.finalScore?.home, awayScore: card.finalScore?.away },
@@ -845,7 +869,7 @@ async function handleRequest(request, response) {
             metadata: copy.metadata,
             destination: { path: `/match/${encodeURIComponent(snapshot.match.id)}`, ctaLabel: copy.ctaLabel },
             attribution: { source: "room", campaign: "room_invite" },
-            payload: { fixtureId: snapshot.match.id, roomId: snapshot.roomId, homeTeam: snapshot.match.homeTeam.name, awayTeam: snapshot.match.awayTeam.name, fixtureStatus: snapshot.match.status, participantCount: snapshot.roomPopulation }, editorialContext,
+            payload: { fixtureId: snapshot.match.id, roomId: snapshot.roomId, displayName: participant.displayName, homeTeam: snapshot.match.homeTeam.name, awayTeam: snapshot.match.awayTeam.name, fixtureStatus: snapshot.match.status, participantCount: snapshot.roomPopulation }, editorialContext,
           });
           sendJson(response, 201, { share, url: `${publicBaseUrl(request)}/s/${share.publicCode}` });
           return;
@@ -859,7 +883,7 @@ async function handleRequest(request, response) {
           metadata: copy.metadata,
           destination: { path: `/match/${encodeURIComponent(snapshot.match.id)}`, ctaLabel: copy.ctaLabel },
           attribution: { source: "result", campaign: "round_result" },
-          payload: { fixtureId: snapshot.match.id, roomId: snapshot.roomId, roundId: result.roundId, correct, points: result.pointsAwarded, rank: snapshot.leaderboard.find((entry) => entry.participantId === body.participantId)?.rank ?? null, winningOptionId: result.winningOptionId, verified: Boolean(snapshot.ledger?.headHash), homeTeam: snapshot.match.homeTeam.name, awayTeam: snapshot.match.awayTeam.name, homeScore: snapshot.match.homeScore, awayScore: snapshot.match.awayScore }, editorialContext,
+          payload: { fixtureId: snapshot.match.id, roomId: snapshot.roomId, roundId: result.roundId, displayName: participant.displayName, correct, points: result.pointsAwarded, rank: snapshot.leaderboard.find((entry) => entry.participantId === body.participantId)?.rank ?? null, winningOptionId: result.winningOptionId, verified: Boolean(snapshot.ledger?.headHash), homeTeam: snapshot.match.homeTeam.name, awayTeam: snapshot.match.awayTeam.name, homeScore: snapshot.match.homeScore, awayScore: snapshot.match.awayScore }, editorialContext,
         });
         sendJson(response, 201, { share, url: `${publicBaseUrl(request)}/s/${share.publicCode}` });
         return;
@@ -889,7 +913,7 @@ async function handleRequest(request, response) {
         metadata: copy.metadata,
         destination: { path: `/match/${encodeURIComponent(fixture.fixtureId)}/preview`, ctaLabel: copy.ctaLabel },
         attribution: { source: "prediction", campaign: "pre_match_1x2" },
-        payload: { fixtureId: fixture.fixtureId, predictionId: prediction.id, choice: body.choice, choiceLabel, homeTeam: fixture.homeTeam, awayTeam: fixture.awayTeam, kickoffAt: fixture.startTime }, editorialContext,
+        payload: { fixtureId: fixture.fixtureId, predictionId: prediction.id, displayName: prediction.displayName, choice: body.choice, choiceLabel, homeTeam: fixture.homeTeam, awayTeam: fixture.awayTeam, kickoffAt: fixture.startTime }, editorialContext,
       });
       sendJson(response, 201, { prediction, share, url: `${publicBaseUrl(request)}/s/${share.publicCode}` });
       return;
@@ -989,7 +1013,7 @@ async function handleRequest(request, response) {
         metadata: copy.metadata,
         destination: { path: `/match/${encodeURIComponent(fixtureId)}/preview`, ctaLabel: copy.ctaLabel },
         attribution: { source: resolved ? "result" : "prediction", campaign: resolved ? "fixture_prediction_result" : "pre_match_1x2" },
-        payload: { fixtureId, predictionId: prediction.id, choice: prediction.choice, choiceLabel: label, correct: prediction.correct ?? null, finalScore: prediction.finalScore ?? null, homeTeam: fixture.homeTeam, awayTeam: fixture.awayTeam, kickoffAt: fixture.startTime }, editorialContext,
+        payload: { fixtureId, predictionId: prediction.id, displayName: prediction.displayName, choice: prediction.choice, choiceLabel: label, correct: prediction.correct ?? null, finalScore: prediction.finalScore ?? null, homeTeam: fixture.homeTeam, awayTeam: fixture.awayTeam, kickoffAt: fixture.startTime }, editorialContext,
       });
       sendJson(response, 201, { prediction, share, url: `${publicBaseUrl(request)}/s/${share.publicCode}` });
       return;

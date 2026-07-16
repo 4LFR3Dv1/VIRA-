@@ -50,6 +50,10 @@ test("administrative E2E routes are absent when disabled and fixed when enabled"
       assert.equal(started.status, 200); assert.equal((await started.json()).inputAuthority, "captured_txline_test_fixture");
       const pressure = await fetch(`${origin}/__e2e/scenario/policy-run/pressure`, { method: "POST", headers });
       assert.equal(pressure.status, 200); assert.equal((await pressure.json()).state, "open");
+      for (const moment of ["corner", "card", "goal"]) {
+        const response = await fetch(`${origin}/__e2e/scenario/policy-run/${moment}`, { method: "POST", headers });
+        assert.equal(response.status, 200); assert.equal((await response.json()).moment, moment);
+      }
       assert.equal((await fetch(`${origin}/__e2e/scenario/policy-run/start`, { method: "POST", headers: { ...headers, "Content-Type": "application/json" }, body: "{}" })).status, 405);
       assert.equal((await fetch(`${origin}/__e2e/ingest`, { method: "POST", headers })).status, 404);
       const ready = await (await fetch(`${origin}/ready`)).json(); assert.equal(path.resolve(ready.eventStore.dataDir), path.resolve(enabledDir));
