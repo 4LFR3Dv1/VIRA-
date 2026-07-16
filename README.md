@@ -67,7 +67,7 @@ Both experiences reuse the same guest identity and social distribution layer, bu
 
 **When no match is live**
 
-Open [Official VIRA Review](https://vira.snelabs.space/help?lang=en) to inspect a resolved round reconstructed from the public ledger, or use the canonical [3:40 demo](https://www.youtube.com/watch?v=eqe9e5TZ02k) to see the complete two-device journey.
+Open [Official VIRA Review](https://vira.snelabs.space/help?lang=en) to inspect a resolved round reconstructed from the public ledger, or use the canonical [demo](https://www.youtube.com/watch?v=eqe9e5TZ02k) to see the complete two-device journey.
 
 ```text
 Pick → Share → Join → Play → Resolve → Rank → Verify

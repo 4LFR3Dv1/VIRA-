@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 2,
+  "title": "VIRA — One Match, Two Social Experiences, Powered by TxLINE",
+  "resolution": "1920x1080",
+  "fps": 30,
+  "durationSeconds": 270.5,
+  "scenes": [
+    { "id": "01-hook", "duration": 15.25, "overlay": "ONE MATCH · TWO SOCIAL EXPERIENCES", "sources": ["product:picks-result:a", "match:round-open:a", "match:resolution-both:a"] },
+    { "id": "02-preview", "duration": 14.28, "overlay": "MATCH PREVIEW · PICK A SIDE", "sources": ["product:preview:a", "match:prediction-share:a"] },
+    { "id": "03-picks", "duration": 29.17, "overlay": "VIRA PICKS · SOCIAL PREDICTIONS", "disclosure": "Supported TxLINE markets · no combined probability · no money involved", "sources": ["product:picks-builder:a", "product:picks-selected:a"] },
+    { "id": "04-card", "duration": 20.71, "overlay": "CONFIRM · IMMUTABLE · SHARE", "sources": ["product:picks-confirmed:a", "product:picks-share-card:a"] },
+    { "id": "05-friend", "duration": 19.68, "overlay": "A FRIEND MAKES THEIR OWN PICKS", "disclosure": "Distinct identity · same social group", "sources": ["product:friend-opens:b", "product:friend-confirmed:b"] },
+    { "id": "06-lock", "duration": 22.23, "overlay": "INVITE · JOIN · LOCK AT KICKOFF", "sources": ["match:room-share-sheet:a", "product:picks-locked:a", "match:shared-room:a"] },
+    { "id": "07-room", "duration": 29.03, "overlay": "TxLINE LIVE · PRESSURE · CORNER · CARD · GOAL", "hideOverlay": true, "sources": ["match:live-pressure:a", "match:live-corner:a", "match:live-card:a", "match:live-goal:a"] },
+    { "id": "08-round", "duration": 20.42, "overlay": "PRIVATE UNTIL LOCK", "external": "cross-device", "sourceStart": 10.4 },
+    { "id": "09-resolution", "duration": 18.39, "overlay": "ONE RESULT · EVERY SCREEN", "disclosure": "Competitive demo input: captured TxLINE test fixture", "external": "cross-device", "sourceStart": 29.0 },
+    { "id": "10-post-match", "duration": 21.15, "overlay": "POST-MATCH PICKS RESULT", "sources": ["product:picks-result:a", "product:picks-result-share-card:a"] },
+    { "id": "11-judge", "duration": 16.48, "overlay": "JUDGE EVALUATION · AVAILABLE ANYTIME", "sources": ["product:judge-hero:a", "product:judge-playback:a"] },
+    { "id": "12-chain", "duration": 22.57, "overlay": "TxLINE → SNAPSHOT → LOCK → RULE → RESULT", "overlayY": 24, "sources": ["product:judge-chain:a"], "externalTail": "txline" },
+    { "id": "13-commercial", "duration": 13.49, "overlay": "FREE FOR FANS · BUILT FOR PARTNERS", "sources": ["product:picks-share:a", "match:ranking:a"] },
+    { "id": "14-outro", "duration": 7.65, "overlay": "VIRA", "cta": { "url": "vira.snelabs.space", "repo": "github.com/4LFR3Dv1/VIRA-", "reassurance": "NO ACCOUNT · NO WALLET · NO MONEY INVOLVED" }, "sources": ["product:preview:a"] }
+  ]
+}

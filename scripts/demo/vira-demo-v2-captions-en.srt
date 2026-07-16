@@ -1,0 +1,211 @@
+1
+00:00:00,080 --> 00:00:05,179
+Football is already social. But most digital match experiences still
+
+2
+00:00:05,339 --> 00:00:10,437
+leave every fan watching alone. VIRA turns one football match
+
+3
+00:00:10,597 --> 00:00:15,170
+into a shared experience, before, during, and after kickoff.
+
+4
+00:00:15,330 --> 00:00:21,120
+Every journey starts in Match Preview. Fans see the fixture,
+
+5
+00:00:21,280 --> 00:00:26,475
+kickoff, market context, and the experiences currently available — all
+
+6
+00:00:26,635 --> 00:00:29,450
+continuously updated from TxLINE data.
+
+7
+00:00:29,610 --> 00:00:35,170
+Before kickoff, VIRA Picks lets fans make structured match predictions
+
+8
+00:00:35,330 --> 00:00:40,889
+using supported TxLINE market observations. Here, the fan selects the
+
+9
+00:00:41,049 --> 00:00:46,609
+match result and the regular-time total goals line. Consensus is
+
+10
+00:00:46,769 --> 00:00:52,328
+shown only for each individual selection. VIRA never calculates a
+
+11
+00:00:52,488 --> 00:00:58,048
+combined probability, and no money, stake, payout, or wagering is
+
+12
+00:00:58,208 --> 00:00:58,620
+involved.
+
+13
+00:00:58,780 --> 00:01:04,537
+Once confirmed, the Picks card becomes immutable. The server preserves
+
+14
+00:01:04,697 --> 00:01:10,454
+the exact market snapshots observed at confirmation, including freshness, provider
+
+15
+00:01:10,614 --> 00:01:16,371
+context, and canonical hashes. The fan can now share a
+
+16
+00:01:16,531 --> 00:01:19,330
+clear, visual card with friends.
+
+17
+00:01:19,490 --> 00:01:24,509
+A friend opens the shared link and sees the original
+
+18
+00:01:24,669 --> 00:01:29,688
+card without receiving private credentials or session data. They can
+
+19
+00:01:29,848 --> 00:01:34,867
+join the same social group, create their own predictions, and
+
+20
+00:01:35,027 --> 00:01:39,010
+confirm a separate card under their own identity.
+
+21
+00:01:39,170 --> 00:01:45,746
+At kickoff, every card is locked by the server. The
+
+22
+00:01:45,906 --> 00:01:52,483
+browser cannot extend the deadline, reopen a card, or change
+
+23
+00:01:52,643 --> 00:01:59,219
+a confirmed selection. The fixture authority always controls whether new
+
+24
+00:01:59,379 --> 00:02:01,240
+predictions are accepted.
+
+25
+00:02:01,400 --> 00:02:07,551
+As the match moves live, the experience continues inside the
+
+26
+00:02:07,711 --> 00:02:13,862
+VIRA Match Room. TxLINE match events, scores, market movement, and
+
+27
+00:02:14,022 --> 00:02:20,173
+live football signals are normalized into a shared consumer experience.
+
+28
+00:02:20,333 --> 00:02:26,483
+Fans can follow attacking pressure, defensive pressure, possession shifts, and
+
+29
+00:02:26,643 --> 00:02:30,270
+the moments that change the match.
+
+30
+00:02:30,430 --> 00:02:35,644
+When an eligible signal opens a round, both participants receive
+
+31
+00:02:35,804 --> 00:02:41,017
+the same question and the same authoritative deadline. Each answer
+
+32
+00:02:41,177 --> 00:02:46,391
+remains private until the server locks the round. No participant
+
+33
+00:02:46,551 --> 00:02:50,690
+can inspect another fan’s choice before that lock.
+
+34
+00:02:50,850 --> 00:02:56,820
+The official TxLINE observation resolves the round for everyone. The
+
+35
+00:02:56,980 --> 00:03:02,950
+same deterministic rule produces the result, updates the isolated competitive
+
+36
+00:03:03,110 --> 00:03:09,080
+ledger, and refreshes the Mini League ranking across both screens.
+
+37
+00:03:09,240 --> 00:03:14,955
+After the final result, VIRA resolves each supported Pick independently
+
+38
+00:03:15,115 --> 00:03:20,830
+from the authoritative regular-time score. Fans receive a simple summary,
+
+39
+00:03:20,990 --> 00:03:26,705
+see which reads were correct, missed, or void, and can
+
+40
+00:03:26,865 --> 00:03:30,230
+share the result without financial language.
+
+41
+00:03:30,390 --> 00:03:35,723
+Live football is not required to evaluate VIRA. The Judge
+
+42
+00:03:35,883 --> 00:03:41,217
+Evaluation Guide provides direct access to VIRA Picks, the live
+
+43
+00:03:41,377 --> 00:03:46,710
+product, and a certified playback reconstructed through the production runtime.
+
+44
+00:03:46,870 --> 00:03:51,617
+The evidence chain remains visible: a TxLINE provider observation is
+
+45
+00:03:51,777 --> 00:03:56,523
+normalized, persisted, locked by the server, processed by a deterministic
+
+46
+00:03:56,683 --> 00:04:01,430
+rule, and reproduced from the append-only event history. The public
+
+47
+00:04:01,590 --> 00:04:06,336
+projection exposes the fixture context, provider sequence, timestamps, rule, result,
+
+48
+00:04:06,496 --> 00:04:09,280
+and verification hashes — without exposing credentials.
+
+49
+00:04:09,440 --> 00:04:15,704
+VIRA is free and accessible for fans, while creating a
+
+50
+00:04:15,864 --> 00:04:22,128
+reusable engagement layer for clubs, broadcasters, sponsors, communities, and sports
+
+51
+00:04:22,288 --> 00:04:22,770
+platforms.
+
+52
+00:04:22,930 --> 00:04:29,725
+One match. Two social experiences. Powered by TxLINE. This is
+
+53
+00:04:29,885 --> 00:04:30,420
+VIRA.

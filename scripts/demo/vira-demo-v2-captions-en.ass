@@ -1,0 +1,67 @@
+[Script Info]
+ScriptType: v4.00+
+PlayResX: 1920
+PlayResY: 1080
+WrapStyle: 0
+ScaledBorderAndShadow: yes
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Default,Arial,34,&H00FFFFFF,&H000000FF,&HCC050A12,&HCC050A12,-1,0,0,0,100,100,0,0,3,2,0,2,180,180,68,1
+Style: LiveMoment,Arial,34,&H00FFFFFF,&H000000FF,&HCC050A12,&HCC050A12,-1,0,0,0,100,100,0,0,3,2,0,2,180,180,235,1
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+Dialogue: 0,0:00:00.08,0:00:05.17,Default,,0,0,0,,Football is already social. But most digital match experiences still
+Dialogue: 0,0:00:05.33,0:00:10.43,Default,,0,0,0,,leave every fan watching alone. VIRA turns one football match
+Dialogue: 0,0:00:10.59,0:00:15.17,Default,,0,0,0,,into a shared experience, before, during, and after kickoff.
+Dialogue: 0,0:00:15.33,0:00:21.12,Default,,0,0,0,,Every journey starts in Match Preview. Fans see the fixture,
+Dialogue: 0,0:00:21.28,0:00:26.47,Default,,0,0,0,,kickoff, market context, and the experiences currently available - all
+Dialogue: 0,0:00:26.63,0:00:29.45,Default,,0,0,0,,continuously updated from TxLINE data.
+Dialogue: 0,0:00:29.61,0:00:35.17,Default,,0,0,0,,Before kickoff, VIRA Picks lets fans make structured match predictions
+Dialogue: 0,0:00:35.33,0:00:40.88,Default,,0,0,0,,using supported TxLINE market observations. Here, the fan selects the
+Dialogue: 0,0:00:41.04,0:00:46.60,Default,,0,0,0,,match result and the regular-time total goals line. Consensus is
+Dialogue: 0,0:00:46.76,0:00:52.32,Default,,0,0,0,,shown only for each individual selection. VIRA never calculates a
+Dialogue: 0,0:00:52.48,0:00:58.04,Default,,0,0,0,,combined probability, and no money, stake, payout, or wagering is
+Dialogue: 0,0:00:58.20,0:00:58.62,Default,,0,0,0,,involved.
+Dialogue: 0,0:00:58.78,0:01:04.53,Default,,0,0,0,,Once confirmed, the Picks card becomes immutable. The server preserves
+Dialogue: 0,0:01:04.69,0:01:10.45,Default,,0,0,0,,the exact market snapshots observed at confirmation, including freshness, provider
+Dialogue: 0,0:01:10.61,0:01:16.37,Default,,0,0,0,,context, and canonical hashes. The fan can now share a
+Dialogue: 0,0:01:16.53,0:01:19.33,Default,,0,0,0,,clear, visual card with friends.
+Dialogue: 0,0:01:19.49,0:01:24.50,Default,,0,0,0,,A friend opens the shared link and sees the original
+Dialogue: 0,0:01:24.66,0:01:29.68,Default,,0,0,0,,card without receiving private credentials or session data. They can
+Dialogue: 0,0:01:29.84,0:01:34.86,Default,,0,0,0,,join the same social group, create their own predictions, and
+Dialogue: 0,0:01:35.02,0:01:39.01,Default,,0,0,0,,confirm a separate card under their own identity.
+Dialogue: 0,0:01:39.17,0:01:45.74,Default,,0,0,0,,At kickoff, every card is locked by the server. The
+Dialogue: 0,0:01:45.90,0:01:52.48,Default,,0,0,0,,browser cannot extend the deadline, reopen a card, or change
+Dialogue: 0,0:01:52.64,0:01:59.21,Default,,0,0,0,,a confirmed selection. The fixture authority always controls whether new
+Dialogue: 0,0:01:59.37,0:02:01.24,Default,,0,0,0,,predictions are accepted.
+Dialogue: 0,0:02:01.40,0:02:07.55,Default,,0,0,0,,As the match moves live, the experience continues inside the
+Dialogue: 0,0:02:07.71,0:02:13.86,LiveMoment,,0,0,0,,VIRA Match Room. TxLINE match events, scores, market movement, and
+Dialogue: 0,0:02:14.02,0:02:20.17,LiveMoment,,0,0,0,,live football signals are normalized into a shared consumer experience.
+Dialogue: 0,0:02:20.33,0:02:26.48,Default,,0,0,0,,Fans can follow attacking pressure, defensive pressure, possession shifts, and
+Dialogue: 0,0:02:26.64,0:02:30.27,Default,,0,0,0,,the moments that change the match.
+Dialogue: 0,0:02:30.43,0:02:35.64,Default,,0,0,0,,When an eligible signal opens a round, both participants receive
+Dialogue: 0,0:02:35.80,0:02:41.01,Default,,0,0,0,,the same question and the same authoritative deadline. Each answer
+Dialogue: 0,0:02:41.17,0:02:46.39,Default,,0,0,0,,remains private until the server locks the round. No participant
+Dialogue: 0,0:02:46.55,0:02:50.69,Default,,0,0,0,,can inspect another fan’s choice before that lock.
+Dialogue: 0,0:02:50.85,0:02:56.82,Default,,0,0,0,,The official TxLINE observation resolves the round for everyone. The
+Dialogue: 0,0:02:56.98,0:03:02.95,Default,,0,0,0,,same deterministic rule produces the result, updates the isolated competitive
+Dialogue: 0,0:03:03.11,0:03:09.08,Default,,0,0,0,,ledger, and refreshes the Mini League ranking across both screens.
+Dialogue: 0,0:03:09.24,0:03:14.95,Default,,0,0,0,,After the final result, VIRA resolves each supported Pick independently
+Dialogue: 0,0:03:15.11,0:03:20.83,Default,,0,0,0,,from the authoritative regular-time score. Fans receive a simple summary,
+Dialogue: 0,0:03:20.99,0:03:26.70,Default,,0,0,0,,see which reads were correct, missed, or void, and can
+Dialogue: 0,0:03:26.86,0:03:30.23,Default,,0,0,0,,share the result without financial language.
+Dialogue: 0,0:03:30.39,0:03:35.72,Default,,0,0,0,,Live football is not required to evaluate VIRA. The Judge
+Dialogue: 0,0:03:35.88,0:03:41.21,Default,,0,0,0,,Evaluation Guide provides direct access to VIRA Picks, the live
+Dialogue: 0,0:03:41.37,0:03:46.71,Default,,0,0,0,,product, and a certified playback reconstructed through the production runtime.
+Dialogue: 0,0:03:46.87,0:03:51.61,Default,,0,0,0,,The evidence chain remains visible: a TxLINE provider observation is
+Dialogue: 0,0:03:51.77,0:03:56.52,Default,,0,0,0,,normalized, persisted, locked by the server, processed by a deterministic
+Dialogue: 0,0:03:56.68,0:04:01.43,Default,,0,0,0,,rule, and reproduced from the append-only event history. The public
+Dialogue: 0,0:04:01.59,0:04:06.33,Default,,0,0,0,,projection exposes the fixture context, provider sequence, timestamps, rule, result,
+Dialogue: 0,0:04:06.49,0:04:09.28,Default,,0,0,0,,and verification hashes - without exposing credentials.
+Dialogue: 0,0:04:09.44,0:04:15.70,Default,,0,0,0,,VIRA is free and accessible for fans, while creating a
+Dialogue: 0,0:04:15.86,0:04:22.12,Default,,0,0,0,,reusable engagement layer for clubs, broadcasters, sponsors, communities, and sports
+Dialogue: 0,0:04:22.28,0:04:22.77,Default,,0,0,0,,platforms.
+Dialogue: 0,0:04:22.93,0:04:29.72,Default,,0,0,0,,One match. Two social experiences. Powered by TxLINE. This is
+Dialogue: 0,0:04:29.88,0:04:30.42,Default,,0,0,0,,VIRA.
