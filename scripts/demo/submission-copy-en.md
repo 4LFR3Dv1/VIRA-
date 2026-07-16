@@ -62,6 +62,6 @@ The main friction was temporal and lifecycle interpretation: kickoff time, marke
 
 - Live app: https://vira.snelabs.space/?lang=en
 - Public repository: https://github.com/4LFR3Dv1/VIRA-
-- Demo video: https://www.youtube.com/watch?v=eqe9e5TZ02k
+- Demo V2: https://www.youtube.com/watch?v=LnOd2kWTiGA
 
 No wallet, OAuth, purchase or installation required.

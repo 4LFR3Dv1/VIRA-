@@ -8,8 +8,10 @@
   VIRA turns authoritative football moments into synchronized multiplayer challenges powered by TxLINE.
 
   [![Live App](https://img.shields.io/badge/Live_app-Open_VIRA-9EF01A?style=for-the-badge&labelColor=050814)](https://vira.snelabs.space/?lang=en)
-  [![Demo](https://img.shields.io/badge/Demo-3%3A40_on_YouTube-FF0033?style=for-the-badge&labelColor=050814)](https://www.youtube.com/watch?v=eqe9e5TZ02k)
+  [![Demo V2](https://img.shields.io/badge/Demo_V2-4%3A30_on_YouTube-FF0033?style=for-the-badge&labelColor=050814)](https://www.youtube.com/watch?v=LnOd2kWTiGA)
   [![Commercial Pitch](https://img.shields.io/badge/Pitch-Commercial_PDF-9EF01A?style=for-the-badge&labelColor=050814)](docs/VIRA_Synchronized_Football_Engagement.pdf)
+  [![Platform Deck](https://img.shields.io/badge/Deck-Synchronized_Participation-9EF01A?style=for-the-badge&labelColor=050814)](docs/VIRA_Synchronized_Participation.pdf)
+  [![Brand Activation](https://img.shields.io/badge/Deck-Matchday_Brand_Rituals-FFFFFF?style=for-the-badge&labelColor=050814)](docs/Matchday_Brand_Rituals.pdf)
   [![Judge Walkthrough](https://img.shields.io/badge/Judges-3_minute_walkthrough-FFFFFF?style=for-the-badge&labelColor=050814)](https://vira.snelabs.space/help?lang=en)
   [![Verify](https://github.com/4LFR3Dv1/VIRA-/actions/workflows/verify.yml/badge.svg)](https://github.com/4LFR3Dv1/VIRA-/actions/workflows/verify.yml)
 
@@ -18,7 +20,7 @@
 
 <br />
 
-[![VIRA — synchronized multiplayer football experience](https://i.ytimg.com/vi/eqe9e5TZ02k/maxresdefault.jpg)](https://www.youtube.com/watch?v=eqe9e5TZ02k)
+[![VIRA — one match, two social experiences](https://i.ytimg.com/vi/LnOd2kWTiGA/maxresdefault.jpg)](https://www.youtube.com/watch?v=LnOd2kWTiGA)
 
 ## The match becomes the game
 
@@ -67,7 +69,7 @@ Both experiences reuse the same guest identity and social distribution layer, bu
 
 **When no match is live**
 
-Open [Official VIRA Review](https://vira.snelabs.space/help?lang=en) to inspect a resolved round reconstructed from the public ledger, or use the canonical [demo](https://www.youtube.com/watch?v=eqe9e5TZ02k) to see the complete two-device journey.
+Open [Official VIRA Review](https://vira.snelabs.space/help?lang=en) to inspect a resolved round reconstructed from the public ledger, or use the canonical [Demo V2](https://www.youtube.com/watch?v=LnOd2kWTiGA) to see the complete two-device journey.
 
 ```text
 Pick → Share → Join → Play → Resolve → Rank → Verify
@@ -200,7 +202,17 @@ share created → invite opened → guest joined → live answer
 
 Commercial reporting can price and optimize distribution around qualified joins, answer rate, return rate, share conversion and repeat participation — not merely logo impressions.
 
-The [VIRA commercial pitch](docs/VIRA_Synchronized_Football_Engagement.pdf) presents the product positioning, TxLINE-powered architecture, measurable engagement funnel, partner value and revenue paths in a concise five-page deck.
+### Commercial materials
+
+The commercial narrative is available in three focused five-page decks rather than forcing every partner into the same presentation.
+
+| Material | Best for | Focus |
+| --- | --- | --- |
+| [VIRA — Synchronized Participation](docs/VIRA_Synchronized_Participation.pdf) | TxODDS judges, broadcasters and rights holders | The complete product journey, TxLINE authority chain, reproducibility and B2B2C participation model. |
+| [Matchday Brand Rituals](docs/Matchday_Brand_Rituals.pdf) | Sponsors, agencies and brand activation teams | A protected sponsored-fixture format, measurable participation funnel and focused pilot scope. |
+| [Synchronized Football Engagement](docs/VIRA_Synchronized_Football_Engagement.pdf) | Product, engineering and commercial reviewers | Core positioning, product architecture, partner value and monetization paths. |
+
+Product images in these decks that demonstrate deterministic end-to-end states are explicitly identified as captured TxLINE test fixtures. They are not represented as active live delivery, and none of the commercial formats introduces wagering or financial incentives.
 
 ## Production evidence
 
@@ -435,7 +447,7 @@ VIRA addresses these points through a server-side Consumer projection, explicit 
 
 - **Live app:** https://vira.snelabs.space/?lang=en
 - **PT-BR app:** https://vira.snelabs.space/?lang=pt-BR
-- **Demo:** https://www.youtube.com/watch?v=eqe9e5TZ02k
+- **Demo V2:** https://www.youtube.com/watch?v=LnOd2kWTiGA
 - **Commercial pitch:** [VIRA — Synchronized Football Engagement](docs/VIRA_Synchronized_Football_Engagement.pdf)
 - **Judge walkthrough:** https://vira.snelabs.space/help?lang=en
 - **Public repository at submission:** https://github.com/4LFR3Dv1/VIRA-

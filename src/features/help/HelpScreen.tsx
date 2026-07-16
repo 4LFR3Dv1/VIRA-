@@ -12,7 +12,7 @@ import { ViraLoader } from "../../shared/brand/ViraLoader.tsx";
 type Playback = Awaited<ReturnType<typeof fetchPublicPlayback>>;
 type Icon = ComponentType<{ className?: string }>;
 
-const DEMO_URL = "https://www.youtube.com/watch?v=eqe9e5TZ02k";
+const DEMO_URL = "https://www.youtube.com/watch?v=LnOd2kWTiGA";
 const REPO_URL = "https://github.com/4LFR3Dv1/VIRA-";
 const PITCH_URL = "https://github.com/4LFR3Dv1/VIRA-/blob/main/docs/VIRA_Synchronized_Football_Engagement.pdf";
 

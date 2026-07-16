@@ -66,7 +66,7 @@ Public playback contains no session token, participant credential, TxLINE creden
 ## Submission links
 
 - [Live product](https://vira.snelabs.space/?lang=en)
-- [Canonical demo video](https://www.youtube.com/watch?v=eqe9e5TZ02k)
+- [Canonical Demo V2](https://www.youtube.com/watch?v=LnOd2kWTiGA)
 - [Public repository](https://github.com/4LFR3Dv1/VIRA-)
 - [Commercial pitch](VIRA_Synchronized_Football_Engagement.pdf)
 - [TxLINE endpoint map](TXLINE_ENDPOINT_MAP.md)

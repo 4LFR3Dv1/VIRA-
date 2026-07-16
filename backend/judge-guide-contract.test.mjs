@@ -11,7 +11,7 @@ test("judge guide exposes the complete evaluation journey and submission resourc
 test("judge walkthrough is product-facing and operations are separated", async () => {
   const walkthrough = await fs.readFile(new URL("../docs/JUDGE_WALKTHROUGH.md", import.meta.url), "utf8");
   const operations = await fs.readFile(new URL("../docs/OPERATIONS_RUNBOOK.md", import.meta.url), "utf8");
-  for (const marker of ["Available now", "During a live fixture", "Anytime", "VIRA Picks", "Certified Playback", "Canonical demo video"]) assert.match(walkthrough, new RegExp(marker, "i"));
+  for (const marker of ["Available now", "During a live fixture", "Anytime", "VIRA Picks", "Certified Playback", "Canonical Demo V2"]) assert.match(walkthrough, new RegExp(marker, "i"));
   assert.doesNotMatch(walkthrough, /eventLoopLagMs|queueDepth|four-hour wall-clock soak/);
   assert.match(operations, /eventLoopLagMs/);
   assert.match(operations, /single-writer/i);
