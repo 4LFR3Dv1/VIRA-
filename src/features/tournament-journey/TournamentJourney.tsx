@@ -12,7 +12,8 @@ const copy = {
     stages: { semi_final: "Semifinal", third_place: "Third place", final: "Final" },
     scheduled: "Scheduled", live: "Live now", paused: "Paused", finished: "Final", postponed: "Postponed", cancelled: "Cancelled", unknown: "Status unavailable",
     unavailable: "Result unavailable", open: "Open match", champion: "Official champion", roadComplete: "The road is complete.", decided: "Explore how the World Cup was decided.",
-    playbackTitle: "See how VIRA works during a live match", playbackBody: "Guided playback using a sanitized captured TxLINE fixture.", playbackCta: "Start guided playback",
+    playbackTitle: "Experience VIRA live now", playbackBody: "Enter a complete match journey. The room identifies its certified captured TxLINE source before playback begins.", playbackCta: "Enter the experience",
+    yourPath: "Your path",
     authority: "Bracket structure: editorial manifest · Match data: TxLINE",
   },
   "pt-BR": {
@@ -21,12 +22,13 @@ const copy = {
     stages: { semi_final: "Semifinal", third_place: "Terceiro lugar", final: "Final" },
     scheduled: "Agendada", live: "Ao vivo", paused: "Pausada", finished: "Final", postponed: "Adiada", cancelled: "Cancelada", unknown: "Status indisponível",
     unavailable: "Resultado indisponível", open: "Abrir partida", champion: "Campeão oficial", roadComplete: "O caminho está completo.", decided: "Explore como a Copa do Mundo foi decidida.",
-    playbackTitle: "Veja como o VIRA funciona durante uma partida ao vivo", playbackBody: "Playback guiado com uma fixture TxLINE capturada e sanitizada.", playbackCta: "Iniciar playback guiado",
+    playbackTitle: "Viva o VIRA ao vivo agora", playbackBody: "Entre em uma jornada completa. A sala identifica a fonte TxLINE capturada e certificada antes de começar.", playbackCta: "Entrar na experiência",
+    yourPath: "Seu caminho",
     authority: "Estrutura: manifesto editorial · Dados das partidas: TxLINE",
   },
 } as const;
 
-export function TournamentJourney({ journey }: { journey: TournamentJourneyProjection }) {
+export function TournamentJourney({ journey, highlightTeam = null }: { journey: TournamentJourneyProjection; highlightTeam?: string | null }) {
   const { locale, formatDateTime, localizedHref, teamName } = useLocale();
   const c = copy[locale];
   const semis = journey.fixtures.filter((item) => item.stage === "semi_final").sort((a, b) => a.slot - b.slot);
@@ -40,12 +42,12 @@ export function TournamentJourney({ journey }: { journey: TournamentJourneyProje
     </div>
 
     <div className="mt-9 hidden grid-cols-[1fr_52px_1fr] items-stretch gap-y-4 lg:grid" aria-label={c.title}>
-      <div className="grid gap-4">{semis.map((fixture) => <JourneyCard key={fixture.fixtureId} item={fixture} label={`${c.stages.semi_final} ${fixture.slot}`} c={c} formatDateTime={formatDateTime} teamName={teamName} href={localizedHref(`/match/${fixture.fixtureId}/preview`)} />)}</div>
+      <div className="grid gap-4">{semis.map((fixture) => <JourneyCard key={fixture.fixtureId} item={fixture} label={`${c.stages.semi_final} ${fixture.slot}`} c={c} formatDateTime={formatDateTime} teamName={teamName} href={localizedHref(`/match/${fixture.fixtureId}/preview`)} highlightTeam={highlightTeam} />)}</div>
       <div aria-hidden="true" className="relative"><span className="absolute left-0 top-1/4 h-px w-full bg-white/18" /><span className="absolute left-1/2 top-1/4 h-1/2 w-px bg-white/18" /><span className="absolute left-1/2 top-3/4 h-px w-1/2 bg-white/18" /></div>
-      <div className="grid gap-4"><JourneyCard item={final} label={c.stages.final} c={c} formatDateTime={formatDateTime} teamName={teamName} href={final ? localizedHref(`/match/${final.fixtureId}/preview`) : "#"} emphasis /><JourneyCard item={third} label={c.stages.third_place} c={c} formatDateTime={formatDateTime} teamName={teamName} href={third ? localizedHref(`/match/${third.fixtureId}/preview`) : "#"} /></div>
+      <div className="grid gap-4"><JourneyCard item={final} label={c.stages.final} c={c} formatDateTime={formatDateTime} teamName={teamName} href={final ? localizedHref(`/match/${final.fixtureId}/preview`) : "#"} emphasis highlightTeam={highlightTeam} /><JourneyCard item={third} label={c.stages.third_place} c={c} formatDateTime={formatDateTime} teamName={teamName} href={third ? localizedHref(`/match/${third.fixtureId}/preview`) : "#"} highlightTeam={highlightTeam} /></div>
     </div>
 
-    <ol className="mt-8 grid gap-3 lg:hidden" aria-label={c.title}>{[...semis, third, final].filter(Boolean).map((fixture) => <li key={fixture!.fixtureId}><JourneyCard item={fixture} label={fixture!.stage === "semi_final" ? `${c.stages.semi_final} ${fixture!.slot}` : c.stages[fixture!.stage]} c={c} formatDateTime={formatDateTime} teamName={teamName} href={localizedHref(`/match/${fixture!.fixtureId}/preview`)} emphasis={fixture!.stage === "final"} /></li>)}</ol>
+    <ol className="mt-8 grid gap-3 lg:hidden" aria-label={c.title}>{[...semis, third, final].filter(Boolean).map((fixture) => <li key={fixture!.fixtureId}><JourneyCard item={fixture} label={fixture!.stage === "semi_final" ? `${c.stages.semi_final} ${fixture!.slot}` : c.stages[fixture!.stage]} c={c} formatDateTime={formatDateTime} teamName={teamName} href={localizedHref(`/match/${fixture!.fixtureId}/preview`)} emphasis={fixture!.stage === "final"} highlightTeam={highlightTeam} /></li>)}</ol>
 
     {journey.status === "complete" && final?.result && final.fixture ? <div className="mt-8 border border-primary/45 bg-primary/[.06] p-5"><p className="font-['Chakra_Petch'] text-2xl font-black uppercase">{c.roadComplete}</p><p className="mt-2 font-['DM_Mono'] text-sm font-bold text-primary">{teamName(final.fixture.fixture.homeTeam.name)} {final.result.homeScore}–{final.result.awayScore} {teamName(final.fixture.fixture.awayTeam.name)}</p><p className="mt-2 text-sm text-white/50">{c.decided}</p></div> : null}
 
@@ -55,12 +57,14 @@ export function TournamentJourney({ journey }: { journey: TournamentJourneyProje
 }
 
 type Copy = typeof copy.en | typeof copy["pt-BR"];
-function JourneyCard({ item, label, c, formatDateTime, teamName, href, emphasis = false }: { item?: TournamentJourneyFixture; label: string; c: Copy; formatDateTime: (value: string, options?: Intl.DateTimeFormatOptions & { timeZone?: string }) => string; teamName: (name: string) => string; href: string; emphasis?: boolean }) {
+function JourneyCard({ item, label, c, formatDateTime, teamName, href, emphasis = false, highlightTeam = null }: { item?: TournamentJourneyFixture; label: string; c: Copy; formatDateTime: (value: string, options?: Intl.DateTimeFormatOptions & { timeZone?: string }) => string; teamName: (name: string) => string; href: string; emphasis?: boolean; highlightTeam?: string | null }) {
   const fixture = item?.fixture?.fixture;
   const status = fixture?.status ?? "unknown";
   const result = item?.result;
+  const highlighted = Boolean(highlightTeam && fixture && [fixture.homeTeam.name, fixture.awayTeam.name].some((name) => normalizeTeam(name) === normalizeTeam(highlightTeam)));
   const kickoff = fixture?.kickoffAt ? formatDateTime(fixture.kickoffAt, { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit", timeZone: item?.fixture?.temporal.timeZone }) : null;
-  return <article className={`relative min-h-40 border p-5 ${emphasis ? "border-primary/55 bg-primary/[.055]" : "border-white/14 bg-[#050814]/40"}`}>
+  return <article data-highlighted-path={highlighted ? "true" : undefined} className={`relative min-h-40 overflow-hidden border p-5 transition-colors duration-500 motion-reduce:transition-none ${highlighted ? "border-primary bg-primary/[.09] shadow-[inset_3px_0_0_#c7ff18]" : emphasis ? "border-primary/55 bg-primary/[.055]" : "border-white/14 bg-[#050814]/40"}`}>
+    {highlighted ? <span className="absolute right-0 top-0 bg-primary px-3 py-1 font-['DM_Mono'] text-[8px] font-black uppercase text-[#050814]">{c.yourPath}</span> : null}
     <div className="flex items-start justify-between gap-4"><div><p className="font-['DM_Mono'] text-[9px] font-black uppercase text-primary">{label}</p><p className="mt-1 font-['DM_Mono'] text-[8px] uppercase text-white/30">{fixture ? c[status] : c.unavailable}{kickoff ? ` · ${kickoff}` : ""}</p></div>{result ? <span className="font-['Chakra_Petch'] text-2xl font-black">{result.homeScore}–{result.awayScore}</span> : null}</div>
     {fixture ? <div className="mt-5 grid gap-2"><TeamLine providerName={fixture.homeTeam.name} displayName={teamName(fixture.homeTeam.name)} score={result?.homeScore} /><TeamLine providerName={fixture.awayTeam.name} displayName={teamName(fixture.awayTeam.name)} score={result?.awayScore} /></div> : <p role="status" className="mt-8 text-sm font-bold uppercase text-white/38">{c.unavailable}</p>}
     {fixture ? <Link aria-label={`${c.open}: ${teamName(fixture.homeTeam.name)} vs ${teamName(fixture.awayTeam.name)}`} to={href} className="mt-5 inline-flex items-center gap-2 text-[10px] font-black uppercase text-white/55 hover:text-primary">{c.open} <ArrowRight className="size-3.5" /></Link> : null}
@@ -68,3 +72,7 @@ function JourneyCard({ item, label, c, formatDateTime, teamName, href, emphasis 
 }
 
 function TeamLine({ providerName, displayName, score }: { providerName: string; displayName: string; score?: number }) { return <div className="flex min-h-8 items-center gap-3"><TeamIcon name={providerName} size="sm" /><span className="flex-1 font-['Chakra_Petch'] text-sm font-black uppercase">{displayName}</span>{Number.isFinite(score) ? <strong className="font-['DM_Mono'] text-sm">{score}</strong> : null}</div>; }
+
+function normalizeTeam(name: string) {
+  return name.trim().toLocaleLowerCase("en").replace(/[^a-z0-9]/g, "");
+}
