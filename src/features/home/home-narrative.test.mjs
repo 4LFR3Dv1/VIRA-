@@ -17,6 +17,10 @@ test("World Cup Now prioritizes active play, then the nearest scheduled fixture"
 test("exceptional states remain distinct and a completed tournament selects the official final", () => {
   const postponed = journeyFixture("final", "final", "postponed", "2026-07-19T19:00:00.000Z");
   assert.equal(selectHomeNarrativeFixture(home({ journey: { status: "active", fixtures: [postponed] } })).projection.fixture.status, "postponed");
+  postponed.fixture.fixture.status = "cancelled";
+  assert.equal(selectHomeNarrativeFixture(home({ journey: { status: "active", fixtures: [postponed] } })).projection.fixture.status, "cancelled");
+  postponed.fixture.fixture.status = "unknown";
+  assert.equal(selectHomeNarrativeFixture(home({ journey: { status: "active", fixtures: [postponed] } })).projection.fixture.status, "unknown");
   postponed.fixture.fixture.status = "finished";
   const semi = journeyFixture("semi", "semi_final", "finished", "2026-07-14T19:00:00.000Z");
   assert.equal(selectHomeNarrativeFixture(home({ journey: { status: "complete", fixtures: [semi, postponed], champion: { name: "Spain" } } })).fixtureId, "final");
