@@ -36,7 +36,7 @@ test("market snapshots reject stale, missing options, wrong line and ambiguity",
   assert.equal(buildMarketSnapshotForSelection({ ...base, context: context([market("OVERUNDER_PARTICIPANT_GOALS", ["over"], "line=2.5")]) }).reason, "market_options_invalid");
   assert.equal(buildMarketSnapshotForSelection({ ...base, context: context([market("OVERUNDER_PARTICIPANT_GOALS", ["over", "under"], "line=3.5")]) }).reason, "market_missing");
   assert.equal(buildMarketSnapshotForSelection({ ...base, context: context([market("OVERUNDER_PARTICIPANT_GOALS", ["over", "under"], "line=2.5", "a"), market("OVERUNDER_PARTICIPANT_GOALS", ["over", "under"], "line=2.5", "b")]) }).reason, "market_ambiguous");
-  const oldNow = Date.parse("2026-07-20T02:00:00.000Z");
+  const oldNow = Date.parse("2026-07-23T19:51:01.000Z");
   assert.equal(buildMarketSnapshotForSelection({ ...base, now: oldNow, context: context([market("OVERUNDER_PARTICIPANT_GOALS", ["over", "under"], "line=2.5")], new Date(oldNow).toISOString()) }).reason, "market_stale");
 });
 

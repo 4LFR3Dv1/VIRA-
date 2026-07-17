@@ -35,7 +35,7 @@ test("line parser consumes the entire value and mapping rejects approximate, dup
   ]) assert.equal(buildMarketSnapshotForSelection({ fixture, context: contextFor(mutate({ options })), selection, now: Date.parse("2026-07-15T17:03:00.000Z") }).reason, "market_options_invalid");
 });
 
-test("fresh acquisition keeps a stable pre-match observation available while stale acquisition and old observation fail closed", () => {
+test("fresh acquisition keeps a stable pre-match observation available while stale acquisition and truly old observation fail closed", () => {
   const stableNow = Date.parse("2026-07-15T17:12:00.000Z");
   const stable = buildMarketSnapshotForSelection({ fixture, context: contextFor(vector.market, "2026-07-15T17:11:58.000Z"), selection, now: stableNow });
   assert.equal(stable.available, true);
@@ -44,5 +44,11 @@ test("fresh acquisition keeps a stable pre-match observation available while sta
 
   assert.equal(buildMarketSnapshotForSelection({ fixture, context: contextFor(vector.market, "2026-07-15T17:03:03.840Z"), selection, now: stableNow }).reason, "market_acquisition_stale");
   assert.equal(buildMarketSnapshotForSelection({ fixture, context: contextFor(vector.market, "2026-07-15T17:11:58.000Z", false), selection, now: stableNow }).reason, "market_endpoint_unavailable");
-  assert.equal(buildMarketSnapshotForSelection({ fixture, context: contextFor(vector.market, "2026-07-16T00:00:00.000Z"), selection, now: Date.parse("2026-07-16T00:00:00.000Z") }).reason, "market_stale");
+  const realStableMarket = { ...vector.market, capturedAt: "2026-07-16T07:38:35.904Z" };
+  const realStableNow = Date.parse("2026-07-17T02:23:32.523Z");
+  const realStable = buildMarketSnapshotForSelection({ fixture, context: contextFor(realStableMarket, "2026-07-17T02:23:32.523Z"), selection, now: realStableNow });
+  assert.equal(realStable.available, true);
+  assert.equal(realStable.snapshot.observedAt, "2026-07-16T07:38:35.904Z");
+
+  assert.equal(buildMarketSnapshotForSelection({ fixture, context: contextFor(vector.market, "2026-07-18T17:03:04.000Z"), selection, now: Date.parse("2026-07-18T17:03:04.000Z") }).reason, "market_stale");
 });

@@ -1,7 +1,12 @@
 import crypto from "node:crypto";
 import { canonicalSelectionId, cloneFrozen } from "./vira-picks-contracts.mjs";
 
-const DEFAULT_OBSERVATION_FRESH_MS = 6 * 60 * 60 * 1000;
+// TxLINE can keep a pre-match market unchanged for more than a day. A recent,
+// successful acquisition proves that the endpoint still serves that exact
+// observation; observedAt remains the market-change timestamp, not a health
+// timestamp. Keep a bounded 72-hour editorial window while the acquisition
+// itself must remain recent.
+const DEFAULT_OBSERVATION_FRESH_MS = 72 * 60 * 60 * 1000;
 const DEFAULT_ACQUISITION_FRESH_MS = 2 * 60 * 1000;
 export const PROVEN_MARKET_TYPES = Object.freeze({
   match_result: Object.freeze(["1X2_PARTICIPANT_RESULT"]),
