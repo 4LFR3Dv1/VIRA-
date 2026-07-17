@@ -1,5 +1,6 @@
 import type { ShellMode } from "../routing/route-manifest";
 import type { StaticTranslationKey } from "../../i18n/translate.ts";
+import type { HomeProjection } from "../../social/share.ts";
 
 export type ShellConnectivity = {
   browser: "online" | "offline";
@@ -40,6 +41,13 @@ export type ShellActiveRoom = {
   lastConfirmedVersion: number;
   updatedAt: string;
   connectionState: string;
+  matchStatus: "scheduled" | "live" | "paused" | "postponed" | "cancelled" | "finished" | "unknown";
+  homeScore: number;
+  awayScore: number;
+  matchClockSec: number;
+  roomPopulation: number;
+  roundOpenedAt: string | null;
+  roundLocksAt: string | null;
 };
 
 export type PersistedRoomReference = Pick<ShellActiveRoom, "roomId" | "participantId" | "participantName" | "lastConfirmedVersion" | "updatedAt">;
@@ -79,6 +87,7 @@ export type ShellExperience = {
   activeRoom: ActiveRoomPresenceState;
   review: OfficialReviewAvailability;
   atmosphere: ShellAtmosphereExperience;
+  matchday: { kind: "loading" | "ready" | "unavailable"; home: HomeProjection | null; updatedAt: string | null };
 };
 
 export function deriveConnectionPresentation(value: ShellConnectivity): ShellConnectionPresentation {

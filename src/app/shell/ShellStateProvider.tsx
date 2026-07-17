@@ -7,6 +7,8 @@ import { ShellExperienceContext } from "./ShellContext";
 import { SHELL_ROOM_PRESENCE_EVENT, SHELL_ROOM_REFERENCE_KEY } from "./room-presence";
 import { deriveConnectionPresentation, type ActiveRoomPresenceState, type OfficialReviewAvailability, type PersistedRoomReference, type ShellActiveRoom, type ShellAtmosphereExperience, type ShellAtmosphereIntent, type ShellConnectivity, type ShellReadiness } from "./shell-experience";
 import { deriveCanonicalExperienceState, experienceCopy, resolutionBelongsToCurrentRound } from "../../features/match-experience/state-model";
+import { useLocale } from "../../i18n/locale-context.tsx";
+import { fetchHome, type HomeProjection } from "../../social/share.ts";
 
 function readReference(): PersistedRoomReference | null {
   try {
@@ -23,6 +25,7 @@ function readReference(): PersistedRoomReference | null {
 }
 
 export function ShellStateProvider({ children }: { children: ReactNode }) {
+  const { locale, timeZone } = useLocale();
   const location = useLocation();
   const route = matchCurrentRoute(location.pathname);
   const [browserOnline, setBrowserOnline] = useState(navigator.onLine);
@@ -34,6 +37,24 @@ export function ShellStateProvider({ children }: { children: ReactNode }) {
   const [review, setReview] = useState<OfficialReviewAvailability>({ kind: "unavailable" });
   const [readiness, setReadiness] = useState<ShellReadiness>({ kind: "booting", scope: "global" });
   const [atmosphereOwners, setAtmosphereOwners] = useState<Map<string, ShellAtmosphereIntent>>(() => new Map());
+  const [matchdayHome, setMatchdayHome] = useState<HomeProjection | null>(null);
+  const [matchdayStatus, setMatchdayStatus] = useState<"loading" | "ready" | "unavailable">("loading");
+  const [matchdayUpdatedAt, setMatchdayUpdatedAt] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    const refresh = () => void fetchHome({ locale, timeZone }).then((home) => {
+      if (cancelled) return;
+      setMatchdayHome(home);
+      setMatchdayStatus("ready");
+      setMatchdayUpdatedAt(new Date().toISOString());
+    }).catch(() => { if (!cancelled) setMatchdayStatus("unavailable"); });
+    refresh();
+    const interval = window.setInterval(refresh, 15_000);
+    const visible = () => { if (document.visibilityState === "visible") refresh(); };
+    document.addEventListener("visibilitychange", visible);
+    return () => { cancelled = true; window.clearInterval(interval); document.removeEventListener("visibilitychange", visible); };
+  }, [locale, timeZone]);
 
   const registerAtmosphere = useCallback((owner: string, intent: ShellAtmosphereIntent) => {
     setAtmosphereOwners((current) => {
@@ -117,6 +138,13 @@ export function ShellStateProvider({ children }: { children: ReactNode }) {
         lastConfirmedVersion: snapshot.version,
         updatedAt: new Date().toISOString(),
         connectionState: snapshot.connectionState,
+        matchStatus: snapshot.match.status,
+        homeScore: snapshot.match.homeScore,
+        awayScore: snapshot.match.awayScore,
+        matchClockSec: snapshot.match.matchClockSec,
+        roomPopulation: snapshot.roomPopulation,
+        roundOpenedAt: snapshot.currentRound?.openedAt ?? null,
+        roundLocksAt: snapshot.currentRound?.state === "open" ? snapshot.currentRound.locksAt : null,
       } });
     }).catch(() => !cancelled && setPresence({ kind: "expired", roomId: reference.roomId }));
     return () => { cancelled = true; };
@@ -181,9 +209,10 @@ export function ShellStateProvider({ children }: { children: ReactNode }) {
     activeRoom: presence,
     review,
     atmosphere,
+    matchday: { kind: matchdayStatus, home: matchdayHome, updatedAt: matchdayUpdatedAt },
     registerAtmosphere,
     releaseAtmosphere,
-  }), [atmosphere, connectivity, presence, readiness, registerAtmosphere, releaseAtmosphere, review, route]);
+  }), [atmosphere, connectivity, matchdayHome, matchdayStatus, matchdayUpdatedAt, presence, readiness, registerAtmosphere, releaseAtmosphere, review, route]);
 
   return <ShellExperienceContext.Provider value={value}>{children}</ShellExperienceContext.Provider>;
 }

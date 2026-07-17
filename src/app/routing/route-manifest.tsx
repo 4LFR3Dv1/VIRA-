@@ -38,7 +38,7 @@ export const viraRoutes = [
   ...(VIRA_PICKS_ENABLED ? [{ id: "match-picks" as const, path: "picks/:fixtureId", pattern: "/picks/:fixtureId", titleKey: "route.matchPreview.title" as const, shellMode: "game" as const, maxWidth: "full" as const, backPath: "/matches", availability: "feature_flag" as const, component: ViraPicksScreen }] : []),
   ...(VIRA_VISUAL_COMPANION_ENABLED ? [{ id: "match-companion" as const, path: "match/:matchId/companion", pattern: "/match/:matchId/companion", titleKey: "route.matchCompanion.title" as const, shellMode: "immersive" as const, maxWidth: "full" as const, backPath: "/matches", availability: "feature_flag" as const, component: CompanionRouteScreen }] : []),
   { id: "judge-playback", path: "match/judge-playback-france-spain-v2", pattern: "/match/judge-playback-france-spain-v2", titleKey: "route.matchRoom.title", shellMode: "immersive", maxWidth: "full", backPath: "/help", availability: "available", component: GuidedPlaybackScreen },
-  { id: "match-room", path: "match/:matchId", pattern: "/match/:matchId", titleKey: "route.matchRoom.title", shellMode: "immersive", maxWidth: "full", availability: "available", component: MatchRoomScreen },
+  { id: "match-room", path: "match/:matchId", pattern: "/match/:matchId", titleKey: "route.matchRoom.title", shellMode: "immersive", maxWidth: "full", backPath: "/matches", availability: "available", component: MatchRoomScreen },
 ] satisfies ViraRouteDefinition[];
 
 export function matchCurrentRoute(pathname: string) {

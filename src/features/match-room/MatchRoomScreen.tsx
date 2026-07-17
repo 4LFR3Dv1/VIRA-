@@ -13,7 +13,6 @@ import { useRoomRuntime } from "../../runtime/use-room-runtime";
 import { JoinRoomDialog } from "../lobby/JoinRoomDialog";
 import { CausalityRail } from "./CausalityRail";
 import { LiveDecisionCapsule } from "./LiveDecisionCapsule";
-import { MatchHeader } from "./MatchHeader";
 import { MatchJourney } from "./MatchJourney";
 import { MobileMatchContextNavigation } from "./MobileMatchContextNavigation";
 import { ReplayFinishedPanel } from "./ReplayFinishedPanel";
@@ -177,7 +176,6 @@ export function MatchRoomScreen() {
 
   return (
     <div className="min-h-screen bg-background/55 text-foreground">
-      <MatchHeader state={state} onBack={() => navigate(localizedHref("/matches"))} />
       <TournamentLifecycleRail model={experienceModel} />
       <main className="mx-auto w-full max-w-[1440px] px-4 pb-24 pt-5 md:px-7 lg:px-10 lg:pb-12">
         {!matchFinished && participantId && sessionToken ? <div className="flex flex-wrap justify-end gap-2"><MatchAlertsControl roomId={matchId} fixtureId={state.snapshot.match.id} participantId={participantId} sessionToken={sessionToken} locale={locale} timeZone={timeZone} inviteCode={inviteCode} /><ViraShareButton label={t("room.invite")} create={() => createRoomShare({ kind: "room", roomId: matchId, participantId, sessionToken, displayName: state.snapshot.currentParticipant?.displayName ?? playerName }, { locale, timeZone })} /></div> : null}

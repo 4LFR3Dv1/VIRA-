@@ -1,11 +1,11 @@
-import { ArrowLeft, Radio, ShieldCheck, UserRound } from "lucide-react";
+import { ArrowLeft, ShieldCheck, UserRound } from "lucide-react";
 import { AnimatePresence, LayoutGroup, motion, useReducedMotion } from "motion/react";
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { Link, useLocation, useNavigate, useOutlet } from "react-router";
 
 import { ViraLoader } from "../../shared/brand/ViraLoader";
 import { LocaleSelector } from "../../i18n/LocaleSelector.tsx";
-import { useLocale } from "../../i18n/locale-context.tsx";
+import { useLocale, type LocaleContextValue } from "../../i18n/locale-context.tsx";
 import type { StaticTranslationKey } from "../../i18n/translate.ts";
 import { useShellExperience } from "./ShellContext";
 import { OfficialReviewPortal } from "./OfficialReviewPortal";
@@ -14,6 +14,7 @@ import { resolveNavigationTransition } from "../routing/navigation-transition";
 import type { ShellActiveRoom } from "./shell-experience";
 import { OPEN_OFFICIAL_REVIEW_EVENT, SHELL_OVERLAY_STATE_EVENT } from "./shell-events";
 import { ViraShellBackground } from "./ViraShellBackground";
+import { deriveMatchdayPulseV1, roundProgress, type MatchdayPulseV1 } from "./matchday-topbar-model.ts";
 
 export function ViraAppShell() {
   const shell = useShellExperience();
@@ -24,6 +25,8 @@ export function ViraAppShell() {
   const [restored, setRestored] = useState(false);
   const [externalOverlays, setExternalOverlays] = useState<Set<string>>(() => new Set());
   const previousConnection = useRef(shell.connection.kind);
+  const [nowMs, setNowMs] = useState(Date.now());
+  useEffect(() => { const interval = window.setInterval(() => setNowMs(Date.now()), 1_000); return () => window.clearInterval(interval); }, []);
   useEffect(() => {
     const wasInterrupted = previousConnection.current !== "healthy";
     previousConnection.current = shell.connection.kind;
@@ -61,6 +64,7 @@ export function ViraAppShell() {
   };
   const alertVisible = shell.connection.kind !== "healthy";
   const location = useLocation();
+  const pulse = deriveMatchdayPulseV1({ routeId: shell.route.id, pathname: location.pathname, home: shell.matchday.home, homeAvailable: shell.matchday.kind === "ready", matchdayUpdatedAt: shell.matchday.updatedAt, activeRoom: shell.activeRoom, review: shell.review, connection: shell.connection });
   const currentFixtureId = location.pathname.match(/^\/match\/([^/]+)/)?.[1] ?? null;
   const activeFixtureId = shell.activeRoom.kind === "confirmed" ? shell.activeRoom.room.fixtureId : null;
   const overlayOpen = reviewOpen || externalOverlays.size > 0;
@@ -69,10 +73,10 @@ export function ViraAppShell() {
   return <LayoutGroup id="vira-shell"><div data-shell-mode={shell.mode} data-shell-alert={alertVisible ? "visible" : "hidden"} data-active-room={continuityVisible ? "visible" : "hidden"} style={style} className="vira-app-shell">
     <ViraShellBackground paused={overlayOpen || Boolean(roomTakeover)} />
     <div className="vira-app-shell__content">
-    <ShellSignalRail />
+    <ShellSignalRail pulse={pulse} nowMs={nowMs} />
     <ShellConnectionSurface />
     <ConnectionRestoredNotice open={restored} />
-    <ShellHeader onOpenReview={() => setReviewOpen(true)} />
+    <ShellHeader pulse={pulse} nowMs={nowMs} onOpenReview={() => setReviewOpen(true)} />
     <RouteTransitionFrame />
     {continuityVisible ? <ActiveRoomContinuity onEnterRoom={enterRoom} /> : null}
     <RoomTransitionTakeover room={roomTakeover} />
@@ -96,34 +100,104 @@ function RoomTransitionTakeover({ room }: { room: ShellActiveRoom | null }) {
   </motion.div> : null}</AnimatePresence>;
 }
 
-function ShellSignalRail() {
+function ShellSignalRail({ pulse, nowMs }: { pulse: MatchdayPulseV1; nowMs: number }) {
   const { connection, readiness } = useShellExperience();
   const { t } = useLocale();
   const reduceMotion = useReducedMotion();
   if (readiness.kind === "integrity_failed") return <div aria-label={t("shell.signal.integrityFailed")} className="fixed inset-x-0 top-0 z-[100] h-[3px] bg-red-500" />;
+  const progress = roundProgress(pulse, nowMs);
+  if (connection.kind === "healthy" && progress !== null) return <div aria-label={t("shell.signal.systemConfirmed")} className="fixed inset-x-0 top-0 z-[100] h-[3px] bg-white/10"><div className="h-full bg-primary transition-[width] duration-1000 motion-reduce:transition-none" style={{ width: `${progress * 100}%` }} /></div>;
   if (connection.kind === "healthy") return <div aria-label={t("shell.signal.systemConfirmed")} className="fixed inset-x-0 top-0 z-[100] h-[2px] bg-primary" />;
   if (connection.kind === "room_reconnecting" || connection.kind === "txline_reconnecting") return <div aria-label={t("shell.signal.reconnecting")} className="fixed inset-x-0 top-0 z-[100] h-[3px] overflow-hidden bg-white/10"><motion.div animate={reduceMotion ? undefined : { x: ["-100%", "300%"] }} transition={reduceMotion ? undefined : { duration: 1.4, repeat: Infinity, ease: "linear" }} className="h-full w-1/3 bg-primary" /></div>;
   return <div aria-label={t("shell.signal.unavailable")} className="fixed inset-x-0 top-0 z-[100] h-[3px] bg-amber-400" />;
 }
 
-function ShellHeader({ onOpenReview }: { onOpenReview: () => void }) {
-  const { mode, route, connection, activeRoom, review } = useShellExperience();
-  const { t, localizedHref } = useLocale();
-  if (mode === "immersive") return null;
+function ShellHeader({ pulse, nowMs, onOpenReview }: { pulse: MatchdayPulseV1; nowMs: number; onOpenReview: () => void }) {
+  const { route, connection, activeRoom, review } = useShellExperience();
+  const { locale, timeZone, t, localizedHref, formatDateTime, formatNumber, teamName } = useLocale();
   const confirmedRoom = activeRoom.kind === "confirmed" ? activeRoom.room : null;
+  const identity = confirmedRoom?.participantName || window.localStorage.getItem("vira:displayName")?.trim() || null;
+  const section = sectionLabel(route.id, locale);
+  const pulseText = presentPulse(pulse, nowMs, { locale, timeZone, formatDateTime, formatNumber, teamName, connected: connection.kind === "healthy" });
+  const txline = providerLabel(pulse, nowMs, locale, connection.kind === "healthy");
   return <header style={{ top: "var(--shell-alert-height)" }} className="sticky z-40 border-b border-white/10 bg-[#050814]/92 backdrop-blur-xl">
-    <div className="mx-auto flex h-[72px] max-w-[1720px] items-center px-4 lg:px-7">
-      {mode === "game" && route.backPath ? <Link to={localizedHref(route.backPath)} aria-label={t("shell.back")} className="grid size-10 place-items-center border border-white/15 hover:border-primary hover:text-primary"><ArrowLeft className="size-4" /></Link> : <Link to={localizedHref("/")} aria-label="VIRA" className="flex h-12 items-center"><img src="/vira-icon.png" alt="VIRA" className="hidden h-9 w-auto object-contain sm:block" /><img src="/vira-symbol.png" alt="" className="h-10 w-10 object-contain sm:hidden" /></Link>}
-      <div className="ml-4 min-w-0 border-l border-white/10 pl-4"><motion.p key={`${route.id}:${route.titleKey}`} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} className="truncate font-['DM_Mono'] text-[10px] font-black uppercase tracking-[.16em]">{t(route.titleKey)}</motion.p>{route.contextKey ? <p className="mt-1 truncate text-[10px] uppercase tracking-[.12em] text-white/40">{t(route.contextKey)}</p> : null}</div>
-      <div className="ml-auto flex items-center gap-2">
-        <span className={`hidden h-10 items-center gap-2 border px-3 font-['DM_Mono'] text-[9px] uppercase sm:inline-flex ${connection.kind === "healthy" ? "border-primary/25 text-primary" : "border-amber-400/30 text-amber-300"}`}><Radio className="size-3" />{connection.kind === "healthy" ? "TxLINE" : t("shell.reconnecting")}</span>
-        {confirmedRoom ? <Link to={localizedHref(`/match/${confirmedRoom.roomId}`)} className="hidden h-10 items-center gap-2 border border-primary/25 px-3 md:flex"><span className="size-2 bg-primary" /><span className="max-w-36 truncate font-['DM_Mono'] text-[9px] uppercase">{t(`shell.roomPhase.${confirmedRoom.phase === "action_required" ? "actionRequired" : confirmedRoom.phase === "answer_confirmed" ? "answerConfirmed" : confirmedRoom.phase === "result_available" ? "resultAvailable" : confirmedRoom.phase}` as StaticTranslationKey)}</span></Link> : null}
+    <div className="mx-auto grid min-h-[76px] max-w-[1720px] grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 px-3 sm:h-[72px] sm:min-h-0 sm:grid-cols-[minmax(13rem,.75fr)_minmax(18rem,1.4fr)_minmax(13rem,.75fr)] sm:px-5 lg:px-7">
+      <div className="flex min-w-0 items-center gap-3">{route.backPath ? <Link to={localizedHref(route.backPath)} aria-label={t("shell.back")} className="hidden size-9 shrink-0 place-items-center border border-white/15 hover:border-primary hover:text-primary lg:grid"><ArrowLeft className="size-4" /></Link> : null}<Link to={localizedHref("/")} aria-label="VIRA Home" className="flex shrink-0 items-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"><img src="/vira-icon.png" alt="VIRA" className="hidden h-8 w-auto object-contain sm:block" /><img src="/vira-symbol.png" alt="" className="h-8 w-8 object-contain sm:hidden" /></Link><div className="hidden min-w-0 border-l border-white/10 pl-3 sm:block"><motion.p key={section} initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} className="truncate font-['DM_Mono'] text-[10px] font-black uppercase tracking-[.14em]">{section}</motion.p><p className="mt-1 truncate font-['DM_Mono'] text-[8px] font-bold uppercase tracking-[.12em] text-white/38">World Cup</p></div></div>
+      <Link to={localizedHref(pulse.destination ?? "/")} aria-label={pulseText.aria} className="min-w-0 justify-self-center text-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"><p className="truncate font-['Chakra_Petch'] text-[12px] font-black uppercase tracking-[.03em] text-white sm:text-[15px]">{pulseText.primary}</p><p className={`mt-1 truncate font-['DM_Mono'] text-[8px] font-bold uppercase tracking-[.1em] sm:text-[9px] ${pulse.kind === "round_open" || pulse.kind === "live" ? "text-primary" : "text-white/42"}`}>{pulseText.secondary}</p></Link>
+      <div className="flex items-center justify-end gap-2">
+        <span title={txline.detail} className={`hidden h-10 items-center gap-2 border px-3 font-['DM_Mono'] text-[8px] font-bold uppercase lg:inline-flex ${pulse.providerState === "unavailable" ? "border-amber-400/30 text-amber-300" : "border-white/12 text-white/58"}`}><span className={`size-1.5 rounded-full ${pulse.providerState === "live" ? "bg-primary motion-safe:animate-pulse" : pulse.providerState === "unavailable" ? "bg-amber-300" : "bg-primary"}`} />{txline.label}</span>
         {review.kind === "available" ? <button type="button" onClick={onOpenReview} aria-label={t("shell.openReview")} className="hidden size-10 place-items-center border border-white/10 text-white/45 hover:border-primary hover:text-primary md:grid"><ShieldCheck className="size-4" /></button> : null}
         <LocaleSelector />
-        <span className="hidden size-10 place-items-center border border-white/10 text-white/50 sm:grid"><UserRound className="size-4" /></span>
+        <span title={identity ?? (locale === "pt-BR" ? "Visitante" : "Guest")} aria-label={identity ? `${locale === "pt-BR" ? "Perfil" : "Profile"}: ${identity}` : locale === "pt-BR" ? "Perfil de visitante" : "Guest profile"} className="hidden h-10 max-w-32 items-center gap-2 border border-white/10 px-3 text-white/58 xl:flex">{identity ? <><span className="grid size-5 place-items-center rounded-full bg-white/8 font-['DM_Mono'] text-[9px] font-black text-primary">{identity.slice(0, 1).toUpperCase()}</span><span className="truncate font-['DM_Mono'] text-[8px] font-bold uppercase">{identity}</span></> : <UserRound className="size-4" />}</span>
       </div>
     </div>
   </header>;
+}
+
+function sectionLabel(routeId: string, locale: "en" | "pt-BR") {
+  const labels = locale === "pt-BR"
+    ? { home: "Jornada da Copa", matches: "Briefing das partidas", "match-preview": "Briefing da partida", "match-picks": "VIRA Picks", "match-room": "Match Room", "judge-playback": "Playback certificado", help: "Guia de avaliação", "match-companion": "Companion" }
+    : { home: "World Cup journey", matches: "Match briefing", "match-preview": "Match briefing", "match-picks": "VIRA Picks", "match-room": "Match Room", "judge-playback": "Certified playback", help: "Evaluation guide", "match-companion": "Companion" };
+  return labels[routeId as keyof typeof labels] ?? "MY VIRA";
+}
+
+function presentPulse(pulse: MatchdayPulseV1, nowMs: number, context: Pick<LocaleContextValue, "locale" | "timeZone" | "formatDateTime" | "formatNumber" | "teamName"> & { connected: boolean }) {
+  const pt = context.locale === "pt-BR";
+  const home = pulse.homeTeam ? context.teamName(pulse.homeTeam) : null; const away = pulse.awayTeam ? context.teamName(pulse.awayTeam) : null;
+  const matchup = home && away ? `${home} × ${away}` : pulse.champion ? `${context.teamName(pulse.champion)} · ${pt ? "campeã" : "champions"}` : pt ? "Copa do Mundo" : "World Cup";
+  const score = pulse.homeScore !== null && pulse.awayScore !== null ? `${context.formatNumber(pulse.homeScore)}–${context.formatNumber(pulse.awayScore)}` : null;
+  const clock = pulse.matchClockSec !== null ? `${context.formatNumber(Math.floor(pulse.matchClockSec / 60))}′` : null;
+  const connected = context.connected ? (pt ? "conectado" : "connected") : (pt ? "reconectando" : "reconnecting");
+  const stage = pulse.stage === "semi_final" ? (pt ? "semifinal" : "semifinal") : pulse.stage === "third_place" ? (pt ? "terceiro lugar" : "third place") : pulse.stage === "final" ? "final" : null;
+  if (pulse.kind === "round_open") {
+    const seconds = pulse.roundLocksAt ? Math.max(0, Math.ceil((Date.parse(pulse.roundLocksAt) - nowMs) / 1_000)) : 0;
+    const secondary = `${pt ? "Rodada aberta" : "Round open"} · ${pt ? "responda em" : "answer within"} ${context.formatNumber(seconds)}s`;
+    return { primary: `${matchup}${score ? ` · ${score}` : ""}`, secondary, aria: `${matchup}. ${secondary}` };
+  }
+  if (pulse.kind === "captured_playback") {
+    const secondary = pt ? "TxLINE capturada · playback certificado" : "Captured TxLINE · certified playback";
+    return { primary: matchup, secondary, aria: `${matchup}. ${secondary}` };
+  }
+  if (pulse.kind === "live") {
+    const status = pulse.fixtureStatus === "paused" ? (pt ? "pausada" : "paused") : (pt ? "ao vivo" : "live");
+    const population = pulse.roomPopulation !== null ? ` · ${context.formatNumber(pulse.roomPopulation)} ${pt ? "na sala" : "in room"}` : "";
+    const secondary = `${status}${clock ? ` · ${clock}` : ""} · ${connected}${population}`;
+    return { primary: score ? `${home} ${score} ${away}` : matchup, secondary, aria: `${matchup}. ${secondary}` };
+  }
+  if (pulse.kind === "upcoming") {
+    const countdown = pulse.kickoffAt ? compactCountdown(Date.parse(pulse.kickoffAt) - nowMs, context.locale) : null;
+    const kickoff = pulse.kickoffAt ? context.formatDateTime(pulse.kickoffAt, { timeZone: context.timeZone, day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }) : null;
+    const secondary = [stage, countdown ?? kickoff ?? (pt ? "agendada" : "scheduled")].filter(Boolean).join(" · ");
+    return { primary: matchup, secondary, aria: `${matchup}. ${secondary}` };
+  }
+  if (pulse.kind === "final") {
+    const secondary = pulse.verified ? (pt ? "Final · resultado verificado" : "Final · result verified") : (pt ? "Final · resultado oficial" : "Final · official result");
+    return { primary: score ? `${home} ${score} ${away}` : matchup, secondary, aria: `${matchup}. ${secondary}` };
+  }
+  if (pulse.kind === "exceptional") {
+    const states: Record<string, [string, string]> = { paused: ["Paused", "Pausada"], postponed: ["Postponed", "Adiada"], cancelled: ["Cancelled", "Cancelada"], unknown: ["Status unavailable", "Status indisponível"] };
+    const secondary = states[pulse.fixtureStatus ?? "unknown"]?.[pt ? 1 : 0] ?? (pt ? "Status indisponível" : "Status unavailable");
+    return { primary: matchup, secondary, aria: `${matchup}. ${secondary}` };
+  }
+  const secondary = pulse.champion ? (pt ? "Torneio concluído" : "Tournament complete") : (pt ? "Torneio em andamento" : "Tournament active");
+  return { primary: matchup, secondary, aria: `${matchup}. ${secondary}` };
+}
+
+function compactCountdown(ms: number, locale: "en" | "pt-BR") {
+  if (!Number.isFinite(ms) || ms <= 0) return locale === "pt-BR" ? "começa em breve" : "starting soon";
+  const totalMinutes = Math.floor(ms / 60_000); const days = Math.floor(totalMinutes / 1_440); const hours = Math.floor((totalMinutes % 1_440) / 60); const minutes = totalMinutes % 60;
+  if (days > 0) return `${locale === "pt-BR" ? "em" : "in"} ${days}d ${String(hours).padStart(2, "0")}h`;
+  return `${locale === "pt-BR" ? "em" : "in"} ${String(hours).padStart(2, "0")}h ${String(minutes).padStart(2, "0")}m`;
+}
+
+function providerLabel(pulse: MatchdayPulseV1, nowMs: number, locale: "en" | "pt-BR", connected: boolean) {
+  const pt = locale === "pt-BR";
+  if (pulse.providerState === "captured") return { label: pt ? "TxLINE capturada" : "Captured TxLINE", detail: pt ? "Fixture TxLINE capturada e sanitizada." : "Sanitized captured TxLINE fixture." };
+  if (pulse.providerState === "unavailable" || !connected) return { label: pt ? "TxLINE indisponível" : "TxLINE unavailable", detail: pt ? "A autoridade TxLINE não está disponível agora." : "TxLINE authority is not currently available." };
+  if (pulse.providerState === "live") return { label: "TxLINE Live", detail: pt ? "Sala conectada ao estado atual da partida." : "Room connected to the current match state." };
+  const ageSec = pulse.providerUpdatedAt ? Math.max(0, Math.floor((nowMs - Date.parse(pulse.providerUpdatedAt)) / 1_000)) : null;
+  const age = ageSec === null || !Number.isFinite(ageSec) ? null : ageSec < 60 ? `${ageSec}s` : ageSec < 3_600 ? `${Math.floor(ageSec / 60)}m` : `${Math.floor(ageSec / 3_600)}h`;
+  return { label: age ? `TxLINE ${pt ? "atualizada há" : "updated"} ${age}${pt ? "" : " ago"}` : "TxLINE updated", detail: pt ? "Última aquisição pública confirmada." : "Last confirmed public acquisition." };
 }
 
 function RouteTransitionFrame() {

@@ -30,6 +30,13 @@ export function createConfirmedRoomPresence(state: ReplayState, participantId: s
     lastConfirmedVersion: state.snapshot.version,
     updatedAt: new Date().toISOString(),
     connectionState: state.snapshot.connectionState,
+    matchStatus: state.snapshot.match.status,
+    homeScore: state.snapshot.match.homeScore,
+    awayScore: state.snapshot.match.awayScore,
+    matchClockSec: state.snapshot.match.matchClockSec,
+    roomPopulation: state.snapshot.roomPopulation,
+    roundOpenedAt: state.snapshot.currentRound?.openedAt ?? null,
+    roundLocksAt: state.snapshot.currentRound?.state === "open" ? state.snapshot.currentRound.locksAt : null,
   };
 }
 
