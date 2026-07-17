@@ -77,6 +77,7 @@ export type TranslationMessages = {
   "fixture.schedule.toBeConfirmed": undefined;
   "fixture.schedule.scheduledDate": { dateTime: string };
   "fixture.market.directionalCurrent": { selection: string };
+  "fixture.market.teamToWin": { team: string };
   "fixture.market.lastObserved": undefined;
   "fixture.market.unavailable": undefined;
   "home.loading": undefined;

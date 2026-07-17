@@ -128,6 +128,12 @@ test("fixture intents localize without mutating authoritative facts", () => {
   assert.equal(fixtureSchedule(translate("pt-BR"), projection, "14 jul. · 16:00"), "Amanhã");
   assert.equal(fixtureMarketStatement(translate("en"), projection, "France"), "Showing the last observed market.");
   assert.equal(fixtureMarketStatement(translate("pt-BR"), projection, "France"), "Exibindo o último mercado observado.");
+  projection.editorial.marketStatementIntent = "directional_current";
+  assert.equal(translate("en")("fixture.market.teamToWin", { team: "France" }), "France to win");
+  assert.equal(translate("pt-BR")("fixture.market.teamToWin", { team: "França" }), "França vence");
+  assert.equal(fixtureMarketStatement(translate("en"), projection, "France to win"), "Regular-time result.");
+  assert.equal(fixtureMarketStatement(translate("pt-BR"), projection, "França vence"), "Resultado em tempo regulamentar.");
+  projection.editorial.marketStatementIntent = "last_observed";
   assert.equal(JSON.stringify(projection), before);
 });
 
