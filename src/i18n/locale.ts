@@ -71,6 +71,15 @@ export function withLocaleInUrl(href: string, locale: SupportedLocale): string {
   return `${url.pathname}${url.search}${url.hash}`;
 }
 
+export function withLocaleAndAttributionInUrl(href: string, currentHref: string, locale: SupportedLocale): string {
+  const current = new URL(currentHref);
+  const target = new URL(href, current.origin);
+  const invite = current.searchParams.get("invite");
+  if (invite && !target.searchParams.has("invite")) target.searchParams.set("invite", invite);
+  target.searchParams.set("lang", locale);
+  return `${target.pathname}${target.search}${target.hash}`;
+}
+
 export function applyDocumentLocale(
   documentLike: Pick<Document, "documentElement">,
   locale: SupportedLocale,

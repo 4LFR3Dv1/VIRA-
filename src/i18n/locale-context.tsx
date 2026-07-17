@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 
 import { formatDateTime, formatNumber, formatPercent, resolveBrowserTimeZone, type ZonedDateTimeFormatOptions } from "./formatters.ts";
-import { applyBrowserLocale, applyDocumentLocale, localeFromSearch, resolveBrowserLocale, type SupportedLocale } from "./locale.ts";
+import { applyBrowserLocale, applyDocumentLocale, localeFromSearch, resolveBrowserLocale, withLocaleAndAttributionInUrl, type SupportedLocale } from "./locale.ts";
 import { translate, type TranslateFunction } from "./translate.ts";
 import { teamDisplayName } from "./team-display-name.ts";
 
@@ -43,9 +43,7 @@ export function LocaleProvider({ children }: { children: ReactNode }) {
     timeZone,
     setLocale,
     localizedHref: (path) => {
-      const url = new URL(path, window.location.origin);
-      url.searchParams.set("lang", locale);
-      return `${url.pathname}${url.search}${url.hash}`;
+      return withLocaleAndAttributionInUrl(path, window.location.href, locale);
     },
     t: translate(locale),
     formatNumber: (number, options) => formatNumber(locale, number, options),

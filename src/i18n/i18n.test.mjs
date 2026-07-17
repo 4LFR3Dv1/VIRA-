@@ -10,6 +10,7 @@ import {
   persistLocale,
   readPersistedLocale,
   resolveLocale,
+  withLocaleAndAttributionInUrl,
   withLocaleInUrl,
 } from "./locale.ts";
 import { teamDisplayName } from "./team-display-name.ts";
@@ -72,6 +73,17 @@ test("locale URL updates preserve route, room parameters and hash", () => {
   assert.equal(
     withLocaleInUrl("https://vira.test/match/room-7?invite=abc&lang=pt-BR#ranking", "en"),
     "/match/room-7?invite=abc&lang=en#ranking",
+  );
+});
+
+test("localized navigation carries invite attribution without replacing an explicit target invite", () => {
+  assert.equal(
+    withLocaleAndAttributionInUrl("/match/room-9#ranking", "https://vira.test/?invite=abc&lang=pt-BR", "en"),
+    "/match/room-9?invite=abc&lang=en#ranking",
+  );
+  assert.equal(
+    withLocaleAndAttributionInUrl("/picks/final?invite=target", "https://vira.test/?invite=abc", "pt-BR"),
+    "/picks/final?invite=target&lang=pt-BR",
   );
 });
 
