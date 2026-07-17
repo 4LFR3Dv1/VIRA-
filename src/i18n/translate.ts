@@ -218,6 +218,8 @@ export type TranslationMessages = {
   "preview.marketObserved": undefined;
   "preview.waitingEligibleMarket": undefined;
   "preview.market.currentLeader": undefined;
+  "preview.market.regularTimeResult": undefined;
+  "preview.market.teamToWin": { team: string };
   "preview.market.lastObserved": undefined;
   "preview.market.context": undefined;
   "preview.market.reading": undefined;

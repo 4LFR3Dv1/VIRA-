@@ -297,10 +297,11 @@ export function MatchPreviewScreen() {
 
   const leadingChoice = projection?.market.canonical1X2?.leadingChoice ?? null;
   const leadingLabel = leadingChoice === "home" ? teamName(match?.homeTeam ?? "") : leadingChoice === "away" ? teamName(match?.awayTeam ?? "") : leadingChoice === "draw" ? t("lobby.draw") : null;
+  const leadingOutcomeLabel = leadingLabel && leadingChoice !== "draw" ? t("preview.market.teamToWin", { team: leadingLabel }) : leadingLabel;
   const formatPercentage = (value: number) => formatPercent(value <= 1 ? value : value / 100, { minimumFractionDigits: 1, maximumFractionDigits: 1 });
-  const currentSignal = probability && leadingChoice && leadingLabel
+  const currentSignal = probability && leadingChoice && leadingOutcomeLabel
     ? projection?.availability.canMakeDirectionalClaim
-      ? t("preview.market.currentValue", { selection: leadingLabel, percentage: formatPercentage(probability[leadingChoice]) })
+      ? t("preview.market.currentValue", { selection: leadingOutcomeLabel, percentage: formatPercentage(probability[leadingChoice]) })
       : t("preview.market.lastValue", { percentage: formatPercentage(probability[leadingChoice]) })
     : t("preview.market.unavailable");
   const signalCount = context?.marketTaxonomy?.observed ?? 0;
@@ -380,6 +381,7 @@ export function MatchPreviewScreen() {
 
             <div className="mt-8 border-t border-white/15 pt-5 lg:mt-10">
               <p className="font-['DM_Mono'] text-[10px] font-bold uppercase text-white/45">{projection?.availability.canMakeDirectionalClaim ? t("preview.market.currentLeader") : projection?.availability.canShowMarket ? t("preview.market.lastObserved") : t("preview.market.context")}</p>
+              {projection?.availability.canMakeDirectionalClaim ? <p className="mt-1 text-xs text-white/52">{t("preview.market.regularTimeResult")}</p> : null}
               <div className="mt-3 flex flex-col gap-4 lg:flex-row lg:items-end lg:gap-10">
                 <h1 style={{ viewTransitionName: "market-value" } as CSSProperties} className="max-w-3xl font-['Chakra_Petch'] text-[clamp(1.8rem,3.4vw,3.6rem)] font-black uppercase leading-[.9]">
                   {loadingContext && !context ? t("preview.market.reading") : currentSignal}
@@ -452,7 +454,7 @@ export function MatchPreviewScreen() {
         </section>
 
         <section className="mx-auto flex max-w-[1440px] flex-col gap-7 px-5 py-14 sm:px-8 md:flex-row md:items-center md:justify-between lg:px-14">
-          <div className="flex items-start gap-4"><span className="grid size-10 shrink-0 place-items-center border border-primary/30 text-primary"><Check className="size-5" /></span><div><p className="font-['DM_Mono'] text-[10px] uppercase text-primary">{t("preview.verifiedByTxline")}</p><p className="mt-2 max-w-xl text-sm leading-6 text-white/45">{t("preview.auditDescription")}</p></div></div>
+          <div className="flex items-start gap-4"><span aria-hidden className="flex h-10 w-28 shrink-0 items-center justify-center border border-primary/30 bg-white/[.025] px-3"><img src="/txline-logo.svg" alt="" className="h-4 w-auto opacity-90" /></span><div><p className="font-['DM_Mono'] text-[10px] uppercase text-primary">{t("preview.verifiedByTxline")}</p><p className="mt-2 max-w-xl text-sm leading-6 text-white/45">{t("preview.auditDescription")}</p></div></div>
           <button type="button" onClick={() => openRoom(true)} className="inline-flex min-h-12 items-center justify-between gap-8 border border-white/20 px-5 font-['Chakra_Petch'] text-xs font-black uppercase hover:border-primary hover:text-primary">{t("preview.openReview")} <Eye className="size-4" /></button>
         </section>
 
