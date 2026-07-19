@@ -9,7 +9,7 @@
 
   [![Live App](https://img.shields.io/badge/Live_app-Open_VIRA-9EF01A?style=for-the-badge&labelColor=050814)](https://vira.snelabs.space/?lang=en)
   [![Demo V2](https://img.shields.io/badge/Demo_V2-4%3A30_on_YouTube-FF0033?style=for-the-badge&labelColor=050814)](https://www.youtube.com/watch?v=LnOd2kWTiGA)
-  [![Judge Evaluation Guide](https://img.shields.io/badge/Judges-Evaluation_Guide-FFFFFF?style=for-the-badge&labelColor=050814)](https://vira.snelabs.space/help?lang=en)
+  [![Judge Evaluation Guide](https://img.shields.io/badge/Judges-Evaluation_Guide-9EF01A?style=for-the-badge&labelColor=050814)](https://vira.snelabs.space/help?lang=en)
 
   **TxODDS World Cup Hackathon · Live consumer deployment · TxLINE-powered · Solana devnet verified**
 </div>
