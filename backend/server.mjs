@@ -46,7 +46,7 @@ import { createTxlineCatalogCache } from "./txline-catalog-cache.mjs";
 import { ensureVerifiedPlayback, verifiedPlaybackIds } from "./verified-playback-seed.mjs";
 import { publicPlaybackSource, selectPublicPlaybackRoom } from "./public-playback.mjs";
 import { deriveFixtureTemporalContext, resolveEditorialLocaleContext } from "../shared/editorial-domain.mjs";
-import { predictionShareCopy, roomShareCopy, shareChoiceLabel } from "../shared/share-copy.mjs";
+import { predictionShareCopy, roomShareCopy } from "../shared/share-copy.mjs";
 import { authorizeE2eRequest, e2eModeFromEnv } from "./e2e-mode.mjs";
 
 loadLocalEnv();
@@ -944,14 +944,13 @@ async function handleRequest(request, response) {
       }
       const identity = shareStore.identity(token, body.displayName);
       const editorialContext = predictionEditorialContext(fixture, request);
-      const choiceLabel = shareChoiceLabel(body.choice, fixture, editorialContext.locale);
-      const copy = predictionShareCopy({ fixture, displayName: prediction.displayName, choiceLabel, editorialContext });
+      const copy = predictionShareCopy({ fixture, displayName: prediction.displayName, choice: body.choice, editorialContext });
       const share = await shareStore.createShare({
         kind: "prediction", createdByPublicId: identity.publicId, expiresAt: fixture.startTime,
         metadata: copy.metadata,
         destination: { path: `/match/${encodeURIComponent(fixture.fixtureId)}/preview`, ctaLabel: copy.ctaLabel },
         attribution: { source: "prediction", campaign: "pre_match_1x2" },
-        payload: { fixtureId: fixture.fixtureId, predictionId: prediction.id, displayName: prediction.displayName, choice: body.choice, choiceLabel, homeTeam: fixture.homeTeam, awayTeam: fixture.awayTeam, kickoffAt: fixture.startTime }, editorialContext,
+        payload: { fixtureId: fixture.fixtureId, predictionId: prediction.id, displayName: prediction.displayName, choice: body.choice, homeTeam: fixture.homeTeam, awayTeam: fixture.awayTeam, kickoffAt: fixture.startTime }, editorialContext,
       });
       sendJson(response, 201, { prediction, share, url: `${publicBaseUrl(request)}/s/${share.publicCode}` });
       return;
@@ -1052,8 +1051,7 @@ async function handleRequest(request, response) {
       if (!fixture) throw Object.assign(new Error("fixture_not_found"), { status: 404 });
       const resolved = prediction.status === "resolved";
       const editorialContext = predictionEditorialContext(fixture, request);
-      const label = shareChoiceLabel(prediction.choice, fixture, editorialContext.locale);
-      const copy = predictionShareCopy({ fixture, displayName: prediction.displayName, choiceLabel: label, editorialContext, resolvedPrediction: resolved ? prediction : null });
+      const copy = predictionShareCopy({ fixture, displayName: prediction.displayName, choice: prediction.choice, editorialContext, resolvedPrediction: resolved ? prediction : null });
       const share = await shareStore.createShare({
         kind: resolved ? "result" : "prediction",
         createdByPublicId: identity.publicId,
@@ -1061,7 +1059,7 @@ async function handleRequest(request, response) {
         metadata: copy.metadata,
         destination: { path: `/match/${encodeURIComponent(fixtureId)}/preview`, ctaLabel: copy.ctaLabel },
         attribution: { source: resolved ? "result" : "prediction", campaign: resolved ? "fixture_prediction_result" : "pre_match_1x2" },
-        payload: { fixtureId, predictionId: prediction.id, displayName: prediction.displayName, choice: prediction.choice, choiceLabel: label, correct: prediction.correct ?? null, finalScore: prediction.finalScore ?? null, homeTeam: fixture.homeTeam, awayTeam: fixture.awayTeam, kickoffAt: fixture.startTime }, editorialContext,
+        payload: { fixtureId, predictionId: prediction.id, displayName: prediction.displayName, choice: prediction.choice, correct: prediction.correct ?? null, finalScore: prediction.finalScore ?? null, homeTeam: fixture.homeTeam, awayTeam: fixture.awayTeam, kickoffAt: fixture.startTime }, editorialContext,
       });
       sendJson(response, 201, { prediction, share, url: `${publicBaseUrl(request)}/s/${share.publicCode}` });
       return;

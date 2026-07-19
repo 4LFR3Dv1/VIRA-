@@ -176,7 +176,6 @@ export interface TxlineWinProbability {
 
 export interface TxlineMarketOption {
   priceName: string;
-  label: string;
   pct: number | null;
   price: number | null;
 }
@@ -208,15 +207,12 @@ export interface TxlineSuggestedPrediction {
   providerSequence: number | null;
   marketSignature: string;
   marketType: string;
-  marketLabel: string;
   line: string | null;
   period: string | null;
   priceName: string;
-  priceLabel: string;
   pct: number;
   operator: ">=";
   threshold: number;
-  prompt: string;
   winningOption: "yes" | "no";
 }
 

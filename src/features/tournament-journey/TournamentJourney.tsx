@@ -12,7 +12,7 @@ const copy = {
     intro: "Follow the four matches that decide the champion. Results and schedules come from TxLINE.",
     stages: { semi_final: "Semifinal", semi_finals: "Semifinals", third_place: "Third place", final: "Final" },
     scheduled: "Scheduled", awaitingOfficial: "Awaiting official update", live: "Live now", paused: "Paused", finished: "Final", postponed: "Postponed", cancelled: "Cancelled", unknown: "Status unavailable",
-    unavailable: "Result unavailable", open: "Open match", inspect: "View match status", viewResult: "View result", archive: "Match archive", verified: "Official result", champion: "Official champion", roadComplete: "The road is complete.", decided: "Explore how the World Cup was decided.",
+    unavailable: "Result unavailable", awaitingVerifiedResult: "Awaiting verified TxLINE result", awaitingVerifiedDescription: "The result is not displayed until official authority is available.", open: "Open match", inspect: "View match status", viewResult: "View result", archive: "Match archive", verified: "Official result", champion: "Official champion", roadComplete: "The road is complete.", decided: "Explore how the World Cup was decided.",
     yourPath: "Your path", championPath: "Champion's path",
     authority: "Bracket structure: editorial manifest · Match data: TxLINE",
   },
@@ -21,7 +21,7 @@ const copy = {
     intro: "Acompanhe as quatro partidas que definem o campeão. Resultados e horários vêm da TxLINE.",
     stages: { semi_final: "Semifinal", semi_finals: "Semifinais", third_place: "Terceiro lugar", final: "Final" },
     scheduled: "Agendada", awaitingOfficial: "Aguardando atualização oficial", live: "Ao vivo", paused: "Pausada", finished: "Final", postponed: "Adiada", cancelled: "Cancelada", unknown: "Status indisponível",
-    unavailable: "Resultado indisponível", open: "Abrir partida", inspect: "Ver status da partida", viewResult: "Ver resultado", archive: "Arquivo da partida", verified: "Resultado oficial", champion: "Campeão oficial", roadComplete: "O caminho está completo.", decided: "Explore como a Copa do Mundo foi decidida.",
+    unavailable: "Resultado indisponível", awaitingVerifiedResult: "Aguardando resultado verificado pela TxLINE", awaitingVerifiedDescription: "O resultado não é exibido até que a autoridade oficial esteja disponível.", open: "Abrir partida", inspect: "Ver status da partida", viewResult: "Ver resultado", archive: "Arquivo da partida", verified: "Resultado oficial", champion: "Campeão oficial", roadComplete: "O caminho está completo.", decided: "Explore como a Copa do Mundo foi decidida.",
     yourPath: "Seu caminho", championPath: "Caminho do campeão",
     authority: "Estrutura: manifesto editorial · Dados das partidas: TxLINE",
   },
@@ -66,14 +66,16 @@ function JourneyCard({ item, label, c, formatDateTime, teamName, href, emphasis 
   const status = fixture?.status ?? "unknown";
   const result = item?.result;
   const presentation = deriveHomeFixturePresentationState({ status, kickoffAt: fixture?.kickoffAt ?? null, officialResultAvailable: result?.authority === "txline_terminal_history", nowMs });
+  const awaitingVerifiedResult = !result && (!fixture || presentation === "finished" || presentation === "awaiting_official_state");
   const highlighted = Boolean(highlightTeam && fixture && [fixture.homeTeam.name, fixture.awayTeam.name].some((name) => normalizeTeam(name) === normalizeTeam(highlightTeam)));
   const kickoff = fixture?.kickoffAt ? formatDateTime(fixture.kickoffAt, { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit", timeZone: item?.fixture?.temporal.timeZone }) : null;
   const action = presentation === "finished" ? result ? c.viewResult : c.archive : presentation === "upcoming" || presentation === "live" || presentation === "paused" ? c.open : c.inspect;
   const statusCopy = presentation === "upcoming" ? c.scheduled : presentation === "awaiting_official_state" ? c.awaitingOfficial : c[presentation];
   const card = <article data-highlighted-path={highlighted ? "true" : undefined} className={`relative min-h-44 overflow-hidden border p-5 transition-colors duration-500 motion-reduce:transition-none ${highlighted ? "border-primary bg-primary/[.09] shadow-[inset_3px_0_0_#c7ff18]" : emphasis ? "border-primary/55 bg-primary/[.055]" : "border-white/18 bg-[#050814]/40"}`}>
     {highlighted ? <span className="absolute right-0 top-0 bg-primary px-3 py-1 font-['DM_Mono'] text-[8px] font-black uppercase text-[#050814]">{pathLabel}</span> : null}
-    <div className="flex items-start justify-between gap-4"><div><p className="font-['DM_Mono'] text-[9px] font-black uppercase text-primary">{label}</p><p className="mt-1 font-['DM_Mono'] text-[8px] font-medium uppercase text-white/48">{fixture ? statusCopy : c.unavailable}{kickoff ? ` · ${kickoff}` : ""}</p></div>{result ? <span className="font-['Chakra_Petch'] text-2xl font-black">{result.homeScore}–{result.awayScore}</span> : null}</div>
-    {fixture ? <div className="mt-5 grid gap-2"><TeamLine providerName={fixture.homeTeam.name} displayName={teamName(fixture.homeTeam.name)} score={result?.homeScore} /><TeamLine providerName={fixture.awayTeam.name} displayName={teamName(fixture.awayTeam.name)} score={result?.awayScore} /></div> : <p role="status" className="mt-8 text-sm font-bold uppercase text-white/38">{c.unavailable}</p>}
+    <div className="flex items-start justify-between gap-4"><div><p className="font-['DM_Mono'] text-[9px] font-black uppercase text-primary">{label}</p><p className="mt-1 font-['DM_Mono'] text-[8px] font-medium uppercase text-white/48">{fixture ? statusCopy : c.awaitingVerifiedResult}{kickoff ? ` · ${kickoff}` : ""}</p></div>{result ? <span className="font-['Chakra_Petch'] text-2xl font-black">{result.homeScore}–{result.awayScore}</span> : null}</div>
+    {fixture ? <div className="mt-5 grid gap-2"><TeamLine providerName={fixture.homeTeam.name} displayName={teamName(fixture.homeTeam.name)} score={result?.homeScore} /><TeamLine providerName={fixture.awayTeam.name} displayName={teamName(fixture.awayTeam.name)} score={result?.awayScore} /></div> : null}
+    {awaitingVerifiedResult ? <div role="status" className="mt-5 border-l border-white/20 pl-4"><p className="font-['Chakra_Petch'] text-sm font-black uppercase text-white/70">{c.awaitingVerifiedResult}</p><p className="mt-2 text-xs leading-5 text-white/42">{c.awaitingVerifiedDescription}</p></div> : null}
     {result?.authority === "txline_terminal_history" ? <div className="mt-4 flex items-center gap-2 text-white/58"><img src="/txline-logo.svg" alt="TxLINE" className="h-2.5 w-auto opacity-75" /><span className="font-['DM_Mono'] text-[8px] font-bold uppercase">{c.verified}</span></div> : null}
     {fixture ? <span className="mt-4 inline-flex items-center gap-2 text-[10px] font-black uppercase text-white/70 group-hover:text-primary">{action} <ArrowRight className="size-3.5" /></span> : null}
   </article>;

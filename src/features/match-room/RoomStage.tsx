@@ -11,6 +11,7 @@ import type { ViraExperienceModel } from "./experience-model";
 import { useLocale } from "../../i18n/locale-context.tsx";
 import { roundOptionCopy } from "../../i18n/round-copy.ts";
 import { participantAwaitsCurrentRoundResolution } from "../match-experience/state-model.ts";
+import { canonicalMarketSelectionLabel, canonicalOutcomeSelection } from "../../../shared/canonical-market-copy.mjs";
 
 interface RoomStageProps {
   state: ReplayState;
@@ -43,12 +44,12 @@ export function RoomStage({ state, model, answerSummary, latestPresentationEvent
 }
 
 function PreparingRoundStage({ state, kind, context }: { state: ReplayState; kind: "market" | "round"; context: MatchTxlineContext | null }) {
-  const { formatNumber, t, teamName } = useLocale();
+  const { formatNumber, locale, t, teamName } = useLocale();
   const reduceMotion = useReducedMotion();
   const connected = state.snapshot.connectionState === "live";
   const receivedSignals = state.snapshot.timeline.length;
   const projectedMarket = context?.consumerProjection?.availability.canShowMarket ? context.consumerProjection.market.canonical1X2 : null;
-  const watch = projectedMarket ? { priceLabel: projectedMarket.leadingChoice === "home" ? teamName(context?.fixture.homeTeam ?? "") : projectedMarket.leadingChoice === "away" ? teamName(context?.fixture.awayTeam ?? "") : t("lobby.draw"), pct: projectedMarket.selections[projectedMarket.leadingChoice], directional: context?.consumerProjection?.availability.canMakeDirectionalClaim === true } : null;
+  const watch = projectedMarket ? { priceLabel: canonicalMarketSelectionLabel(canonicalOutcomeSelection(projectedMarket.leadingChoice), { locale, homeTeam: teamName(context?.fixture.homeTeam ?? ""), awayTeam: teamName(context?.fixture.awayTeam ?? "") }) ?? t("common.unavailable"), pct: projectedMarket.selections[projectedMarket.leadingChoice], directional: context?.consumerProjection?.availability.canMakeDirectionalClaim === true } : null;
 
   return (
     <motion.section layout className="relative min-h-[31rem] overflow-hidden border-y border-white/15 bg-[#090d18]">
@@ -124,9 +125,9 @@ function PreMatchMarketWatch({ state, context, participantCount, onFanPulse }: {
   const homeShare = pulse.total ? Math.round((pulse.byTeam.home / pulse.total) * 100) : 50;
   const awayShare = pulse.total ? 100 - homeShare : 50;
   const options = probability ? [
-    { label: homeName, value: probability.home },
-    { label: t("lobby.draw"), value: probability.draw },
-    { label: awayName, value: probability.away },
+    { label: canonicalMarketSelectionLabel("part1", { locale, homeTeam: homeName, awayTeam: awayName })!, value: probability.home },
+    { label: canonicalMarketSelectionLabel("draw", { locale, homeTeam: homeName, awayTeam: awayName })!, value: probability.draw },
+    { label: canonicalMarketSelectionLabel("part2", { locale, homeTeam: homeName, awayTeam: awayName })!, value: probability.away },
   ] : [];
   const cast = async (side: "home" | "away") => {
     if (!onFanPulse || pulse.currentParticipantChoice || submitting) return;

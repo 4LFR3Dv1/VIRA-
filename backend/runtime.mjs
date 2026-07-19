@@ -470,10 +470,11 @@ export function createRoomRuntime({ eventStore = null, commitmentPublisher = nul
       };
       return;
     }
+    const canonicalTitle = `market:${suggestedPrediction.marketType}:${suggestedPrediction.priceName}:gte:${suggestedPrediction.threshold}`;
     room.currentRound = {
       ...room.currentRound,
-      title: suggestedPrediction.prompt,
-      contextLabel: `Mercado · ${suggestedPrediction.marketType}`,
+      title: canonicalTitle,
+      contextLabel: `market:${suggestedPrediction.marketType}`,
       resolution: {
         mode: "first_matching_event",
         eventType: "odds_shift",
@@ -496,7 +497,7 @@ export function createRoomRuntime({ eventStore = null, commitmentPublisher = nul
       no: room.roomDistribution.no ?? 0,
     };
     const latestOpen = room.timeline.find((item) => item.id === "timeline-round-1-open");
-    if (latestOpen) latestOpen.description = suggestedPrediction.prompt;
+    if (latestOpen) latestOpen.description = canonicalTitle;
   }
 
   function emit(roomId, event, data) {

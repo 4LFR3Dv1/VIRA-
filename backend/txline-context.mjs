@@ -96,16 +96,6 @@ function marketLabel(record) {
   return `${type}${line}${period}`;
 }
 
-function optionLabel(priceName, match) {
-  const value = String(priceName);
-  if (value === "part1") return match?.homeTeam ?? "Home";
-  if (value === "part2") return match?.awayTeam ?? "Away";
-  if (value === "draw") return "Empate";
-  if (value === "over") return "Over";
-  if (value === "under") return "Under";
-  return value;
-}
-
 function extractAvailableMarkets(payload, match, sourceEndpoint) {
   const markets = asRecords(payload)
     .map((record) => {
@@ -114,7 +104,6 @@ function extractAvailableMarkets(payload, match, sourceEndpoint) {
       const prices = Array.isArray(record?.Prices) ? record.Prices.map((value) => Number(value)).map((value) => Number.isFinite(value) ? value : null) : [];
       const options = priceNames.map((priceName, index) => ({
         priceName,
-        label: optionLabel(priceName, match),
         pct: pct[index],
         price: prices[index],
       }));
@@ -207,16 +196,13 @@ function bestPredictionFromMarkets(markets) {
     providerSequence: selected.sequence,
     marketSignature: selected.signature,
     marketType: selected.marketType,
-    marketLabel: selected.label,
     bookmakerId: selected.bookmakerId,
     line: selected.marketParameters,
     period: selected.marketPeriod,
     priceName: selected.leadingOption.priceName,
-    priceLabel: selected.leadingOption.label,
     pct: selected.leadingOption.pct,
     operator: ">=",
     threshold,
-    prompt: `${selected.leadingOption.label} chega a ${threshold}% ou mais no proximo sinal?`,
     winningOption: selected.leadingOption.pct >= threshold ? "yes" : "no",
   };
 }
@@ -423,4 +409,4 @@ export async function buildTxlineContext(config, match) {
   };
 }
 
-export const txlineContextInternals = { projectScoreState, projectHistoricalScoreState };
+export const txlineContextInternals = { extractAvailableMarkets, bestPredictionFromMarkets, projectScoreState, projectHistoricalScoreState };

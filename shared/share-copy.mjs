@@ -1,3 +1,5 @@
+import { canonicalMarketSelectionLabel, canonicalOutcomeSelection } from "./canonical-market-copy.mjs";
+
 export const LEGACY_SHARE_LOCALE = "pt-BR";
 export const LEGACY_SHARE_TIME_ZONE = "America/Sao_Paulo";
 
@@ -40,11 +42,12 @@ function dictionary(locale) {
 }
 
 export function shareKindLabel(kind, locale) { return dictionary(normalizeShareLocale(locale)).kinds[kind] ?? "VIRA"; }
-export function shareChoiceLabel(choice, fixture, locale) { const copy = dictionary(normalizeShareLocale(locale)); return choice === "home" ? fixture.homeTeam : choice === "away" ? fixture.awayTeam : copy.draw; }
+export function shareChoiceLabel(choice, fixture, locale) { return canonicalMarketSelectionLabel(canonicalOutcomeSelection(choice), { locale: normalizeShareLocale(locale), homeTeam: fixture.homeTeam, awayTeam: fixture.awayTeam }); }
 
-export function predictionShareCopy({ fixture, displayName, choiceLabel, editorialContext, resolvedPrediction = null }) {
+export function predictionShareCopy({ fixture, displayName, choice, editorialContext, resolvedPrediction = null }) {
   const locale = normalizeShareLocale(editorialContext?.locale);
   const copy = dictionary(locale);
+  const choiceLabel = shareChoiceLabel(choice, fixture, locale) ?? (locale === "en" ? "the match" : "a partida");
   if (resolvedPrediction) return {
     metadata: { title: copy.predictionResultTitle(displayName, resolvedPrediction.correct), description: copy.predictionResultBody(fixture.homeTeam, resolvedPrediction.finalScore?.home ?? "", resolvedPrediction.finalScore?.away ?? "", fixture.awayTeam, choiceLabel), imagePath: "dynamic" },
     ctaLabel: copy.resultCta,

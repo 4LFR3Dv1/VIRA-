@@ -2,6 +2,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 import { resolveShareLocaleContext } from "../shared/share-copy.mjs";
+import { canonicalMarketSelectionLabel, canonicalOutcomeSelection } from "../shared/canonical-market-copy.mjs";
 
 const logoCandidates = [
   new URL("../public/vira-icon.png", import.meta.url),
@@ -94,7 +95,9 @@ function defs() {
 function predictionCard(share, copy) {
   const payload = share.payload ?? {};
   const kickoff = share.editorialContext?.localKickoffDate ? `${share.editorialContext.localKickoffDate} · ${share.editorialContext.localKickoffTime ?? ""}` : "—";
-  const name = String(payload.displayName ?? "A FAN").toUpperCase(); const choice = String(payload.choiceLabel ?? "THE MATCH").toUpperCase();
+  const locale = resolveShareLocaleContext(share).locale;
+  const choiceLabel = canonicalMarketSelectionLabel(canonicalOutcomeSelection(payload.choice), { locale, homeTeam: payload.homeTeam, awayTeam: payload.awayTeam });
+  const name = String(payload.displayName ?? "A FAN").toUpperCase(); const choice = String(choiceLabel ?? (locale === "en" ? "THE MATCH" : "A PARTIDA")).toUpperCase();
   return `${base(copy.prediction)}${matchupIdentity(payload)}${textLines(`${name} ${copy.backing} ${choice}.`, 58, 328, { limit: 22, maxLines: 2, size: 54 })}<text class="display" x="58" y="475" fill="${COLORS.lime}" font-size="31" letter-spacing=".5">${copy.whoWith}</text><text x="58" y="538" fill="${COLORS.muted}" font-size="15" letter-spacing="2">${copy.kickoff} · ${escapeXml(kickoff)}</text>${activationCta(share, copy)}`;
 }
 
@@ -117,8 +120,8 @@ function resultCard(share, copy) {
 
 function pickLabel(selection, locale) {
   const en = locale === "en";
-  if (selection.kind === "match_result") return selection.selection === "home" ? (en ? "Home" : "Casa") : selection.selection === "away" ? (en ? "Away" : "Visitante") : (en ? "Draw" : "Empate");
-  if (selection.kind === "total_goals") return selection.selection === "over" ? (en ? "Over 2.5" : "Mais de 2,5") : (en ? "Under 2.5" : "Menos de 2,5");
+  if (selection.kind === "match_result") return canonicalMarketSelectionLabel(canonicalOutcomeSelection(selection.selection), { locale }) ?? "—";
+  if (selection.kind === "total_goals") return `${canonicalMarketSelectionLabel(selection.selection, { locale }) ?? "—"} ${en ? "2.5" : "de 2,5"}`;
   return selection.selection === "yes" ? (en ? "Both score: Yes" : "Ambas marcam: Sim") : (en ? "Both score: No" : "Ambas marcam: Não");
 }
 

@@ -29,6 +29,7 @@ import { competitionDisplayName } from "../../i18n/semantic-copy.ts";
 import { VIRA_PICKS_ENABLED } from "../picks/feature-flags.ts";
 import { fetchOwnerPicks } from "../picks/api.ts";
 import { fetchTournamentJourney, type TournamentJourneyFixture } from "../../social/share";
+import { canonicalMarketSelectionLabel } from "../../../shared/canonical-market-copy.mjs";
 
 type ContextState = "idle" | "loading" | "ready" | "empty" | "error";
 type FinishedCapabilities = { room: boolean; ranking: boolean; verifiedRounds: boolean; picks: boolean };
@@ -78,9 +79,16 @@ function marketSubtitle(market: TxlineAvailableMarket, t: TranslateFunction) {
   return [line ? t("preview.market.line", { line }) : null, period].filter(Boolean).join(" · ");
 }
 
-function strongestMarketValue(market: TxlineAvailableMarket) {
-  const option = market.leadingOption ?? market.options.find((item) => item.pct !== null) ?? null;
-  return option?.pct == null ? null : { label: option.label, value: option.pct };
+function canonicalMarketOptionLabel(option: TxlineAvailableMarket["options"][number], match: MatchCatalogEntry | null, locale: "en" | "pt-BR", t: TranslateFunction, teamName: (name: string) => string) {
+  return canonicalMarketSelectionLabel(option.priceName, { locale, homeTeam: match ? teamName(match.homeTeam) : null, awayTeam: match ? teamName(match.awayTeam) : null }) ?? t("common.unavailable");
+}
+
+function strongestMarketValue(market: TxlineAvailableMarket, match: MatchCatalogEntry | null, locale: "en" | "pt-BR", t: TranslateFunction, teamName: (name: string) => string) {
+  const option = market.leadingOption ?? market.options.reduce<TxlineAvailableMarket["options"][number] | null>((leading, item) => {
+    if (item.pct === null) return leading;
+    return !leading || leading.pct === null || item.pct > leading.pct ? item : leading;
+  }, null);
+  return option?.pct == null ? null : { label: canonicalMarketOptionLabel(option, match, locale, t, teamName), value: option.pct };
 }
 
 function TeamHeading({ name, side }: { name: string; side: "home" | "away" }) {
@@ -439,7 +447,7 @@ export function MatchPreviewScreen() {
           <h2 className="mt-3 font-['Chakra_Petch'] text-4xl font-black uppercase">{t("preview.roundDirectorContext")}</h2>
           <div className="mt-8 border-t border-white/15">
             {markets.length ? markets.map((market, index) => {
-              const strongest = strongestMarketValue(market);
+              const strongest = strongestMarketValue(market, match, locale, t, teamName);
               return <div key={market.id} className="grid grid-cols-[32px_minmax(0,1fr)_auto] items-center gap-4 border-b border-white/15 py-6 transition hover:bg-white/[.025] sm:grid-cols-[48px_minmax(0,1fr)_180px]"><span className="font-['DM_Mono'] text-xs text-white/30">{String(index + 1).padStart(2, "0")}</span><div className="min-w-0"><p className="truncate font-['Chakra_Petch'] font-black uppercase">{marketTitle(market, t)}</p><p className="mt-1 truncate text-sm text-white/40">{marketSubtitle(market, t)}</p></div><div className="text-right"><strong className="block truncate text-sm text-primary sm:text-lg">{strongest ? `${strongest.label} ${formatPercentage(strongest.value)}` : t("preview.market.waiting")}</strong><span className="font-['DM_Mono'] text-[9px] uppercase text-white/30">{market.signature === prediction?.marketSignature ? t("preview.market.active") : market.sourceEndpoint.includes("updates") ? t("preview.market.updated") : t("preview.market.available")}</span></div></div>;
             }) : <p className="border-b border-white/15 py-8 text-sm text-white/45">{t("preview.market.noneEligible")}</p>}
           </div>
