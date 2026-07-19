@@ -9,11 +9,7 @@
 
   [![Live App](https://img.shields.io/badge/Live_app-Open_VIRA-9EF01A?style=for-the-badge&labelColor=050814)](https://vira.snelabs.space/?lang=en)
   [![Demo V2](https://img.shields.io/badge/Demo_V2-4%3A30_on_YouTube-FF0033?style=for-the-badge&labelColor=050814)](https://www.youtube.com/watch?v=LnOd2kWTiGA)
-  [![Commercial Pitch](https://img.shields.io/badge/Pitch-Commercial_PDF-9EF01A?style=for-the-badge&labelColor=050814)](docs/VIRA_Synchronized_Football_Engagement.pdf)
-  [![Platform Deck](https://img.shields.io/badge/Deck-Synchronized_Participation-9EF01A?style=for-the-badge&labelColor=050814)](docs/VIRA_Synchronized_Participation.pdf)
-  [![Brand Activation](https://img.shields.io/badge/Deck-Matchday_Brand_Rituals-FFFFFF?style=for-the-badge&labelColor=050814)](docs/Matchday_Brand_Rituals.pdf)
-  [![Judge Walkthrough](https://img.shields.io/badge/Judges-3_minute_walkthrough-FFFFFF?style=for-the-badge&labelColor=050814)](https://vira.snelabs.space/help?lang=en)
-  [![Verify](https://github.com/4LFR3Dv1/VIRA-/actions/workflows/verify.yml/badge.svg)](https://github.com/4LFR3Dv1/VIRA-/actions/workflows/verify.yml)
+  [![Judge Evaluation Guide](https://img.shields.io/badge/Judges-Evaluation_Guide-FFFFFF?style=for-the-badge&labelColor=050814)](https://vira.snelabs.space/help?lang=en)
 
   **TxODDS World Cup Hackathon · Live consumer deployment · TxLINE-powered · Solana devnet verified**
 </div>
@@ -55,9 +51,18 @@ Both experiences reuse the same guest identity and social distribution layer, bu
 
 ## Judge fast path — under three minutes
 
-**Available now, before kickoff**
+**Permanent certified path — available even after the tournament ends**
 
-1. Open the [live app](https://vira.snelabs.space/?lang=en), choose a scheduled fixture and enter VIRA Picks.
+1. Open the [Judge Evaluation Guide](https://vira.snelabs.space/help?lang=en).
+2. Start the canonical [Guided Playback](https://vira.snelabs.space/match/judge-playback-france-spain-v2?lang=en), explicitly identified as a sanitized captured TxLINE fixture rather than a current live match.
+3. Experience the complete sequence: ten-second countdown → kickoff → synchronized round → private answer → server lock → TxLINE signal → shared resolution → France 2–1 Spain.
+4. Finish on the terminal share card, then use **Replay from start** or **Inspect evidence** to verify the journey again.
+
+The Guided Playback reuses the production Consumer projections and preserves the ordering of the captured TxLINE evidence. It does not enter the official World Cup bracket or present the captured result as current live delivery.
+
+**Available around a scheduled fixture**
+
+1. Open the [live app](https://vira.snelabs.space/?lang=en), choose an eligible scheduled fixture and enter VIRA Picks.
 2. Confirm an immutable card, share it and open the link in an anonymous or mobile window.
 3. Create a second card with another guest identity and verify that both cards remain independent.
 
@@ -67,10 +72,6 @@ Both experiences reuse the same guest identity and social distribution layer, bu
 2. Compare the synchronized round, private answer state, server-owned deadline and Mini League membership.
 3. Watch both screens receive the same TxLINE-driven resolution and updated ranking.
 
-**When no match is live**
-
-Open [Official VIRA Review](https://vira.snelabs.space/help?lang=en) to inspect a resolved round reconstructed from the public ledger, or use the canonical [Demo V2](https://www.youtube.com/watch?v=LnOd2kWTiGA) to see the complete two-device journey.
-
 ```text
 Pick → Share → Join → Play → Resolve → Rank → Verify
 ```
@@ -79,12 +80,17 @@ The canonical demo shows the complete experience, two isolated participants and 
 
 ## Product journey
 
-| Match Preview | VIRA Picks | Match Room result |
-| --- | --- | --- |
-| [![Brazil vs France Match Preview](docs/images/vira-match-preview.png)](docs/images/vira-match-preview.png) | [![Confirmed immutable VIRA Picks card](docs/images/vira-picks-confirmed.png)](docs/images/vira-picks-confirmed.png) | [![Resolved synchronized Match Room](docs/images/vira-match-room-resolved.png)](docs/images/vira-match-room-resolved.png) |
-| Discover the fixture, TxLINE consensus and available fan experiences. | Confirm structured pre-match predictions that lock at kickoff. | Resolve the same live rule for every participant, then update ranking. |
+<p align="center">
+  <a href="docs/images/vira-world-cup-journey.png"><img src="docs/images/vira-world-cup-journey.png" height="190" alt="World Cup Now and Road to the Final journey" /></a>
+  <a href="docs/images/vira-picks-share.png"><img src="docs/images/vira-picks-share.png" height="190" alt="VIRA Picks social card inviting a friend to make their picks" /></a>
+  <a href="docs/images/vira-match-result-share.png"><img src="docs/images/vira-match-result-share.png" height="190" alt="Resolved Match Room result share with points and ranking" /></a>
+</p>
 
-The gallery uses sanitized, deterministic TxLINE test fixtures so each state remains inspectable when no match is active. Live production uses the same Consumer UI and authority checks.
+| **World Cup Now → Road to the Final** | **VIRA Picks → social invitation** | **Match Room → resolved and shareable** |
+| --- | --- | --- |
+| Understand the current tournament state, personal context and official path before entering a match. | Confirm an immutable pre-match point of view and invite a friend to make their own. | Resolve the synchronized decision, update points and ranking, then turn the outcome into the next invitation. |
+
+The gallery uses sanitized, deterministic TxLINE test fixtures so each state remains inspectable when no match is active. The tournament structure is editorially versioned; match participants, status, kickoff and results remain TxLINE-owned. Live production uses the same Consumer UI and authority checks.
 
 ## Why VIRA stands out
 
@@ -216,7 +222,11 @@ Product images in these decks that demonstrate deterministic end-to-end states a
 
 ## Production evidence
 
-At the latest release gate:
+The canonical Demo V2 evidence package is pinned to release [`vira-demo-final-v2-2026-07-16`](https://github.com/4LFR3Dv1/VIRA-/releases/tag/vira-demo-final-v2-2026-07-16) at commit [`ec46a28`](https://github.com/4LFR3Dv1/VIRA-/commit/ec46a28c730388d5f7e449c11b801b92b5edf82a). Its video masters, captions, thumbnail, metadata and certification manifest are SHA-256 certified within that release.
+
+[![Verify](https://github.com/4LFR3Dv1/VIRA-/actions/workflows/verify.yml/badge.svg)](https://github.com/4LFR3Dv1/VIRA-/actions/workflows/verify.yml)
+
+At that release gate:
 
 - production build passed;
 - the complete automated verification suite passed across contracts, runtime, replay, Picks and Consumer journeys;
