@@ -6,6 +6,7 @@ import test from "node:test";
 
 import { WORLD_CUP_JOURNEY_MANIFEST_V1, validateTournamentJourneyManifestV1 } from "./tournament-journey-manifest.mjs";
 import { TournamentJourneyStore } from "./tournament-journey-store.mjs";
+import { shouldPreserveTerminalProjection, shouldRecoverTerminalHistory } from "./tournament-journey-service.mjs";
 import { buildTournamentJourneyProjection, terminalResultFromTxlineHistory } from "./tournament-journey.mjs";
 
 function fixture(fixtureId, home, away, status, kickoffAt = "2026-07-19T19:00:00.000Z") {
@@ -49,6 +50,22 @@ test("finished final without terminal authority does not produce a premature cha
   assert.equal(unresolved.status, "active"); assert.equal(unresolved.champion, null);
   const resolved = buildTournamentJourneyProjection({ manifest: WORLD_CUP_JOURNEY_MANIFEST_V1, archive: archiveWithFinal("finished", { authority: "txline_terminal_history", homeScore: 2, awayScore: 1 }) });
   assert.equal(resolved.status, "complete"); assert.equal(resolved.champion.name, "Spain");
+});
+
+test("removed tournament fixtures recover terminal history after their match window without inferring a result", () => {
+  const nowMs = Date.parse("2026-07-19T04:50:00.000Z");
+  assert.equal(shouldRecoverTerminalHistory({ stage: "third_place", status: "scheduled", kickoffAt: "2026-07-18T21:00:00.000Z", result: null, nowMs }), true);
+  assert.equal(shouldRecoverTerminalHistory({ stage: "final", status: "scheduled", kickoffAt: "2026-07-19T19:00:00.000Z", result: null, nowMs }), false);
+  assert.equal(shouldRecoverTerminalHistory({ stage: "third_place", status: "scheduled", kickoffAt: "2026-07-18T21:00:00.000Z", result: { authority: "txline_terminal_history" }, nowMs }), false);
+  assert.equal(shouldRecoverTerminalHistory({ stage: "third_place", status: "postponed", kickoffAt: "2026-07-18T21:00:00.000Z", result: null, nowMs }), false);
+  assert.equal(shouldRecoverTerminalHistory({ stage: "semi_final", status: "cancelled", kickoffAt: "2026-07-14T19:00:00.000Z", result: null, nowMs }), false);
+});
+
+test("a stale scheduled catalog observation cannot downgrade a terminal archived projection", () => {
+  const previous = { result: { authority: "txline_terminal_history" }, projection: fixture("third", "France", "England", "finished") };
+  assert.equal(shouldPreserveTerminalProjection(previous, fixture("third", "France", "England", "scheduled")), true);
+  assert.equal(shouldPreserveTerminalProjection(previous, fixture("third", "France", "England", "finished")), false);
+  assert.equal(shouldPreserveTerminalProjection({ result: null }, fixture("third", "France", "England", "scheduled")), false);
 });
 
 test("archive is atomic, idempotent and preserves payload provenance across restart", async () => {

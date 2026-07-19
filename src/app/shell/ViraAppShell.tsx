@@ -64,7 +64,7 @@ export function ViraAppShell() {
   };
   const alertVisible = shell.connection.kind !== "healthy";
   const location = useLocation();
-  const pulse = deriveMatchdayPulseV1({ routeId: shell.route.id, pathname: location.pathname, home: shell.matchday.home, homeAvailable: shell.matchday.kind === "ready", matchdayUpdatedAt: shell.matchday.updatedAt, activeRoom: shell.activeRoom, review: shell.review, connection: shell.connection });
+  const pulse = deriveMatchdayPulseV1({ routeId: shell.route.id, pathname: location.pathname, home: shell.matchday.home, homeAvailable: shell.matchday.kind === "ready", matchdayUpdatedAt: shell.matchday.updatedAt, activeRoom: shell.activeRoom, review: shell.review, connection: shell.connection, nowMs });
   const currentFixtureId = location.pathname.match(/^\/match\/([^/]+)/)?.[1] ?? null;
   const activeFixtureId = shell.activeRoom.kind === "confirmed" ? shell.activeRoom.room.fixtureId : null;
   const overlayOpen = reviewOpen || externalOverlays.size > 0;
@@ -175,7 +175,7 @@ function presentPulse(pulse: MatchdayPulseV1, nowMs: number, context: Pick<Local
     return { primary: score ? `${home} ${score} ${away}` : matchup, secondary, aria: `${matchup}. ${secondary}` };
   }
   if (pulse.kind === "exceptional") {
-    const states: Record<string, [string, string]> = { paused: ["Paused", "Pausada"], postponed: ["Postponed", "Adiada"], cancelled: ["Cancelled", "Cancelada"], unknown: ["Status unavailable", "Status indisponível"] };
+    const states: Record<string, [string, string]> = { scheduled: ["Awaiting official update", "Aguardando atualização oficial"], paused: ["Paused", "Pausada"], postponed: ["Postponed", "Adiada"], cancelled: ["Cancelled", "Cancelada"], unknown: ["Status unavailable", "Status indisponível"] };
     const secondary = states[pulse.fixtureStatus ?? "unknown"]?.[pt ? 1 : 0] ?? (pt ? "Status indisponível" : "Status unavailable");
     return { primary: matchup, secondary, aria: `${matchup}. ${secondary}` };
   }

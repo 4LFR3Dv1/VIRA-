@@ -51,7 +51,7 @@ function assertProjectionContract(projection: ConsumerProjection) {
   if (projection.availability.canMakeDirectionalClaim) expect(projection.market.freshness.currentForDirectionalClaim).toBe(true);
 }
 
-async function assertFixtureFacts(page: Page, projection: ConsumerProjection) {
+async function assertFixtureFacts(page: Page, projection: ConsumerProjection, options: { homeSurface?: boolean; nowMs?: number } = {}) {
   await expect(page.locator("body")).toContainText(projection.fixture.homeTeam.name);
   await expect(page.locator("body")).toContainText(projection.fixture.awayTeam.name);
   const text = await bodyText(page);
@@ -61,8 +61,13 @@ async function assertFixtureFacts(page: Page, projection: ConsumerProjection) {
     tomorrow: /\btomorrow\b|\bamanhã\b/i,
     finished: /\bfinished\b|encerrad[ao]/i,
   };
-  const expectedRelation = relationCopy[projection.temporal.relation];
-  if (expectedRelation) expect(text).toMatch(expectedRelation);
+  const kickoffMs = Date.parse(projection.fixture.kickoffAt ?? "");
+  const scheduledPastKickoff = projection.fixture.status === "scheduled" && Number.isFinite(kickoffMs) && kickoffMs <= (options.nowMs ?? Date.now());
+  if (options.homeSurface && scheduledPastKickoff) expect(text).toMatch(/awaiting official update|aguardando atualização oficial/i);
+  else {
+    const expectedRelation = relationCopy[projection.temporal.relation];
+    if (expectedRelation) expect(text).toMatch(expectedRelation);
+  }
   if (projection.availability.canShowMarket && projection.market.canonical1X2) {
     expect(text).toMatch(/TxLINE market observed|Market score|1X2 distribution|Mercado TxLINE observado|Placar de mercado|Distribuicao 1X2|Distribuição 1X2/i);
     expect(text).toMatch(/draw|empate/i);
@@ -121,7 +126,7 @@ test("Home, Lobby and Preview preserve the deployed Consumer projection", async 
     await page.goto("/?lang=en"); checkedRoutes.push("/?lang=en");
     const homeUi = await (await homeUiResponsePromise).json() as { editorial: { fixture: { consumerProjection: ConsumerProjection } | null } };
     const homeUiProjection = homeUi.editorial.fixture?.consumerProjection ?? featured.consumerProjection;
-    await assertFixtureFacts(page, homeUiProjection);
+    await assertFixtureFacts(page, homeUiProjection, { homeSurface: true });
     const homeText = await bodyText(page);
     if (!homeUiProjection.availability.canMakeDirectionalClaim) expect(homeText).not.toMatch(/mercado atual\b|mercado agora\b|lidera o mercado|favorece/i);
 

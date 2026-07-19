@@ -9,6 +9,16 @@ export type HomeNarrativeFixture = {
   journeyFixture: TournamentJourneyFixture | null;
 };
 
+export type HomeFixturePresentationState =
+  | "live"
+  | "paused"
+  | "upcoming"
+  | "awaiting_official_state"
+  | "finished"
+  | "postponed"
+  | "cancelled"
+  | "unknown";
+
 const ACTIVE = new Set(["live", "paused"]);
 const EXCEPTIONAL = new Set(["postponed", "cancelled", "unknown"]);
 
@@ -23,17 +33,44 @@ function stageWeight(value: HomeNarrativeFixture) {
   return 0;
 }
 
-function rank(value: HomeNarrativeFixture, tournamentComplete: boolean) {
+export function deriveHomeFixturePresentationState(input: {
+  status: string;
+  kickoffAt: string | null;
+  officialResultAvailable?: boolean;
+  nowMs: number;
+}): HomeFixturePresentationState {
+  if (input.officialResultAvailable) return "finished";
+  if (input.status === "live") return "live";
+  if (input.status === "paused") return "paused";
+  if (input.status === "finished") return "finished";
+  if (input.status === "postponed") return "postponed";
+  if (input.status === "cancelled") return "cancelled";
+  if (input.status !== "scheduled") return "unknown";
+  const kickoffMs = Date.parse(input.kickoffAt ?? "");
+  return Number.isFinite(kickoffMs) && kickoffMs > input.nowMs ? "upcoming" : "awaiting_official_state";
+}
+
+export function presentationStateForNarrative(value: HomeNarrativeFixture, nowMs: number) {
+  return deriveHomeFixturePresentationState({
+    status: value.projection.fixture.status,
+    kickoffAt: value.projection.fixture.kickoffAt,
+    officialResultAvailable: value.journeyFixture?.result?.authority === "txline_terminal_history",
+    nowMs,
+  });
+}
+
+function rank(value: HomeNarrativeFixture, tournamentComplete: boolean, nowMs: number) {
   const status = value.projection.fixture.status;
   if (tournamentComplete && value.journeyFixture?.stage === "final") return 1_000;
   if (ACTIVE.has(status)) return 900;
-  if (status === "scheduled") return 800;
+  if (status === "scheduled" && presentationStateForNarrative(value, nowMs) === "upcoming") return 800;
+  if (status === "scheduled") return 750;
   if (EXCEPTIONAL.has(status)) return 700 + stageWeight(value);
   if (status === "finished") return 600 + stageWeight(value);
   return 0;
 }
 
-export function selectHomeNarrativeFixture(home: HomeProjection): HomeNarrativeFixture | null {
+export function selectHomeNarrativeFixture(home: HomeProjection, nowMs = Date.now()): HomeNarrativeFixture | null {
   const byId = new Map<string, HomeNarrativeFixture>();
   for (const item of home.journey?.fixtures ?? []) {
     if (!item.fixture) continue;
@@ -45,8 +82,13 @@ export function selectHomeNarrativeFixture(home: HomeProjection): HomeNarrativeF
     byId.set(featured.fixtureId, { fixtureId: featured.fixtureId, projection: featured.consumerProjection, homeFixture: featured, journeyFixture: existing?.journeyFixture ?? null });
   }
   const complete = home.journey?.status === "complete";
+  if (complete) {
+    const final = [...byId.values()].find((item) => item.journeyFixture?.stage === "final" && item.journeyFixture.result?.authority === "txline_terminal_history");
+    if (final) return final;
+  }
+  if (featured) return byId.get(featured.fixtureId) ?? null;
   return [...byId.values()].sort((left, right) => {
-    const tier = rank(right, complete) - rank(left, complete);
+    const tier = rank(right, complete, nowMs) - rank(left, complete, nowMs);
     if (tier) return tier;
     const status = left.projection.fixture.status;
     if (status === "scheduled") return kickoff(left) - kickoff(right);
@@ -75,8 +117,9 @@ export function countdownParts(kickoffAt: string | null, nowMs: number) {
   };
 }
 
-export function deriveExperienceMode(input: { status: string; publicRoomAvailable: boolean; playbackAvailable: boolean }) {
+export function deriveExperienceMode(input: { status: string; publicRoomAvailable: boolean; playbackAvailable: boolean | null }) {
   if (["live", "paused"].includes(input.status) && input.publicRoomAvailable) return "live_room" as const;
+  if (input.playbackAvailable === null) return "loading" as const;
   if (input.playbackAvailable) return "guided_playback" as const;
   return "match_catalog" as const;
 }

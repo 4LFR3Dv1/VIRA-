@@ -34,7 +34,7 @@ function homeWith(item, champion = null) {
 }
 
 function input(overrides = {}) {
-  return { routeId: "home", pathname: "/", home: null, homeAvailable: true, matchdayUpdatedAt: "2026-07-16T18:00:10.000Z", activeRoom: noRoom, review, connection, ...overrides };
+  return { routeId: "home", pathname: "/", home: null, homeAvailable: true, matchdayUpdatedAt: "2026-07-16T18:00:10.000Z", nowMs: Date.parse("2026-07-16T18:00:10.000Z"), activeRoom: noRoom, review, connection, ...overrides };
 }
 
 test("an open round has priority over every public matchday state", () => {
@@ -65,6 +65,14 @@ test("public projections keep upcoming, exceptional and verified terminal states
   assert.equal(final.kind, "final");
   assert.equal(final.verified, true);
   assert.deepEqual([final.homeScore, final.awayScore], [2, 1]);
+});
+
+test("a scheduled fixture whose kickoff passed is awaiting authority, never upcoming", () => {
+  const item = { fixtureId: "third", stage: "third_place", fixture: fixture("third", "scheduled", "2026-07-18T21:00:00.000Z"), result: null };
+  const pulse = deriveMatchdayPulseV1(input({ home: homeWith(item), nowMs: Date.parse("2026-07-19T04:50:00.000Z") }));
+  assert.equal(pulse.kind, "exceptional");
+  assert.equal(pulse.fixtureStatus, "scheduled");
+  assert.equal(pulse.homeScore, null);
 });
 
 test("certified playback is disclosed independently of the official tournament", () => {

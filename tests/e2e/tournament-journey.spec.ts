@@ -71,10 +71,34 @@ test("home adapts the same narrative to a live final and public room", async ({ 
   await context.close();
 });
 
+test("home switches fixtures without leaking stale room state and keeps playback hydration neutral", async ({ browser }) => {
+  const base = await (await fetch(`${origin}/home`, { headers: { "X-Vira-Locale": "en", "X-Vira-Time-Zone": "UTC", "X-Vira-Public-Token": "home-consistency-reader-000001" } })).json();
+  const third = base.journey.fixtures.find((item: { stage: string }) => item.stage === "third_place");
+  const final = base.journey.fixtures.find((item: { stage: string }) => item.stage === "final");
+  const now = Date.now();
+  third.fixture.fixture.status = "scheduled"; third.fixture.fixture.kickoffAt = new Date(now - 24 * 60 * 60_000).toISOString(); third.fixture.temporal.relation = "today"; third.result = null;
+  final.fixture.fixture.status = "scheduled"; final.fixture.fixture.kickoffAt = new Date(now + 60 * 60_000).toISOString(); final.fixture.temporal.relation = "today"; final.result = null;
+  const withEditorial = (source: typeof base, item: typeof final) => ({ ...source, editorial: { ...source.editorial, kind: "predict_fixture", fixture: { ...(source.editorial.fixture ?? {}), fixtureId: item.fixtureId, homeTeam: item.fixture.fixture.homeTeam.name, awayTeam: item.fixture.fixture.awayTeam.name, startTime: item.fixture.fixture.kickoffAt, status: "scheduled", roomAvailable: false, temporal: item.fixture.temporal, market: null, consumerProjection: item.fixture } } });
+  const first = withEditorial(structuredClone(base), third); const second = withEditorial(structuredClone(base), final); let homeRequests = 0;
+  const context = await browser.newContext({ baseURL: origin, reducedMotion: "reduce", serviceWorkers: "block" }); const page = await context.newPage();
+  await page.route("**/home", (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(homeRequests++ === 0 ? first : second) }));
+  await page.route("**/picks/fixtures/**", (route) => route.fulfill({ status: 200, contentType: "application/json", body: route.request().url().endsWith("/me") ? JSON.stringify({ card: null }) : JSON.stringify({ schemaVersion: 1, enabled: false }) }));
+  await page.route(`**/public/rooms/${third.fixtureId}/projection`, async (route) => { await new Promise((resolve) => setTimeout(resolve, 700)); await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ roomId: third.fixtureId, match: { homeScore: 4, awayScore: 6, matchClockSec: 7_200 }, lastNormalizedEvent: { type: "match_end", occurredAt: new Date(now - 20 * 60_000).toISOString(), confirmed: true } }) }); });
+  await page.route(`**/public/rooms/${final.fixtureId}/projection`, (route) => route.fulfill({ status: 404, contentType: "application/json", body: JSON.stringify({ error: "room_not_found" }) }));
+  await page.route("**/public/playback", async (route) => { await new Promise((resolve) => setTimeout(resolve, 900)); await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ available: true }) }); });
+  await page.goto("/?lang=en"); await expect(page.getByRole("heading", { name: /France × England awaits official status/i })).toBeVisible();
+  await page.evaluate(() => document.dispatchEvent(new Event("visibilitychange")));
+  await expect(page.getByRole("heading", { name: /Spain × Argentina is next/i })).toBeVisible();
+  await expect(page.getByText("Official score", { exact: true })).toHaveCount(0); await expect(page.getByText("4–6", { exact: true })).toHaveCount(0); await expect(page.getByText("Final whistle", { exact: true })).toHaveCount(0);
+  await expect(page.getByText("No live room or certified playback is currently available.", { exact: true })).toHaveCount(0);
+  await expect(page.getByText(/Certified playback · sanitized captured TxLINE fixture/)).toBeVisible();
+  await context.close();
+});
+
 test("completed tournament makes the official champion and captured experience explicit", async ({ browser }, testInfo) => {
   const base = await (await fetch(`${origin}/home`, { headers: { "X-Vira-Locale": "en", "X-Vira-Time-Zone": "UTC", "X-Vira-Public-Token": "home-complete-reader-00000000001" } })).json();
   const final = base.journey.fixtures.find((item: { stage: string }) => item.stage === "final"); const finishedProjection = structuredClone(final.fixture); finishedProjection.fixture.status = "finished"; finishedProjection.temporal.relation = "finished"; finishedProjection.availability.roomMode = "read_only"; final.fixture = finishedProjection; final.result = { authority: "txline_terminal_history", homeScore: 2, awayScore: 1, providerSequence: 900, observedAt: "2026-07-19T21:00:00.000Z", receivedAt: "2026-07-19T21:00:01.000Z", origin: `/api/scores/historical/${final.fixtureId}`, freshness: "terminal" }; base.journey.status = "complete"; base.journey.champion = { name: "Spain", fixtureId: final.fixtureId, authority: "txline_terminal_history" }; base.editorial.fixture = null; base.editorial.kind = "open_calendar";
-  const context = await browser.newContext({ baseURL: origin, reducedMotion: "reduce" }); const page = await context.newPage();
+  const context = await browser.newContext({ baseURL: origin, reducedMotion: "reduce", serviceWorkers: "block" }); const page = await context.newPage();
   await page.route("**/home", (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(base) }));
   await page.route("**/picks/fixtures/**", (route) => route.fulfill({ status: 200, contentType: "application/json", body: route.request().url().endsWith("/me") ? JSON.stringify({ card: null }) : JSON.stringify({ schemaVersion: 1, enabled: false }) }));
   await page.route("**/public/playback", (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ available: true }) }));

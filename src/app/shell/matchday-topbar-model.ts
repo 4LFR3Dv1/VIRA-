@@ -1,6 +1,6 @@
 import type { FixtureConsumerProjection } from "../../runtime/api.ts";
 import type { HomeProjection, TournamentJourneyFixture } from "../../social/share.ts";
-import { selectHomeNarrativeFixture } from "../../features/home/home-narrative.ts";
+import { deriveHomeFixturePresentationState, selectHomeNarrativeFixture } from "../../features/home/home-narrative.ts";
 import type { ActiveRoomPresenceState, OfficialReviewAvailability, ShellConnectionPresentation } from "./shell-experience.ts";
 
 export type MatchdayPulseKind = "round_open" | "live" | "upcoming" | "final" | "exceptional" | "tournament" | "captured_playback";
@@ -33,14 +33,14 @@ function fixtureIdFromPath(pathname: string) {
   return pathname.match(/^\/(?:picks|match)\/([^/]+)/)?.[1] ?? null;
 }
 
-function routeCandidate(home: HomeProjection | null, pathname: string): Candidate | null {
+function routeCandidate(home: HomeProjection | null, pathname: string, nowMs: number): Candidate | null {
   if (!home) return null;
   const requestedId = fixtureIdFromPath(pathname);
   const journey = requestedId ? home.journey?.fixtures.find((item) => item.fixtureId === requestedId) : null;
   if (journey?.fixture) return { fixtureId: journey.fixtureId, fixture: journey.fixture, result: journey.result, stage: journey.stage };
   const editorial = home.editorial.fixture;
   if (requestedId && editorial?.fixtureId === requestedId) return { fixtureId: requestedId, fixture: editorial.consumerProjection, result: null, stage: null };
-  const narrative = selectHomeNarrativeFixture(home);
+  const narrative = selectHomeNarrativeFixture(home, nowMs);
   return narrative ? { fixtureId: narrative.fixtureId, fixture: narrative.projection, result: narrative.journeyFixture?.result ?? null, stage: narrative.journeyFixture?.stage ?? null } : null;
 }
 
@@ -57,6 +57,7 @@ export function deriveMatchdayPulseV1(input: {
   activeRoom: ActiveRoomPresenceState;
   review: OfficialReviewAvailability;
   connection: ShellConnectionPresentation;
+  nowMs: number;
 }): MatchdayPulseV1 {
   const room = input.activeRoom.kind === "confirmed" ? input.activeRoom.room : null;
   if (room?.phase === "action_required" && room.roundLocksAt) return {
@@ -76,11 +77,12 @@ export function deriveMatchdayPulseV1(input: {
     matchClockSec: room.matchClockSec, roomPopulation: room.roomPopulation, kickoffAt: null, fixtureStatus: room.matchStatus, stage: null, roundOpenedAt: null, roundLocksAt: null,
     providerObservedAt: room.updatedAt, providerUpdatedAt: room.updatedAt, providerState: input.connection.kind === "healthy" ? "live" : "unavailable", verified: room.matchStatus === "finished" && input.review.kind === "available", champion: null,
   };
-  const candidate = routeCandidate(input.home, input.pathname);
+  const candidate = routeCandidate(input.home, input.pathname, input.nowMs);
   if (candidate) {
     const status = candidate.fixture.fixture.status;
+    const presentation = deriveHomeFixturePresentationState({ status, kickoffAt: candidate.fixture.fixture.kickoffAt, officialResultAvailable: candidate.result?.authority === "txline_terminal_history", nowMs: input.nowMs });
     return {
-      kind: status === "live" || status === "paused" ? "live" : status === "scheduled" ? "upcoming" : status === "finished" ? "final" : "exceptional",
+      kind: presentation === "live" || presentation === "paused" ? "live" : presentation === "upcoming" ? "upcoming" : presentation === "finished" ? "final" : "exceptional",
       fixtureId: candidate.fixtureId, destination: status === "live" || status === "paused" ? `/match/${candidate.fixtureId}` : `/match/${candidate.fixtureId}/preview`,
       homeTeam: candidate.fixture.fixture.homeTeam.name, awayTeam: candidate.fixture.fixture.awayTeam.name,
       homeScore: candidate.result?.homeScore ?? null, awayScore: candidate.result?.awayScore ?? null, matchClockSec: null, roomPopulation: null,
