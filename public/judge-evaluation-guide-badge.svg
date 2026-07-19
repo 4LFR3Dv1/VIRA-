@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="252" height="28" role="img" aria-label="Judges: Evaluation Guide">
+  <title>Judges: Evaluation Guide</title>
+  <linearGradient id="edge" x2="0" y2="1">
+    <stop offset="0" stop-color="#ffffff" stop-opacity="0.08" />
+    <stop offset="1" stop-opacity="0.08" />
+  </linearGradient>
+  <clipPath id="shape">
+    <rect width="252" height="28" rx="3" />
+  </clipPath>
+  <g clip-path="url(#shape)">
+    <rect width="78" height="28" fill="#050814" />
+    <rect x="78" width="174" height="28" fill="#9ef01a" />
+    <rect width="252" height="28" fill="url(#edge)" />
+  </g>
+  <g font-family="Verdana,DejaVu Sans,sans-serif" font-size="10" font-weight="700" text-anchor="middle" letter-spacing="0.7">
+    <text x="39" y="18" fill="#ffffff">JUDGES</text>
+    <text x="165" y="18" fill="#050814">EVALUATION GUIDE</text>
+  </g>
+</svg>
