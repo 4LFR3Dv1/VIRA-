@@ -11,7 +11,7 @@
   [![Demo V2](https://img.shields.io/badge/Demo_V2-4%3A30_on_YouTube-FF0033?style=for-the-badge&labelColor=050814)](https://www.youtube.com/watch?v=LnOd2kWTiGA)
   [![Judge Evaluation Guide](public/judge-evaluation-guide-badge.svg)](https://vira.snelabs.space/help?lang=en)
 
-  **TxODDS World Cup Hackathon · Live consumer deployment · TxLINE-powered · Solana devnet verified**
+  **Active public deployment · TxLINE-powered · deterministic replay · optional Solana devnet commitments**
 </div>
 
 <br />
@@ -104,15 +104,9 @@ The gallery uses sanitized, deterministic TxLINE test fixtures so each state rem
 | **Trust** | Every verified result can be reproduced from an append-only, hash-chained event ledger. |
 | **Mainstream positioning** | No money, payout, betting position or token purchase is part of the Consumer experience. |
 
-## Built for the hackathon criteria
+## Evaluation evidence
 
-| Criterion | Product evidence |
-| --- | --- |
-| **Fan Accessibility & UX** | English and PT-BR, responsive UI, guest entry, PWA, share links and a focused second-screen flow. |
-| **Real-Time Responsiveness** | TxLINE score/odds adapters, stream reconnection, serialized room processing and SSE delivery to participants. |
-| **Originality & Value Creation** | The match opens a synchronized social decision loop instead of becoming another passive scoreboard. |
-| **Commercial Path** | A B2B2C engagement layer for broadcasters, sponsors, clubs, creators and sports communities. |
-| **Completeness & Execution** | Deployed product, public demo, persistent backend, deterministic replay, two-device E2E and operational probes. |
+Reviewers can inspect the [architecture](docs/ARCHITECTURE.md), [integrity model](docs/INTEGRITY_MODEL.md), [public playback evidence](https://vira.snelabs.space/public/playback), [operations surface](docs/OPERATIONS.md) and [three-minute evaluation guide](docs/JUDGE_GUIDE.md). Hackathon-specific scoring and walkthrough details remain in the judge guide rather than defining the product narrative.
 
 ## TxLINE is the live authority
 
@@ -434,16 +428,14 @@ VIRA addresses these points through a server-side Consumer projection, explicit 
 
 | Document | Purpose |
 | --- | --- |
-| [Judge Walkthrough](docs/JUDGE_WALKTHROUGH.md) | Three-minute product evaluation across Picks, Match Room and certified playback. |
-| [Operations Runbook](docs/OPERATIONS_RUNBOOK.md) | Readiness, live monitoring, persistence and certification procedures. |
-| [TxLINE Endpoint Map](docs/TXLINE_ENDPOINT_MAP.md) | Provider endpoints and product mapping. |
-| [Football Moment Engine](docs/FOOTBALL_MOMENT_ENGINE.md) | Normalized football actions and round conditions. |
-| [Consumer Cadence](docs/CONSUMER_CADENCE.md) | Meaningful-round limits and cooldown policy. |
-| [Social Share Layer](docs/SOCIAL_SHARE_LAYER.md) | Invitations, predictions, Mini Leagues and privacy. |
-| [VIRA Picks V1](docs/VIRA_PICKS.md) | Isolated pre-match Picks architecture, authority, flags and known limits. |
-| [PWA Cache Policy](docs/pwa-cache-policy.md) | Why competitive state is never served stale. |
-| [Solana Subscription Evidence](docs/TXLINE_SOLANA_SUBSCRIPTION_EVIDENCE.md) | Secret-free TxLINE activation record. |
-| [Commercial Pitch](docs/VIRA_Synchronized_Football_Engagement.pdf) | Five-page product, architecture, partner value and monetization overview. |
+| [Architecture](docs/ARCHITECTURE.md) | Runtime topology, authority boundaries and scaling limit. |
+| [Integrity Model](docs/INTEGRITY_MODEL.md) | Competitive properties, enforcement and non-guarantees. |
+| [TxLINE Integration](docs/TXLINE_INTEGRATION.md) | Provider authority, acquisition, normalization and runtime modes. |
+| [Replay and Evidence](docs/REPLAY_AND_EVIDENCE.md) | Ledger, public verification and reproducible evidence. |
+| [Security](docs/SECURITY.md) | Assets, controls, privacy boundaries and residual risks. |
+| [Operations](docs/OPERATIONS.md) | Deployment invariants, public probes and runbook entry point. |
+| [Evaluation Guide](docs/JUDGE_GUIDE.md) | Permanent three-minute product and evidence path. |
+| [Commercial Path](docs/COMMERCIAL_PATH.md) | Proposed B2B2C formats, measurable funnel and detailed materials. |
 
 ## Known limits
 
@@ -453,14 +445,22 @@ VIRA addresses these points through a server-side Consumer projection, explicit 
 - The deterministic competitive demo uses a captured, explicitly disclosed TxLINE fixture.
 - Long-running ledgers will eventually need snapshotting, compaction or a transactional store.
 
-## Submission
+## Current status
+
+**Active — live public deployment.** VIRA is operable as a single-replica product and maintains a permanent disclosed playback path. It is not represented as horizontally scalable, externally audited or continuously backed by a currently live match.
+
+## License
+
+No license file has been published. Source availability does not by itself grant reuse or redistribution rights; licensing remains an explicit maintainer decision.
+
+## Public links
 
 - **Live app:** https://vira.snelabs.space/?lang=en
 - **PT-BR app:** https://vira.snelabs.space/?lang=pt-BR
 - **Demo V2:** https://www.youtube.com/watch?v=LnOd2kWTiGA
 - **Commercial pitch:** [VIRA — Synchronized Football Engagement](docs/VIRA_Synchronized_Football_Engagement.pdf)
 - **Judge walkthrough:** https://vira.snelabs.space/help?lang=en
-- **Public repository at submission:** https://github.com/4LFR3Dv1/VIRA-
+- **Public repository:** https://github.com/4LFR3Dv1/VIRA-
 
 ---
 
