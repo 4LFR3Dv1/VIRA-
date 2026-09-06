@@ -1,10 +1,15 @@
 import fs from "node:fs/promises";
+import { createReadStream } from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
 
 import { canonicalJson, hashStoredEvent, sha256Json } from "./event-codec.mjs";
 
 const DEFAULT_SCHEMA_VERSION = 1;
+const DEFAULT_BLOOM_BYTES = 8 * 1024 * 1024;
+const MIN_BLOOM_BYTES = 1024 * 1024;
+const MAX_BLOOM_BYTES = 32 * 1024 * 1024;
+const DEFAULT_RECENT_IDEMPOTENCY_LIMIT = 2048;
 
 function nowIso() {
   return new Date().toISOString();
@@ -22,8 +27,121 @@ function defaultDataDir() {
   return process.env.VIRA_DATA_DIR || path.join(process.cwd(), "data", "vira");
 }
 
-function compareByGlobalPosition(left, right) {
-  return left.globalPosition - right.globalPosition;
+function boundedInteger(raw, fallback, min, max) {
+  const value = Number.parseInt(String(raw ?? ""), 10);
+  if (!Number.isFinite(value)) return fallback;
+  return Math.max(min, Math.min(max, value));
+}
+
+function bloomBytesFromEnv() {
+  return boundedInteger(
+    process.env.VIRA_IDEMPOTENCY_BLOOM_BYTES,
+    DEFAULT_BLOOM_BYTES,
+    MIN_BLOOM_BYTES,
+    MAX_BLOOM_BYTES,
+  );
+}
+
+function recentIdempotencyLimitFromEnv() {
+  return boundedInteger(
+    process.env.VIRA_RECENT_IDEMPOTENCY_LIMIT,
+    DEFAULT_RECENT_IDEMPOTENCY_LIMIT,
+    128,
+    16384,
+  );
+}
+
+function idempotencyFingerprint(streamId, key) {
+  return `${String(streamId)}\u0000${String(key ?? "")}`;
+}
+
+function hash32(value, seed) {
+  let hash = seed >>> 0;
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 0x01000193);
+    hash ^= hash >>> 13;
+  }
+  hash ^= hash >>> 16;
+  hash = Math.imul(hash, 0x85ebca6b);
+  hash ^= hash >>> 13;
+  return hash >>> 0;
+}
+
+class IdempotencyBloom {
+  constructor(byteLength = DEFAULT_BLOOM_BYTES) {
+    this.bytes = new Uint8Array(byteLength);
+    this.bitCount = this.bytes.byteLength * 8;
+  }
+
+  reset() {
+    this.bytes.fill(0);
+  }
+
+  positions(value) {
+    const first = hash32(value, 0x811c9dc5);
+    const second = (hash32(value, 0x9e3779b9) | 1) >>> 0;
+    const positions = [];
+    for (let index = 0; index < 4; index += 1) {
+      positions.push(((first + Math.imul(index, second)) >>> 0) % this.bitCount);
+    }
+    return positions;
+  }
+
+  add(value) {
+    for (const position of this.positions(value)) {
+      this.bytes[position >>> 3] |= 1 << (position & 7);
+    }
+  }
+
+  mightContain(value) {
+    for (const position of this.positions(value)) {
+      if ((this.bytes[position >>> 3] & (1 << (position & 7))) === 0) return false;
+    }
+    return true;
+  }
+}
+
+async function* readLines(filePath) {
+  const stream = createReadStream(filePath);
+  let remainder = Buffer.alloc(0);
+  let baseOffset = 0;
+  let lineNumber = 0;
+
+  for await (const chunk of stream) {
+    const buffer = remainder.length ? Buffer.concat([remainder, chunk]) : chunk;
+    let start = 0;
+    while (start < buffer.length) {
+      const newline = buffer.indexOf(0x0a, start);
+      if (newline < 0) break;
+      let line = buffer.subarray(start, newline);
+      if (line.length && line[line.length - 1] === 0x0d) line = line.subarray(0, line.length - 1);
+      lineNumber += 1;
+      yield {
+        lineNumber,
+        startOffset: baseOffset + start,
+        endOffset: baseOffset + newline + 1,
+        terminated: true,
+        text: line.toString("utf8"),
+      };
+      start = newline + 1;
+    }
+    baseOffset += start;
+    remainder = buffer.subarray(start);
+  }
+
+  if (remainder.length) {
+    lineNumber += 1;
+    let line = remainder;
+    if (line.length && line[line.length - 1] === 0x0d) line = line.subarray(0, line.length - 1);
+    yield {
+      lineNumber,
+      startOffset: baseOffset,
+      endOffset: baseOffset + remainder.length,
+      terminated: false,
+      text: line.toString("utf8"),
+    };
+  }
 }
 
 export class ConcurrencyConflictError extends Error {
@@ -35,18 +153,33 @@ export class ConcurrencyConflictError extends Error {
 }
 
 export class FileEventStore {
-  constructor({ dataDir = defaultDataDir(), eventsFile = "events.jsonl" } = {}) {
+  constructor({
+    dataDir = defaultDataDir(),
+    eventsFile = "events.jsonl",
+    bloomBytes = bloomBytesFromEnv(),
+    recentIdempotencyLimit = recentIdempotencyLimitFromEnv(),
+  } = {}) {
     this.dataDir = dataDir;
     this.eventsPath = path.join(dataDir, eventsFile);
     this.snapshotDir = path.join(dataDir, "snapshots");
     this.quarantineDir = path.join(dataDir, "quarantine");
     this.metadataPath = path.join(dataDir, "metadata.json");
-    this.events = [];
-    this.eventsByStream = new Map();
-    this.idempotencyByStream = new Map();
     this.streamMetadata = new Map();
     this.globalPosition = 0;
     this.writeQueue = Promise.resolve();
+    this.idempotencyBloom = new IdempotencyBloom(boundedInteger(
+      bloomBytes,
+      DEFAULT_BLOOM_BYTES,
+      MIN_BLOOM_BYTES,
+      MAX_BLOOM_BYTES,
+    ));
+    this.recentIdempotencyLimit = boundedInteger(
+      recentIdempotencyLimit,
+      DEFAULT_RECENT_IDEMPOTENCY_LIMIT,
+      128,
+      16384,
+    );
+    this.recentIdempotency = new Map();
   }
 
   async init() {
@@ -59,31 +192,41 @@ export class FileEventStore {
     return this;
   }
 
+  resetIndexes() {
+    this.streamMetadata.clear();
+    this.globalPosition = 0;
+    this.idempotencyBloom.reset();
+    this.recentIdempotency.clear();
+  }
+
   async loadFromDisk() {
-    const raw = await fs.readFile(this.eventsPath, "utf8").catch((error) => {
-      if (error.code === "ENOENT") return "";
-      throw error;
-    });
-    const lines = raw.split(/\r?\n/);
-    const validLines = [];
-    for (let index = 0; index < lines.length; index += 1) {
-      const line = lines[index];
-      if (!line.trim()) continue;
-      let batch;
-      try {
-        batch = JSON.parse(line);
-      } catch (error) {
-        if (index >= lines.length - 2) {
-          await this.quarantineLine(line, "truncated-last-line");
-          await fs.writeFile(this.eventsPath, `${validLines.join("\n")}${validLines.length ? "\n" : ""}`, "utf8");
-          break;
-        }
-        error.message = `event_store_corrupt_line:${index + 1}:${error.message}`;
-        throw error;
-      }
-      this.ingestPersistedBatch(batch);
-      validLines.push(line);
+    this.resetIndexes();
+    let pending = null;
+
+    for await (const record of readLines(this.eventsPath)) {
+      if (pending) await this.ingestLine(pending, false);
+      pending = record;
     }
+
+    if (pending) await this.ingestLine(pending, true);
+  }
+
+  async ingestLine(record, terminal) {
+    if (!record.text.trim()) return;
+    let batch;
+    try {
+      batch = JSON.parse(record.text);
+    } catch (error) {
+      if (terminal) {
+        await this.quarantineLine(record.text, "truncated-last-line");
+        await fs.truncate(this.eventsPath, record.startOffset);
+        await this.syncDirectory(this.dataDir);
+        return;
+      }
+      error.message = `event_store_corrupt_line:${record.lineNumber}:${error.message}`;
+      throw error;
+    }
+    this.ingestPersistedBatch(batch);
   }
 
   metadataFromMemory() {
@@ -150,9 +293,7 @@ export class FileEventStore {
     if (!batch || typeof batch !== "object" || !Array.isArray(batch.events)) {
       throw new Error("invalid_event_batch");
     }
-    for (const event of batch.events) {
-      this.ingestPersistedEvent(event);
-    }
+    for (const event of batch.events) this.ingestPersistedEvent(event);
   }
 
   ingestPersistedEvent(event) {
@@ -163,27 +304,42 @@ export class FileEventStore {
     if (event.eventHash !== expectedHash) {
       throw new Error(`event_hash_mismatch:${event.streamId}:${event.streamVersion}`);
     }
-    const streamEvents = this.eventsByStream.get(event.streamId) ?? [];
-    const previous = streamEvents[streamEvents.length - 1] ?? null;
-    if ((previous?.eventHash ?? null) !== (event.previousStreamEventHash ?? null)) {
+    const metadata = this.streamMetadata.get(event.streamId) ?? { version: 0, headHash: null };
+    if (metadata.headHash !== (event.previousStreamEventHash ?? null)) {
       throw new Error(`stream_hash_chain_mismatch:${event.streamId}:${event.streamVersion}`);
     }
-    if (event.streamVersion !== streamEvents.length + 1) {
+    if (event.streamVersion !== metadata.version + 1) {
       throw new Error(`stream_version_gap:${event.streamId}:${event.streamVersion}`);
     }
-
-    const storedEvent = cloneJson(event);
-    this.events.push(storedEvent);
-    streamEvents.push(storedEvent);
-    this.eventsByStream.set(event.streamId, streamEvents);
-    const idempotency = this.idempotencyByStream.get(event.streamId) ?? new Map();
-    idempotency.set(event.idempotencyKey, storedEvent);
-    this.idempotencyByStream.set(event.streamId, idempotency);
+    const globalPosition = Number(event.globalPosition ?? 0);
+    if (!Number.isSafeInteger(globalPosition) || globalPosition <= this.globalPosition) {
+      throw new Error(`global_position_invalid:${event.streamId}:${event.streamVersion}:${event.globalPosition}`);
+    }
     this.streamMetadata.set(event.streamId, {
       version: event.streamVersion,
       headHash: event.eventHash,
     });
-    this.globalPosition = Math.max(this.globalPosition, Number(event.globalPosition ?? 0));
+    this.globalPosition = globalPosition;
+    this.idempotencyBloom.add(idempotencyFingerprint(event.streamId, event.idempotencyKey));
+  }
+
+  rememberIdempotency(event) {
+    const key = idempotencyFingerprint(event.streamId, event.idempotencyKey);
+    if (this.recentIdempotency.has(key)) this.recentIdempotency.delete(key);
+    this.recentIdempotency.set(key, cloneJson(event));
+    while (this.recentIdempotency.size > this.recentIdempotencyLimit) {
+      const oldest = this.recentIdempotency.keys().next().value;
+      this.recentIdempotency.delete(oldest);
+    }
+  }
+
+  recentIdempotencyEvent(streamId, key) {
+    const fingerprint = idempotencyFingerprint(streamId, key);
+    const event = this.recentIdempotency.get(fingerprint);
+    if (!event) return null;
+    this.recentIdempotency.delete(fingerprint);
+    this.recentIdempotency.set(fingerprint, event);
+    return cloneJson(event);
   }
 
   async append(request) {
@@ -224,11 +380,16 @@ export class FileEventStore {
     let nextStreamVersion = previousVersion;
     let nextGlobalPosition = this.globalPosition;
     const persistedEvents = [];
+    const newEvents = [];
+    const batchIdempotency = new Map();
 
     for (const pending of events) {
-      const duplicate = this.idempotencyByStream.get(safeStreamId)?.get(pending.idempotencyKey);
+      const idempotencyKey = String(pending.idempotencyKey ?? "");
+      let duplicate = batchIdempotency.get(idempotencyKey) ?? null;
+      if (!duplicate) duplicate = await this.findByIdempotencyKey(safeStreamId, idempotencyKey);
       if (duplicate) {
         persistedEvents.push(duplicate);
+        batchIdempotency.set(idempotencyKey, duplicate);
         continue;
       }
       nextStreamVersion += 1;
@@ -254,9 +415,10 @@ export class FileEventStore {
       };
       previousHash = stored.eventHash;
       persistedEvents.push(stored);
+      newEvents.push(stored);
+      batchIdempotency.set(idempotencyKey, stored);
     }
 
-    const newEvents = persistedEvents.filter((event) => event.globalPosition > this.globalPosition);
     if (!newEvents.length) {
       return {
         streamId: safeStreamId,
@@ -287,6 +449,7 @@ export class FileEventStore {
     };
     await this.appendLine(`${canonicalJson(batchWithHash)}\n`);
     this.ingestPersistedBatch(batchWithHash);
+    for (const event of newEvents) this.rememberIdempotency(event);
     await this.writeMetadata();
 
     return {
@@ -321,22 +484,55 @@ export class FileEventStore {
     }
   }
 
+  async *readBatches() {
+    for await (const record of readLines(this.eventsPath)) {
+      if (!record.text.trim()) continue;
+      let batch;
+      try {
+        batch = JSON.parse(record.text);
+      } catch (error) {
+        error.message = `event_store_corrupt_line:${record.lineNumber}:${error.message}`;
+        throw error;
+      }
+      if (!batch || typeof batch !== "object" || !Array.isArray(batch.events)) {
+        throw new Error(`invalid_event_batch:${record.lineNumber}`);
+      }
+      yield batch;
+    }
+  }
+
   async *readAll(afterGlobalPosition = 0) {
     const after = Number(afterGlobalPosition) || 0;
-    for (const event of [...this.events].sort(compareByGlobalPosition)) {
-      if (event.globalPosition > after) yield event;
+    for await (const batch of this.readBatches()) {
+      for (const event of batch.events) {
+        if (Number(event.globalPosition) > after) yield cloneJson(event);
+      }
     }
   }
 
   async *readStream(streamId, afterVersion = 0) {
+    const safeStreamId = String(streamId);
     const after = Number(afterVersion) || 0;
-    for (const event of [...(this.eventsByStream.get(String(streamId)) ?? [])].sort((left, right) => left.streamVersion - right.streamVersion)) {
-      if (event.streamVersion > after) yield event;
+    for await (const batch of this.readBatches()) {
+      for (const event of batch.events) {
+        if (event.streamId === safeStreamId && Number(event.streamVersion) > after) yield cloneJson(event);
+      }
     }
   }
 
   async findByIdempotencyKey(streamId, key) {
-    return this.idempotencyByStream.get(String(streamId))?.get(String(key)) ?? null;
+    const safeStreamId = String(streamId);
+    const safeKey = String(key ?? "");
+    const recent = this.recentIdempotencyEvent(safeStreamId, safeKey);
+    if (recent) return recent;
+    const fingerprint = idempotencyFingerprint(safeStreamId, safeKey);
+    if (!this.idempotencyBloom.mightContain(fingerprint)) return null;
+    for await (const event of this.readStream(safeStreamId)) {
+      if (String(event.idempotencyKey ?? "") !== safeKey) continue;
+      this.rememberIdempotency(event);
+      return event;
+    }
+    return null;
   }
 
   async getStreamMetadata(streamId) {
@@ -367,11 +563,14 @@ export class FileEventStore {
   info() {
     return {
       adapter: "file",
+      retention: "disk_streamed",
       dataDir: this.dataDir,
       eventsPath: this.eventsPath,
       metadataPath: this.metadataPath,
       globalPosition: this.globalPosition,
       streamCount: this.streamMetadata.size,
+      bloomBytes: this.idempotencyBloom.bytes.byteLength,
+      recentIdempotencyEntries: this.recentIdempotency.size,
     };
   }
 }
