@@ -1,5 +1,7 @@
 # VIRA Frontend Migration Plan
 
+> Historical planning document. The migration it describes has been superseded by the implemented Consumer architecture. External workstation references were never repository artifacts; use the current [architecture](docs/ARCHITECTURE.md) and repository history as the canonical record.
+
 ## 1. Purpose
 
 This document defines how to rebuild the VIRA frontend from the current repository state without inheriting the wrong architecture from the existing generated skeleton.
@@ -14,11 +16,7 @@ Therefore the migration strategy is:
 - keep only two routes;
 - treat the replay engine and product contracts as the frontend source of truth.
 
-This document is specific to:
-
-- [VIRA_PRODUCT_BLUEPRINT.md](C:\Users\SUPORTE\Desktop\Hackathons\VIRA_PRODUCT_BLUEPRINT.md)
-- [VIRA_EXECUTION_PLAN.md](C:\Users\SUPORTE\Desktop\Hackathons\VIRA_EXECUTION_PLAN.md)
-- the current repository at `C:\Users\SUPORTE\Desktop\Hackathons\Vira`
+This document originally depended on external product-blueprint and execution-plan files that are not part of the public repository. Those references are intentionally not presented as public evidence.
 
 ## 2. Current Repo Assessment
 
